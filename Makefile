@@ -3,7 +3,10 @@ MODULE := github.com/Zyrakk/noctis
 VERSION ?= dev
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
-.PHONY: build test lint clean
+IMAGE ?= ghcr.io/zyrakk/noctis
+TAG ?= dev
+
+.PHONY: build test lint clean docker-build
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/noctis
@@ -16,3 +19,6 @@ lint:
 
 clean:
 	rm -rf bin/
+
+docker-build:
+	docker build --build-arg VERSION=$(TAG) -t $(IMAGE):$(TAG) .
