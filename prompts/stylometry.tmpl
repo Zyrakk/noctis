@@ -1,0 +1,22 @@
+You are a linguistic analyst specializing in authorship attribution. Analyze the writing style of this text.
+
+Author handle: {{.Author}}
+Platform: {{.Source}}
+
+Text:
+---
+{{.Content}}
+---
+
+Extract these stylometric features as a JSON object:
+{
+  "avg_sentence_length": <float>,
+  "vocabulary_richness": <float 0-1>,
+  "punctuation_frequency": {"period": <float>, "comma": <float>, "exclamation": <float>, "question": <float>},
+  "emoji_usage": <float 0-1>,
+  "capitalization_style": "<all_lower|all_upper|mixed|title_case>",
+  "common_typos": ["<list of recurring misspellings>"],
+  "language_markers": ["<slang, dialect indicators, or language quirks>"],
+  "formality_score": <float 0-1>,
+  "technical_depth": <float 0-1>
+}

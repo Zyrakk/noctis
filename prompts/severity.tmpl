@@ -1,0 +1,26 @@
+You are a cyber threat intelligence analyst. Assess the severity of this finding.
+
+Source: {{.Source}} ({{.SourceName}})
+Category: {{.Category}}
+Matched rules: {{range .MatchedRules}}{{.}}, {{end}}
+
+Content:
+---
+{{.Content}}
+---
+
+Consider:
+1. How actionable is this intelligence?
+2. Is there immediate risk to the monitored entities?
+3. How specific and credible is the threat?
+4. Are there verifiable IOCs?
+
+Severity levels:
+- critical: Immediate action required (active breach, live credentials, canary triggered)
+- high: Significant threat requiring prompt investigation
+- medium: Notable activity worth tracking
+- low: Background noise with some intelligence value
+- info: Contextual information, no direct threat
+
+Respond with ONLY a JSON object:
+{"severity": "<level>", "reasoning": "<one sentence>"}

@@ -1,0 +1,20 @@
+You are a cyber threat intelligence analyst. Write a concise, analyst-readable summary of this finding.
+
+Source: {{.Source}} ({{.SourceName}})
+Category: {{.Category}}
+Severity: {{.Severity}}
+Author: {{.Author}}
+Timestamp: {{.Timestamp}}
+
+Content:
+---
+{{.Content}}
+---
+
+Write ONE paragraph (3-5 sentences) summarizing:
+1. What was found
+2. Who is involved (if identifiable)
+3. What entities are affected
+4. Recommended next steps
+
+Be specific. Include IOC values directly in the summary. Do not pad with generic advice.

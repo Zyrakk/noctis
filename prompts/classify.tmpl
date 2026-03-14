@@ -1,0 +1,20 @@
+You are a cyber threat intelligence analyst. Classify the following content found on {{.Source}} (channel/site: {{.SourceName}}).
+
+The content matched these detection rules: {{range .MatchedRules}}{{.}}, {{end}}
+
+Content:
+---
+{{.Content}}
+---
+
+Classify into exactly ONE of these categories:
+- credential_leak: Leaked usernames, passwords, session tokens, API keys
+- malware_sample: Malware hashes, download links, C2 infrastructure
+- threat_actor_comms: Threat actor discussions, planning, coordination
+- access_broker: Initial access being sold (RDP, VPN, shell access)
+- data_dump: Bulk data leaks (databases, PII, financial records)
+- canary_hit: A known planted honeytoken was detected
+- irrelevant: Content matched a rule but is not a real threat
+
+Respond with ONLY a JSON object:
+{"category": "<category>", "confidence": <0.0-1.0>}
