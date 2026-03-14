@@ -1,16 +1,23 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 
+	"github.com/Zyrakk/noctis/internal/collector"
 	"github.com/Zyrakk/noctis/internal/config"
+	"github.com/Zyrakk/noctis/internal/dispatcher"
 	"github.com/Zyrakk/noctis/internal/health"
+	"github.com/Zyrakk/noctis/internal/llm"
+	"github.com/Zyrakk/noctis/internal/models"
+	"github.com/Zyrakk/noctis/internal/pipeline"
 )
 
 func newServeCmd() *cobra.Command {
@@ -61,15 +68,61 @@ func newServeCmd() *cobra.Command {
 			// 5. Log "starting noctis" with version
 			slog.Info("starting noctis", "version", version)
 
-			// 6. Set health to ready
-			hs.SetReady(true)
+			// Build collectors
+			var collectors []collector.Collector
 
-			// 7. Log "noctis is ready"
+			if cfg.Sources.Paste.Enabled {
+				pc := collector.NewPasteCollector(&cfg.Sources.Paste, &cfg.Sources.Tor)
+				collectors = append(collectors, pc)
+			}
+			if cfg.Sources.Telegram.Enabled {
+				tc := collector.NewTelegramCollector(&cfg.Sources.Telegram)
+				collectors = append(collectors, tc)
+			}
+
+			if len(collectors) == 0 {
+				return fmt.Errorf("no collectors enabled")
+			}
+
+			// Build LLM client
+			llmClient := llm.NewOpenAICompatClient(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.LLM.Model)
+
+			// Build Prometheus metrics
+			metrics := dispatcher.NewPrometheusMetrics(prometheus.DefaultRegisterer)
+
+			// Build pipeline
+			dispatchFn := func(ef models.EnrichedFinding) {
+				metrics.RecordFinding(ef)
+				for _, rule := range ef.MatchedRules {
+					metrics.RecordMatcherMatch(rule)
+				}
+				slog.Info("finding dispatched",
+					"category", ef.Category,
+					"severity", ef.Severity,
+					"source", ef.Source,
+					"iocs", len(ef.IOCs),
+				)
+			}
+
+			promptsDir := "/prompts" // container path; override via env for local dev
+			if dir := os.Getenv("NOCTIS_PROMPTS_DIR"); dir != "" {
+				promptsDir = dir
+			}
+
+			p, err := pipeline.NewPipeline(collectors, cfg.Matching.Rules, llmClient, promptsDir, dispatchFn)
+			if err != nil {
+				return fmt.Errorf("creating pipeline: %w", err)
+			}
+
+			// Start pipeline in background
+			pipelineCtx, pipelineCancel := context.WithCancel(context.Background())
+			defer pipelineCancel()
+			go p.Run(pipelineCtx)
+
+			hs.SetReady(true)
 			slog.Info("noctis is ready")
 
-			// Pipeline wiring added in Phase 1 (Task 20)
-
-			// 8. Wait for SIGINT/SIGTERM
+			// 6. Wait for SIGINT/SIGTERM
 			quit := make(chan os.Signal, 1)
 			signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 			<-quit
