@@ -1,0 +1,43 @@
+noctis:
+  logLevel: info
+  metricsPort: 9090
+  healthPort: 8080
+
+  sources:
+    telegram:
+      enabled: false
+    paste:
+      enabled: true
+      pastebin:
+        enabled: true
+        apiKey: "pastebin-key"
+        interval: 60s
+      scrapers: []
+
+  matching:
+    rules:
+      - name: basic-keyword
+        type: keyword
+        severity: medium
+        patterns:
+          - "leak"
+          - "breach"
+
+  llm:
+    provider: glm
+    baseURL: "http://localhost:11434/v1"
+    model: glm-4
+    apiKey: "${NOCTIS_LLM_API_KEY}"
+    maxTokens: 2048
+    temperature: 0.3
+    timeout: 30s
+    retries: 2
+    maxConcurrent: 3
+    requestsPerMinute: 30
+
+  database:
+    driver: sqlite
+    dsn: "/var/lib/noctis/noctis.db"
+
+  graph:
+    enabled: false

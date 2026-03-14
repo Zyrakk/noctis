@@ -1,0 +1,112 @@
+noctis:
+  logLevel: debug
+  metricsPort: 9090
+  healthPort: 8080
+
+  sources:
+    telegram:
+      enabled: true
+      apiId: 123456
+      apiHash: "abc123def456"
+      phone: "+15555550100"
+      password: "2fa-secret"
+      catchupMessages: 200
+      sessionFile: "/var/lib/noctis/telegram.session"
+      channels:
+        - username: examplechannel1
+          id: 0
+        - username: ""
+          id: 1001234567890
+
+    paste:
+      enabled: false
+      pastebin:
+        enabled: false
+        apiKey: "paste-api-key"
+        interval: 30s
+      scrapers:
+        - name: ghostbin
+          url: "https://ghostbin.com/recent"
+          interval: 60s
+          tor: false
+
+    tor:
+      socksProxy: "socks5://127.0.0.1:9050"
+      requestTimeout: 30s
+
+  matching:
+    rules:
+      - name: credential-keywords
+        type: keyword
+        severity: high
+        patterns:
+          - "password"
+          - "passwd"
+          - "secret"
+          - "api_key"
+      - name: credit-card-regex
+        type: regex
+        severity: critical
+        patterns:
+          - '\b4[0-9]{12}(?:[0-9]{3})?\b'
+          - '\b5[1-5][0-9]{14}\b'
+      - name: ip-address-regex
+        type: regex
+        severity: low
+        patterns:
+          - '\b(?:\d{1,3}\.){3}\d{1,3}\b'
+
+  llm:
+    provider: glm
+    baseURL: "http://localhost:11434/v1"
+    model: glm-4
+    apiKey: "glm-api-key-valid"
+    maxTokens: 4096
+    temperature: 0.2
+    timeout: 60s
+    retries: 3
+    maxConcurrent: 5
+    requestsPerMinute: 60
+
+  profiling:
+    enabled: true
+    activityThreshold: 10
+    similarityThreshold: 0.75
+    storage: "postgres"
+
+  canary:
+    enabled: true
+    storage: "postgres"
+
+  dispatch:
+    wazuh:
+      enabled: true
+      endpoint: "https://wazuh.internal:55000"
+      format: "json"
+    webhooks:
+      - name: slack-alerts
+        url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+        minSeverity: high
+      - name: pagerduty
+        url: "https://events.pagerduty.com/v2/enqueue"
+        minSeverity: critical
+    crds:
+      enabled: true
+      namespace: "noctis-system"
+      gcStaleAfterDays: 30
+    networkPolicy:
+      enabled: true
+      dryRun: false
+      namespace: "noctis-system"
+      whitelistCIDRs:
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+      maxPolicies: 500
+      ttlHours: 72
+
+  database:
+    driver: postgres
+    dsn: "host=localhost port=5432 user=noctis password=secret dbname=noctis sslmode=disable"
+
+  graph:
+    enabled: true
