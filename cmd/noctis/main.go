@@ -16,6 +16,9 @@ func main() {
 		Version: version,
 	}
 
+	root.AddCommand(newServeCmd())
+	root.AddCommand(newConfigCmd())
+
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
