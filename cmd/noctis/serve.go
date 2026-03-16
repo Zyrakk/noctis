@@ -6,18 +6,23 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 
+	"github.com/Zyrakk/noctis/internal/analyzer"
+	"github.com/Zyrakk/noctis/internal/archive"
 	"github.com/Zyrakk/noctis/internal/collector"
 	"github.com/Zyrakk/noctis/internal/config"
+	"github.com/Zyrakk/noctis/internal/database"
+	"github.com/Zyrakk/noctis/internal/discovery"
 	"github.com/Zyrakk/noctis/internal/dispatcher"
 	"github.com/Zyrakk/noctis/internal/health"
+	"github.com/Zyrakk/noctis/internal/ingest"
 	"github.com/Zyrakk/noctis/internal/llm"
 	"github.com/Zyrakk/noctis/internal/models"
-	"github.com/Zyrakk/noctis/internal/pipeline"
 )
 
 func newServeCmd() *cobra.Command {
@@ -68,21 +73,29 @@ func newServeCmd() *cobra.Command {
 			// 5. Log "starting noctis" with version
 			slog.Info("starting noctis", "version", version)
 
-			// Build collectors
-			var collectors []collector.Collector
+			// Connect to database
+			pool, err := database.Connect(context.Background(), cfg.Database.DSN)
+			if err != nil {
+				return fmt.Errorf("connecting to database: %w", err)
+			}
+			defer pool.Close()
 
-			if cfg.Sources.Paste.Enabled {
-				pc := collector.NewPasteCollector(&cfg.Sources.Paste, &cfg.Sources.Tor)
-				collectors = append(collectors, pc)
+			// Run migrations
+			migrations, err := database.LoadMigrations("/migrations")
+			if err != nil {
+				// Try local path for development
+				migrations, err = database.LoadMigrations("migrations")
+				if err != nil {
+					return fmt.Errorf("loading migrations: %w", err)
+				}
 			}
-			if cfg.Sources.Telegram.Enabled {
-				tc := collector.NewTelegramCollector(&cfg.Sources.Telegram)
-				collectors = append(collectors, tc)
+			if err := database.RunMigrations(context.Background(), pool, migrations); err != nil {
+				return fmt.Errorf("running migrations: %w", err)
 			}
+			slog.Info("database migrations applied")
 
-			if len(collectors) == 0 {
-				return fmt.Errorf("no collectors enabled")
-			}
+			// Build archive store
+			archiveStore := archive.New(pool)
 
 			// Build LLM client
 			llmClient := llm.NewOpenAICompatClient(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.LLM.Model)
@@ -90,13 +103,23 @@ func newServeCmd() *cobra.Command {
 			// Build Prometheus metrics
 			metrics := dispatcher.NewPrometheusMetrics(prometheus.DefaultRegisterer)
 
-			// Build pipeline
-			dispatchFn := func(ef models.EnrichedFinding) {
+			// Build analyzer
+			promptsDir := "/prompts"
+			if dir := os.Getenv("NOCTIS_PROMPTS_DIR"); dir != "" {
+				promptsDir = dir
+			}
+			llmAnalyzer := analyzer.New(llmClient, promptsDir)
+
+			// Build discovery engine
+			discoveryEngine := discovery.NewEngine(pool, cfg.Discovery)
+
+			// Alert callback — called for real-time matched findings
+			alertFn := func(ef models.EnrichedFinding) {
 				metrics.RecordFinding(ef)
 				for _, rule := range ef.MatchedRules {
 					metrics.RecordMatcherMatch(rule)
 				}
-				slog.Info("finding dispatched",
+				slog.Info("ALERT: finding dispatched",
 					"category", ef.Category,
 					"severity", ef.Severity,
 					"source", ef.Source,
@@ -104,29 +127,104 @@ func newServeCmd() *cobra.Command {
 				)
 			}
 
-			promptsDir := "/prompts" // container path; override via env for local dev
-			if dir := os.Getenv("NOCTIS_PROMPTS_DIR"); dir != "" {
-				promptsDir = dir
-			}
-
-			p, err := pipeline.NewPipeline(collectors, cfg.Matching.Rules, llmClient, promptsDir, dispatchFn)
+			// Build ingest pipeline
+			ingestPipeline, err := ingest.NewIngestPipeline(
+				archiveStore,
+				cfg.Matching.Rules,
+				llmAnalyzer,
+				metrics,
+				alertFn,
+				cfg.Collection,
+			)
 			if err != nil {
-				return fmt.Errorf("creating pipeline: %w", err)
+				return fmt.Errorf("creating ingest pipeline: %w", err)
 			}
 
-			// Start pipeline in background
+			// Build collectors
+			var collectors []collector.Collector
+
+			if cfg.Sources.Paste.Enabled {
+				pc := collector.NewPasteCollector(&cfg.Sources.Paste, &cfg.Sources.Tor)
+				collectors = append(collectors, pc)
+				slog.Info("paste collector enabled")
+			}
+			if cfg.Sources.Telegram.Enabled {
+				tc := collector.NewTelegramCollector(&cfg.Sources.Telegram)
+				collectors = append(collectors, tc)
+				slog.Info("telegram collector enabled")
+			}
+			if cfg.Sources.Forums.Enabled {
+				fc := collector.NewForumCollector(&cfg.Sources.Forums, &cfg.Sources.Tor)
+				collectors = append(collectors, fc)
+				slog.Info("forum collector enabled", "sites", len(cfg.Sources.Forums.Sites))
+			}
+			if cfg.Sources.Web.Enabled {
+				wc := collector.NewWebCollector(&cfg.Sources.Web, &cfg.Sources.Tor)
+				collectors = append(collectors, wc)
+				slog.Info("web/RSS collector enabled", "feeds", len(cfg.Sources.Web.Feeds))
+			}
+
+			if len(collectors) == 0 {
+				return fmt.Errorf("no collectors enabled")
+			}
+
+			// Start everything
 			pipelineCtx, pipelineCancel := context.WithCancel(context.Background())
 			defer pipelineCancel()
-			go p.Run(pipelineCtx)
+
+			// Start background workers (classification + entity extraction)
+			go ingestPipeline.Run(pipelineCtx)
+			slog.Info("background workers started",
+				"classification_workers", cfg.Collection.ClassificationWorkers,
+				"entity_extraction_workers", cfg.Collection.EntityExtractionWorkers,
+			)
+
+			// Start collectors — each feeds findings into the ingest pipeline
+			var collectorWg sync.WaitGroup
+			for _, c := range collectors {
+				collectorWg.Add(1)
+				coll := c
+				ch := make(chan models.Finding, 50)
+
+				// Collector goroutine
+				go func() {
+					defer collectorWg.Done()
+					if err := coll.Start(pipelineCtx, ch); err != nil && pipelineCtx.Err() == nil {
+						slog.Error("collector error", "collector", coll.Name(), "error", err)
+					}
+				}()
+
+				// Fan-in: read from collector channel, process through ingest pipeline
+				go func() {
+					for f := range ch {
+						if err := ingestPipeline.Process(pipelineCtx, f); err != nil {
+							slog.Error("ingest error", "error", err)
+						}
+						// Feed content to discovery engine
+						if cfg.Discovery.Enabled {
+							go discoveryEngine.ProcessContent(pipelineCtx, f.Content, f.ID)
+						}
+					}
+				}()
+			}
 
 			hs.SetReady(true)
-			slog.Info("noctis is ready")
+			slog.Info("noctis is ready",
+				"collectors", len(collectors),
+				"archive", cfg.Collection.ArchiveAll,
+				"discovery", cfg.Discovery.Enabled,
+			)
 
-			// 6. Wait for SIGINT/SIGTERM
+			// Wait for shutdown signal
 			quit := make(chan os.Signal, 1)
 			signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 			<-quit
-			slog.Info("received shutdown signal")
+			slog.Info("received shutdown signal, initiating graceful shutdown")
+
+			// Graceful shutdown
+			pipelineCancel()
+			collectorWg.Wait()
+			slog.Info("noctis shutdown complete")
 
 			return nil
 		},
