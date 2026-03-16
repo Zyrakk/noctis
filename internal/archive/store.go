@@ -170,6 +170,57 @@ LIMIT $1`
 	return results, nil
 }
 
+// FetchClassifiedUnextracted returns up to limit records that have been
+// classified but not yet had their entities extracted, ordered oldest-first.
+func (s *Store) FetchClassifiedUnextracted(ctx context.Context, limit int) ([]RawContent, error) {
+	const query = `
+SELECT id, source_type, source_id, source_name, content, content_hash,
+       author, author_id, url, language, collected_at, posted_at,
+       metadata, classified, category, tags, severity, summary,
+       entities_extracted
+FROM raw_content
+WHERE classified = true AND entities_extracted = false
+ORDER BY collected_at ASC
+LIMIT $1`
+
+	rows, err := s.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch classified unextracted: %w", err)
+	}
+	defer rows.Close()
+
+	var results []RawContent
+	for rows.Next() {
+		rc, err := scanRawContent(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, rc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch classified unextracted rows: %w", err)
+	}
+
+	return results, nil
+}
+
+// UpsertIOC inserts an IOC record or increments its sighting count if an IOC
+// with the same type and value already exists.
+func (s *Store) UpsertIOC(ctx context.Context, iocType, value, iocContext, sourceContentID string) error {
+	const query = `
+INSERT INTO iocs (type, value, context, source_content_id)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (type, value) DO UPDATE
+SET sighting_count = iocs.sighting_count + 1,
+    last_seen = NOW()`
+
+	_, err := s.pool.Exec(ctx, query, iocType, value, iocContext, sourceContentID)
+	if err != nil {
+		return fmt.Errorf("archive: upsert ioc (%s, %s): %w", iocType, value, err)
+	}
+	return nil
+}
+
 // Search queries the archive with dynamic filtering. Only non-empty fields in
 // the SearchQuery are included in the WHERE clause.
 func (s *Store) Search(ctx context.Context, query SearchQuery) ([]RawContent, error) {
