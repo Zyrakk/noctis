@@ -107,6 +107,14 @@ func stripCodeFences(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// truncate returns the first n characters of s, appending "..." if truncated.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
+}
+
 // Classify asks the LLM to assign a category and confidence to the finding.
 func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matchedRules []string) (*classifyResponse, error) {
 	prompt, err := a.renderTemplate("classify", struct {
@@ -133,7 +141,7 @@ func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matche
 
 	var result classifyResponse
 	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
-		return nil, fmt.Errorf("analyzer: classify parse response %q: %w", resp.Content, err)
+		return nil, fmt.Errorf("analyzer: classify parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 	return &result, nil
 }
@@ -159,7 +167,7 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 
 	var entries []iocEntry
 	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &entries); err != nil {
-		return nil, fmt.Errorf("analyzer: extract_iocs parse response %q: %w", resp.Content, err)
+		return nil, fmt.Errorf("analyzer: extract_iocs parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
 	iocs := make([]models.IOC, len(entries))
@@ -201,7 +209,7 @@ func (a *Analyzer) AssessSeverity(ctx context.Context, finding *models.Finding, 
 
 	var result severityResponse
 	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
-		return models.SeverityInfo, fmt.Errorf("analyzer: severity parse response %q: %w", resp.Content, err)
+		return models.SeverityInfo, fmt.Errorf("analyzer: severity parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
 	sev, err := models.ParseSeverity(result.Severity)

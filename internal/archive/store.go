@@ -69,30 +69,38 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
-// Insert persists a RawContent record. Duplicates (identified by content_hash)
-// are silently skipped via ON CONFLICT DO NOTHING.
+// Insert persists a RawContent record and populates rc.ID with the database-
+// generated UUID. Duplicates (identified by content_hash) are not re-written;
+// the existing row's ID is returned instead via a cheap index lookup.
 func (s *Store) Insert(ctx context.Context, rc *RawContent) error {
 	metaJSON, err := json.Marshal(rc.Metadata)
 	if err != nil {
 		return fmt.Errorf("archive: marshal metadata: %w", err)
 	}
 
-	// ON CONFLICT: do a no-op update so RETURNING always produces a row,
-	// even for duplicates. This gives us the ID in both insert and dedup cases.
+	// CTE approach: INSERT ... DO NOTHING RETURNING id for new rows,
+	// fall back to SELECT id for existing duplicates. Avoids phantom
+	// UPDATE writes, WAL churn, and dead-tuple bloat from self-assignment.
 	const query = `
-INSERT INTO raw_content (
-    source_type, source_id, source_name, content, content_hash,
-    author, author_id, url, language, collected_at, posted_at,
-    metadata, classified, category, tags, severity, summary,
-    entities_extracted
-) VALUES (
-    $1, $2, $3, $4, $5,
-    $6, $7, $8, $9, $10, $11,
-    $12, $13, $14, $15, $16, $17,
-    $18
+WITH ins AS (
+    INSERT INTO raw_content (
+        source_type, source_id, source_name, content, content_hash,
+        author, author_id, url, language, collected_at, posted_at,
+        metadata, classified, category, tags, severity, summary,
+        entities_extracted
+    ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, $16, $17,
+        $18
+    )
+    ON CONFLICT (content_hash) DO NOTHING
+    RETURNING id
 )
-ON CONFLICT (content_hash) DO UPDATE SET source_type = raw_content.source_type
-RETURNING id`
+SELECT id FROM ins
+UNION ALL
+SELECT id FROM raw_content WHERE content_hash = $5
+LIMIT 1`
 
 	err = s.pool.QueryRow(ctx, query,
 		rc.SourceType, rc.SourceID, rc.SourceName, rc.Content, rc.ContentHash,
