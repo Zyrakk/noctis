@@ -12,6 +12,7 @@ import (
 const (
 	SourceTypeTelegram = "telegram"
 	SourceTypePaste    = "paste"
+	SourceTypeForum    = "forum"
 )
 
 // Severity represents the assessed threat level of a finding.

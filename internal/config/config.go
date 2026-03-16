@@ -36,7 +36,43 @@ type Config struct {
 type SourcesConfig struct {
 	Telegram TelegramConfig `yaml:"telegram"`
 	Paste    PasteConfig    `yaml:"paste"`
+	Forums   ForumsConfig   `yaml:"forums"`
 	Tor      TorConfig      `yaml:"tor"`
+}
+
+// ForumsConfig configures forum-based threat intelligence collection.
+type ForumsConfig struct {
+	Enabled bool          `yaml:"enabled"`
+	Sites   []ForumConfig `yaml:"sites"`
+}
+
+// ForumConfig configures a single forum site to scrape.
+type ForumConfig struct {
+	Name             string             `yaml:"name"`
+	URL              string             `yaml:"url"`
+	Tor              bool               `yaml:"tor"`
+	Auth             ForumAuthConfig    `yaml:"auth"`
+	Scraper          ForumScraperConfig `yaml:"scraper"`
+	Interval         time.Duration      `yaml:"interval"`
+	MaxPagesPerCrawl int                `yaml:"maxPagesPerCrawl"`
+	RequestDelay     time.Duration      `yaml:"requestDelay"`
+}
+
+// ForumAuthConfig configures authentication for a forum site.
+type ForumAuthConfig struct {
+	Username      string `yaml:"username"`
+	Password      string `yaml:"password"`
+	LoginURL      string `yaml:"loginURL"`
+	UsernameField string `yaml:"usernameField"`
+	PasswordField string `yaml:"passwordField"`
+}
+
+// ForumScraperConfig configures CSS selectors for scraping a forum site.
+type ForumScraperConfig struct {
+	ThreadListSelector    string `yaml:"threadListSelector"`
+	ThreadContentSelector string `yaml:"threadContentSelector"`
+	AuthorSelector        string `yaml:"authorSelector"`
+	PaginationSelector    string `yaml:"paginationSelector"`
 }
 
 // TelegramConfig configures the Telegram MTProto source.
