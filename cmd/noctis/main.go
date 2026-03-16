@@ -18,6 +18,9 @@ func main() {
 
 	root.AddCommand(newServeCmd())
 	root.AddCommand(newConfigCmd())
+	root.AddCommand(newSourceCmd())
+	root.AddCommand(newSearchCmd())
+	root.AddCommand(newStatsCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
