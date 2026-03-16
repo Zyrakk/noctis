@@ -13,6 +13,7 @@ const (
 	SourceTypeTelegram = "telegram"
 	SourceTypePaste    = "paste"
 	SourceTypeForum    = "forum"
+	SourceTypeWeb      = "web"
 )
 
 // Severity represents the assessed threat level of a finding.

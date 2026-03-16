@@ -34,10 +34,28 @@ type Config struct {
 
 // SourcesConfig groups all ingest source configurations.
 type SourcesConfig struct {
-	Telegram TelegramConfig `yaml:"telegram"`
-	Paste    PasteConfig    `yaml:"paste"`
-	Forums   ForumsConfig   `yaml:"forums"`
-	Tor      TorConfig      `yaml:"tor"`
+	Telegram TelegramConfig   `yaml:"telegram"`
+	Paste    PasteConfig      `yaml:"paste"`
+	Forums   ForumsConfig     `yaml:"forums"`
+	Web      WebSourcesConfig `yaml:"web"`
+	Tor      TorConfig        `yaml:"tor"`
+}
+
+// WebSourcesConfig configures web/RSS-based threat intelligence collection.
+type WebSourcesConfig struct {
+	Enabled bool        `yaml:"enabled"`
+	Feeds   []WebConfig `yaml:"feeds"`
+}
+
+// WebConfig configures a single web feed source.
+type WebConfig struct {
+	Name            string        `yaml:"name"`
+	URL             string        `yaml:"url"`
+	Type            string        `yaml:"type"` // rss, scrape, search
+	ContentSelector string        `yaml:"contentSelector"`
+	Queries         []string      `yaml:"queries"`
+	Interval        time.Duration `yaml:"interval"`
+	Tor             bool          `yaml:"tor"`
 }
 
 // ForumsConfig configures forum-based threat intelligence collection.
