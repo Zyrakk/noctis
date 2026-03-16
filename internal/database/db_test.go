@@ -28,6 +28,7 @@ func TestMigrationFiles_Exist(t *testing.T) {
 	expected := []string{
 		"001_init.sql",
 		"002_graph.sql",
+		"003_pivot.sql",
 	}
 
 	for _, name := range expected {
@@ -51,8 +52,8 @@ func TestParseMigrations(t *testing.T) {
 		t.Fatalf("LoadMigrations returned error: %v", err)
 	}
 
-	if len(migrations) < 2 {
-		t.Fatalf("expected at least 2 migrations, got %d", len(migrations))
+	if len(migrations) < 3 {
+		t.Fatalf("expected at least 3 migrations, got %d", len(migrations))
 	}
 
 	// Verify lexicographic sort order.
