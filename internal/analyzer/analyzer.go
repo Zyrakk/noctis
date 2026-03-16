@@ -87,6 +87,26 @@ func (a *Analyzer) renderTemplate(name string, data any) (string, error) {
 	return buf.String(), nil
 }
 
+// stripCodeFences removes markdown code fences that LLMs (especially GLM)
+// wrap around JSON responses. Handles ```json\n...\n```, ```\n...\n```,
+// and trailing ```.
+func stripCodeFences(s string) string {
+	s = strings.TrimSpace(s)
+	// Remove opening fence: ```json or ```
+	if strings.HasPrefix(s, "```") {
+		s = s[3:]
+		// Remove optional language tag (e.g., "json")
+		if idx := strings.Index(s, "\n"); idx != -1 && idx < 20 {
+			s = s[idx+1:]
+		}
+	}
+	// Remove closing fence
+	if strings.HasSuffix(s, "```") {
+		s = s[:len(s)-3]
+	}
+	return strings.TrimSpace(s)
+}
+
 // Classify asks the LLM to assign a category and confidence to the finding.
 func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matchedRules []string) (*classifyResponse, error) {
 	prompt, err := a.renderTemplate("classify", struct {
@@ -112,8 +132,8 @@ func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matche
 	}
 
 	var result classifyResponse
-	if err := json.Unmarshal([]byte(strings.TrimSpace(resp.Content)), &result); err != nil {
-		return nil, fmt.Errorf("analyzer: classify parse response: %w", err)
+	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
+		return nil, fmt.Errorf("analyzer: classify parse response %q: %w", resp.Content, err)
 	}
 	return &result, nil
 }
@@ -138,8 +158,8 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 	}
 
 	var entries []iocEntry
-	if err := json.Unmarshal([]byte(strings.TrimSpace(resp.Content)), &entries); err != nil {
-		return nil, fmt.Errorf("analyzer: extract_iocs parse response: %w", err)
+	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &entries); err != nil {
+		return nil, fmt.Errorf("analyzer: extract_iocs parse response %q: %w", resp.Content, err)
 	}
 
 	iocs := make([]models.IOC, len(entries))
@@ -180,8 +200,8 @@ func (a *Analyzer) AssessSeverity(ctx context.Context, finding *models.Finding, 
 	}
 
 	var result severityResponse
-	if err := json.Unmarshal([]byte(strings.TrimSpace(resp.Content)), &result); err != nil {
-		return models.SeverityInfo, fmt.Errorf("analyzer: severity parse response: %w", err)
+	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
+		return models.SeverityInfo, fmt.Errorf("analyzer: severity parse response %q: %w", resp.Content, err)
 	}
 
 	sev, err := models.ParseSeverity(result.Severity)

@@ -51,6 +51,50 @@ func testFinding() *models.Finding {
 	}
 }
 
+// TestStripCodeFences verifies that markdown code fences are removed from LLM
+// responses before JSON parsing.
+func TestStripCodeFences(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"plain json", `{"a":"b"}`, `{"a":"b"}`},
+		{"json fence", "```json\n{\"a\":\"b\"}\n```", `{"a":"b"}`},
+		{"bare fence", "```\n{\"a\":\"b\"}\n```", `{"a":"b"}`},
+		{"trailing only", "{\"a\":\"b\"}\n```", `{"a":"b"}`},
+		{"with whitespace", "  ```json\n{\"a\":\"b\"}\n```  ", `{"a":"b"}`},
+		{"array", "```json\n[1,2,3]\n```", `[1,2,3]`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stripCodeFences(tt.input)
+			if got != tt.want {
+				t.Errorf("stripCodeFences() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAnalyzer_Classify_WithCodeFences verifies parsing works when the LLM
+// wraps its JSON response in markdown code fences (as GLM does).
+func TestAnalyzer_Classify_WithCodeFences(t *testing.T) {
+	client := &mockLLMClient{
+		responses: map[string]string{
+			"Classify": "```json\n{\"category\":\"malware_sample\",\"confidence\":0.88}\n```",
+		},
+	}
+
+	a := newTestAnalyzer(t, client)
+	result, err := a.Classify(context.Background(), testFinding(), []string{"rule1"})
+	if err != nil {
+		t.Fatalf("Classify() with code fences: %v", err)
+	}
+	if result.Category != "malware_sample" {
+		t.Errorf("Category = %q; want %q", result.Category, "malware_sample")
+	}
+}
+
 // TestAnalyzer_Classify verifies that the classify method parses a valid JSON
 // classification response and returns the expected category and confidence.
 func TestAnalyzer_Classify(t *testing.T) {

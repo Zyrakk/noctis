@@ -39,10 +39,6 @@ data:
               url: "https://krebsonsecurity.com/feed/"
               type: rss
               interval: 900s
-            - name: "cert-eu"
-              url: "https://cert.europa.eu/publications/security-advisories/rss"
-              type: rss
-              interval: 1800s
             - name: "cisa-advisories"
               url: "https://www.cisa.gov/cybersecurity-advisories/all.xml"
               type: rss

@@ -77,6 +77,8 @@ func (s *Store) Insert(ctx context.Context, rc *RawContent) error {
 		return fmt.Errorf("archive: marshal metadata: %w", err)
 	}
 
+	// ON CONFLICT: do a no-op update so RETURNING always produces a row,
+	// even for duplicates. This gives us the ID in both insert and dedup cases.
 	const query = `
 INSERT INTO raw_content (
     source_type, source_id, source_name, content, content_hash,
@@ -89,14 +91,15 @@ INSERT INTO raw_content (
     $12, $13, $14, $15, $16, $17,
     $18
 )
-ON CONFLICT (content_hash) DO NOTHING`
+ON CONFLICT (content_hash) DO UPDATE SET source_type = raw_content.source_type
+RETURNING id`
 
-	_, err = s.pool.Exec(ctx, query,
+	err = s.pool.QueryRow(ctx, query,
 		rc.SourceType, rc.SourceID, rc.SourceName, rc.Content, rc.ContentHash,
 		rc.Author, rc.AuthorID, rc.URL, rc.Language, rc.CollectedAt, rc.PostedAt,
 		metaJSON, rc.Classified, rc.Category, rc.Tags, rc.Severity, rc.Summary,
 		rc.EntitiesExtracted,
-	)
+	).Scan(&rc.ID)
 	if err != nil {
 		return fmt.Errorf("archive: insert raw_content: %w", err)
 	}
