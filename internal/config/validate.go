@@ -40,9 +40,14 @@ func Validate(cfg *Config) error {
 		errs = append(errs, "sources.forums: at least one site is required when forums are enabled")
 	}
 
-	// Web — if enabled, must have at least one feed.
+	// Web — if enabled, must have at least one feed with a valid type.
 	if cfg.Sources.Web.Enabled && len(cfg.Sources.Web.Feeds) == 0 {
 		errs = append(errs, "sources.web: at least one feed is required when web is enabled")
+	}
+	for i, feed := range cfg.Sources.Web.Feeds {
+		if feed.Type != "rss" && feed.Type != "scrape" && feed.Type != "search" {
+			errs = append(errs, fmt.Sprintf("sources.web.feeds[%d]: type must be 'rss', 'scrape', or 'search', got %q", i, feed.Type))
+		}
 	}
 
 	// Matching rules.

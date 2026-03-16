@@ -112,6 +112,7 @@ func NewFinding(source, sourceID, sourceName, content string) *Finding {
 		SourceName:  sourceName,
 		Content:     content,
 		CollectedAt: time.Now().UTC(),
+		Metadata:    make(map[string]string),
 	}
 	f.ContentHash = f.ComputeContentHash()
 	return f
