@@ -18,12 +18,25 @@ docker build -t ghcr.io/zyrakk/noctis:latest .
 docker push ghcr.io/zyrakk/noctis:latest
 ```
 
-If you're on ARM64 and need multi-arch:
+Multi-arch (required for mixed Intel + ARM clusters):
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t ghcr.io/zyrakk/noctis:latest --push .
 ```
+
+## How Config Works
+
+Noctis reads its config from a YAML file mounted via ConfigMap. The YAML supports `${ENV_VAR}` syntax for secrets — the Go config loader replaces these tokens with environment variable values at startup. The env vars come from the Kubernetes Secret `noctis-secrets`, injected via `envFrom`.
+
+**Example flow:**
+1. Secret `noctis-secrets` has key `NOCTIS_DB_DSN` with value `postgres://noctis:mypass@noctis-postgres.noctis.svc:5432/noctis?sslmode=disable`
+2. The Noctis pod gets `NOCTIS_DB_DSN` as an env var via `envFrom`
+3. The ConfigMap has `dsn: "${NOCTIS_DB_DSN}"` in the YAML
+4. Go's `config.Load()` reads the YAML, replaces `${NOCTIS_DB_DSN}` with the env var value
+5. The daemon connects to postgres using the real DSN
+
+**The ConfigMap never contains real credentials.** All secrets flow through the Kubernetes Secret.
 
 ## Step 1: Create Namespace
 
@@ -37,27 +50,24 @@ Copy the example and fill in real values:
 
 ```bash
 cp deploy/secrets.yaml.example deploy/secrets.yaml
+# Edit deploy/secrets.yaml with real values
 ```
 
-Edit `deploy/secrets.yaml`:
-- Set `NOCTIS_LLM_API_KEY` to your GLM API key
-- Set `NOCTIS_DB_PASSWORD` to a strong password
-- Update `NOCTIS_DB_DSN` to match the password you chose
+Required keys:
+
+| Key | Description |
+|-----|-------------|
+| `NOCTIS_LLM_API_KEY` | GLM API key |
+| `NOCTIS_DB_PASSWORD` | PostgreSQL password (used by both postgres and noctis) |
+| `NOCTIS_DB_DSN` | Full connection string: `postgres://noctis:<PASSWORD>@noctis-postgres.noctis.svc:5432/noctis?sslmode=disable` |
+
+**The password in `NOCTIS_DB_DSN` must match `NOCTIS_DB_PASSWORD` exactly.** The DSN is what the Go code uses to connect. The password is what PostgreSQL uses to authenticate.
 
 ```bash
 kubectl apply -f deploy/secrets.yaml
 ```
 
-**Important:** Never commit `deploy/secrets.yaml` to git. Only `secrets.yaml.example` is tracked.
-
-Also create the PostgreSQL credentials secret (edit the password to match):
-
-```bash
-# Edit the password in postgres.yaml to match NOCTIS_DB_PASSWORD
-kubectl apply -f deploy/postgres.yaml
-```
-
-Wait — that's done in the next step. Just make sure the password in `postgres.yaml`'s `noctis-postgres-credentials` Secret matches `NOCTIS_DB_PASSWORD` in `secrets.yaml`.
+**Never commit `deploy/secrets.yaml` to git.** Only `secrets.yaml.example` is tracked.
 
 ## Step 3: Deploy PostgreSQL
 
@@ -65,30 +75,30 @@ Wait — that's done in the next step. Just make sure the password in `postgres.
 kubectl apply -f deploy/postgres.yaml
 ```
 
-Wait for PostgreSQL to be ready:
+PostgreSQL reads `NOCTIS_DB_PASSWORD` from the same `noctis-secrets` secret via `secretKeyRef`. This guarantees the password is consistent between postgres and noctis.
+
+Wait for it to be ready:
 
 ```bash
 kubectl -n noctis get pods -w
 # Wait until noctis-postgres-0 shows 1/1 Running
 ```
 
-Verify the database is accessible:
+Verify:
 
 ```bash
 kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c '\l'
 ```
 
-You should see the `noctis` database listed.
-
-## Step 4: Deploy Noctis ConfigMap
+## Step 4: Deploy ConfigMap
 
 ```bash
 kubectl apply -f deploy/configmap.yaml
 ```
 
-The default config enables only RSS feeds (BleepingComputer, The Hacker News, Krebs on Security, CERT-EU, CISA Advisories). This is a safe starting point that requires no special credentials.
+The default config enables only RSS feeds (BleepingComputer, The Hacker News, Krebs on Security, CERT-EU, CISA). No special credentials needed for RSS-only mode.
 
-To customize: edit the ConfigMap or create your own.
+The ConfigMap references `${NOCTIS_DB_DSN}` and `${NOCTIS_LLM_API_KEY}` which are resolved from env vars at runtime.
 
 ## Step 5: Deploy Noctis
 
@@ -113,22 +123,24 @@ kubectl -n noctis logs -f deploy/noctis
 
 You should see:
 ```
-{"level":"INFO","msg":"starting noctis","version":"dev"}
+{"level":"INFO","msg":"starting noctis","version":"..."}
 {"level":"INFO","msg":"database migrations applied"}
 {"level":"INFO","msg":"web/RSS collector enabled","feeds":5}
-{"level":"INFO","msg":"background workers started","classification_workers":2,"entity_extraction_workers":1}
-{"level":"INFO","msg":"noctis is ready","collectors":1,"archive":true,"discovery":true}
+{"level":"INFO","msg":"background workers started",...}
+{"level":"INFO","msg":"noctis is ready",...}
 ```
+
+If you see `password authentication failed`, verify:
+1. The password in `NOCTIS_DB_DSN` matches `NOCTIS_DB_PASSWORD` in the secret
+2. The secret was applied: `kubectl -n noctis get secret noctis-secrets -o yaml`
+3. Re-apply the secret and restart the pod: `kubectl -n noctis rollout restart deploy/noctis`
 
 ### Check health
 
 ```bash
 kubectl -n noctis port-forward svc/noctis-metrics 8080:8080 &
-curl http://localhost:8080/healthz
-# Should return: ok
-
-curl http://localhost:8080/readyz
-# Should return: ready
+curl http://localhost:8080/healthz   # ok
+curl http://localhost:8080/readyz    # ready
 ```
 
 ### Check metrics
@@ -138,29 +150,16 @@ kubectl -n noctis port-forward svc/noctis-metrics 9090:9090 &
 curl -s http://localhost:9090/metrics | grep noctis_
 ```
 
-You should see `noctis_findings_total`, `noctis_collector_last_success_timestamp`, and other counters.
-
 ### Check the database has content
 
-After a few minutes, RSS feeds should have been collected and archived:
+After a few minutes:
 
 ```bash
 kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c \
   "SELECT count(*) FROM raw_content;"
 ```
 
-Should return a non-zero count.
-
-```bash
-kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c \
-  "SELECT source_name, count(*) FROM raw_content GROUP BY source_name;"
-```
-
-Shows content per RSS feed.
-
 ## Checking Results the Next Day
-
-After running overnight, your intelligence database will have accumulated content from all configured feeds.
 
 ### Archive stats
 
@@ -169,7 +168,7 @@ kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c \
   "SELECT
     count(*) AS total,
     count(*) FILTER (WHERE classified = true) AS classified,
-    count(*) FILTER (WHERE entities_extracted = true) AS entities_extracted
+    count(*) FILTER (WHERE entities_extracted = true) AS extracted
   FROM raw_content;"
 ```
 
@@ -178,30 +177,23 @@ kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c \
 ```bash
 kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c \
   "SELECT source_name, count(*), max(collected_at)::date AS last_collected
-   FROM raw_content
-   GROUP BY source_name
-   ORDER BY count DESC;"
+   FROM raw_content GROUP BY source_name ORDER BY count DESC;"
 ```
 
-### Classified findings by category
+### Classified findings
 
 ```bash
 kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c \
   "SELECT category, severity, count(*)
-   FROM raw_content
-   WHERE classified = true
-   GROUP BY category, severity
-   ORDER BY count DESC;"
+   FROM raw_content WHERE classified = true
+   GROUP BY category, severity ORDER BY count DESC;"
 ```
 
 ### Extracted IOCs
 
 ```bash
 kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c \
-  "SELECT type, count(*), min(first_seen)::date, max(last_seen)::date
-   FROM iocs
-   GROUP BY type
-   ORDER BY count DESC;"
+  "SELECT type, count(*) FROM iocs GROUP BY type ORDER BY count DESC;"
 ```
 
 ### Discovered sources
@@ -211,38 +203,40 @@ kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c \
   "SELECT type, identifier, status FROM sources ORDER BY created_at DESC LIMIT 20;"
 ```
 
-If source discovery found new URLs in the RSS content, they'll show up here with status `discovered`. Approve them with the CLI (requires building the binary locally):
-
-```bash
-./bin/noctis source list --status discovered -c /path/to/config.yaml
-./bin/noctis source approve <id> -c /path/to/config.yaml
-```
-
-## Scaling Up
-
-Once the RSS-only deployment is verified, you can enable additional sources by editing the ConfigMap:
-
-1. **Paste sites**: Set `paste.enabled: true`, add Pastebin API key to secrets
-2. **Telegram**: Set `telegram.enabled: true`, add API credentials to secrets
-3. **Forums**: Set `forums.enabled: true`, configure site-specific scrapers
-4. **Tor**: Requires a Tor sidecar or host-level Tor service at `127.0.0.1:9050`
-
 ## Troubleshooting
 
-**Noctis pod is CrashLoopBackOff:**
-- Check logs: `kubectl -n noctis logs deploy/noctis`
-- Most common: wrong DB password, missing secrets, or postgres not ready yet
+**`password authentication failed for user noctis`:**
+- The DSN password doesn't match what postgres expects
+- Check: `kubectl -n noctis get secret noctis-secrets -o jsonpath='{.data.NOCTIS_DB_PASSWORD}' | base64 -d`
+- Verify the same password appears in `NOCTIS_DB_DSN`
+- If you changed the password, restart postgres to pick it up: `kubectl -n noctis rollout restart sts/noctis-postgres`
+
+**Noctis pod CrashLoopBackOff:**
+- Check logs: `kubectl -n noctis logs deploy/noctis --previous`
+- Common causes: wrong DB password, postgres not ready yet, missing secret
 
 **No content being collected:**
 - Check RSS feed URLs are reachable from the cluster
-- Check `noctis_collector_errors_total` metric
-- Increase log level to `debug` in the ConfigMap
+- Check metrics: `curl -s localhost:9090/metrics | grep collector_errors`
+- Increase log level: edit `logLevel: debug` in configmap, re-apply, restart
 
 **Classification not happening:**
-- Check GLM API key is correct
-- Check `noctis_llm_errors_total` metric
-- Background workers only start classifying after content is collected
+- Check GLM API key: `kubectl -n noctis get secret noctis-secrets -o jsonpath='{.data.NOCTIS_LLM_API_KEY}' | base64 -d`
+- Check metrics: `curl -s localhost:9090/metrics | grep llm_errors`
+- Workers only classify after content is collected — wait for RSS feeds to populate first
 
-**High memory usage:**
-- Reduce `classificationWorkers` and `entityExtractionWorkers` in config
-- Check `maxContentLength` — default 50k chars per item
+## Scaling Up
+
+Once RSS-only is verified, enable additional sources by editing the ConfigMap:
+
+1. **Paste sites**: Set `paste.enabled: true`, add `NOCTIS_PASTEBIN_API_KEY` to secrets
+2. **Telegram**: Set `telegram.enabled: true`, add Telegram API credentials to secrets
+3. **Forums**: Set `forums.enabled: true`, configure per-forum scrapers
+4. **Tor**: Add a Tor sidecar container or ensure host Tor runs at `127.0.0.1:9050`
+
+After editing the ConfigMap, restart Noctis to pick up changes:
+
+```bash
+kubectl apply -f deploy/configmap.yaml
+kubectl -n noctis rollout restart deploy/noctis
+```

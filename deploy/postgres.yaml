@@ -1,15 +1,4 @@
 apiVersion: v1
-kind: Secret
-metadata:
-  name: noctis-postgres-credentials
-  namespace: noctis
-type: Opaque
-stringData:
-  POSTGRES_USER: "noctis"
-  POSTGRES_PASSWORD: "change-me-to-a-strong-password"
-  POSTGRES_DB: "noctis"
----
-apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: noctis-postgres-data
@@ -50,9 +39,16 @@ spec:
           ports:
             - containerPort: 5432
               name: postgres
-          envFrom:
-            - secretRef:
-                name: noctis-postgres-credentials
+          env:
+            - name: POSTGRES_DB
+              value: noctis
+            - name: POSTGRES_USER
+              value: noctis
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: noctis-secrets
+                  key: NOCTIS_DB_PASSWORD
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
