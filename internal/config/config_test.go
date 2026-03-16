@@ -306,6 +306,46 @@ func TestLoad_EnvSubstitutionMissingVar(t *testing.T) {
 	}
 }
 
+func TestValidate_ForumsEnabledNoSites(t *testing.T) {
+	cfg := &config.Config{
+		LLM: config.LLMConfig{
+			Provider: "glm",
+			BaseURL:  "http://localhost:11434",
+			Model:    "glm-4",
+		},
+		Sources: config.SourcesConfig{
+			Forums: config.ForumsConfig{Enabled: true, Sites: nil},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected error for forums enabled with no sites")
+	}
+	if !containsError(err.Error(), "site") {
+		t.Errorf("expected error to mention 'site', got: %s", err.Error())
+	}
+}
+
+func TestValidate_WebEnabledNoFeeds(t *testing.T) {
+	cfg := &config.Config{
+		LLM: config.LLMConfig{
+			Provider: "glm",
+			BaseURL:  "http://localhost:11434",
+			Model:    "glm-4",
+		},
+		Sources: config.SourcesConfig{
+			Web: config.WebSourcesConfig{Enabled: true, Feeds: nil},
+		},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected error for web enabled with no feeds")
+	}
+	if !containsError(err.Error(), "feed") {
+		t.Errorf("expected error to mention 'feed', got: %s", err.Error())
+	}
+}
+
 // containsError is a helper to check if a string contains a substring (case-insensitive).
 func containsError(haystack, needle string) bool {
 	lower := func(s string) string {

@@ -19,17 +19,41 @@ type wrapper struct {
 
 // Config is the top-level configuration structure.
 type Config struct {
-	LogLevel    string         `yaml:"logLevel"`
-	MetricsPort int            `yaml:"metricsPort"`
-	HealthPort  int            `yaml:"healthPort"`
-	Sources     SourcesConfig  `yaml:"sources"`
-	Matching    MatchingConfig `yaml:"matching"`
-	LLM         LLMConfig      `yaml:"llm"`
+	LogLevel    string          `yaml:"logLevel"`
+	MetricsPort int             `yaml:"metricsPort"`
+	HealthPort  int             `yaml:"healthPort"`
+	Sources     SourcesConfig   `yaml:"sources"`
+	Matching    MatchingConfig  `yaml:"matching"`
+	LLM         LLMConfig       `yaml:"llm"`
 	Profiling   ProfilingConfig `yaml:"profiling"`
-	Canary      CanaryConfig   `yaml:"canary"`
+	Canary      CanaryConfig    `yaml:"canary"`
 	Dispatch    DispatchConfig  `yaml:"dispatch"`
 	Database    DatabaseConfig  `yaml:"database"`
 	Graph       GraphConfig     `yaml:"graph"`
+	Collection  CollectionConfig `yaml:"collection"`
+	Discovery   DiscoveryConfig  `yaml:"discovery"`
+	Storage     StorageConfig    `yaml:"storage"`
+}
+
+// CollectionConfig controls archive-everything behavior and background workers.
+type CollectionConfig struct {
+	ArchiveAll              bool `yaml:"archiveAll"`
+	ClassificationWorkers   int  `yaml:"classificationWorkers"`
+	EntityExtractionWorkers int  `yaml:"entityExtractionWorkers"`
+	ClassificationBatchSize int  `yaml:"classificationBatchSize"`
+	MaxContentLength        int  `yaml:"maxContentLength"`
+}
+
+// DiscoveryConfig controls the source discovery engine.
+type DiscoveryConfig struct {
+	Enabled     bool `yaml:"enabled"`
+	AutoApprove bool `yaml:"autoApprove"`
+}
+
+// StorageConfig controls artifact storage on NFS.
+type StorageConfig struct {
+	ArtifactPath      string `yaml:"artifactPath"`
+	MaxArtifactSizeMB int    `yaml:"maxArtifactSizeMB"`
 }
 
 // SourcesConfig groups all ingest source configurations.
