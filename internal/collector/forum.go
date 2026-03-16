@@ -48,6 +48,10 @@ type ForumCollector struct {
 	seen map[string]bool
 	mu   sync.Mutex
 
+	// Per-site circuit breakers persist across crawl cycles.
+	breakers   map[string]*circuitBreaker
+	breakersMu sync.Mutex
+
 	uaIdx   int
 	uaIdxMu sync.Mutex
 }
@@ -59,6 +63,7 @@ func NewForumCollector(cfg *config.ForumsConfig, torCfg *config.TorConfig) *Foru
 		torCfg:     torCfg,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		seen:       make(map[string]bool),
+		breakers:   make(map[string]*circuitBreaker),
 	}
 
 	if torCfg != nil && torCfg.SocksProxy != "" {
@@ -136,9 +141,13 @@ func (fc *ForumCollector) pollForum(ctx context.Context, site *config.ForumConfi
 
 // crawlForum performs a single crawl cycle of a forum site.
 func (fc *ForumCollector) crawlForum(ctx context.Context, site *config.ForumConfig, out chan<- models.Finding) {
-	cb := &circuitBreaker{
-		backoffDuration: circuitBreakerInitial,
+	// Cap dedup map to prevent unbounded growth. Archive handles true dedup via content_hash.
+	fc.mu.Lock()
+	if len(fc.seen) > 100000 {
+		fc.seen = make(map[string]bool)
 	}
+	fc.mu.Unlock()
+	cb := fc.getBreaker(site.Name)
 
 	client := fc.clientFor(site)
 
@@ -431,6 +440,26 @@ func (fc *ForumCollector) markSeen(hash string) bool {
 	}
 	fc.seen[hash] = true
 	return false
+}
+
+// resetSeen clears the dedup map to prevent unbounded memory growth.
+// Safe to call between crawl cycles since the archive handles true dedup.
+func (fc *ForumCollector) resetSeen() {
+	fc.mu.Lock()
+	fc.seen = make(map[string]bool)
+	fc.mu.Unlock()
+}
+
+// getBreaker returns the persistent circuit breaker for a given forum site.
+func (fc *ForumCollector) getBreaker(siteName string) *circuitBreaker {
+	fc.breakersMu.Lock()
+	defer fc.breakersMu.Unlock()
+	cb, ok := fc.breakers[siteName]
+	if !ok {
+		cb = &circuitBreaker{backoffDuration: circuitBreakerInitial}
+		fc.breakers[siteName] = cb
+	}
+	return cb
 }
 
 // forumContentHash returns the hex SHA-256 of content for dedup purposes.

@@ -36,6 +36,8 @@ func newRateLimiter(minDelay time.Duration) *rateLimiter {
 
 // Wait blocks until minDelay has elapsed since the last call. Returns
 // ctx.Err() if the context is cancelled while waiting.
+// The time slot is claimed optimistically under the lock to prevent
+// concurrent workers from bypassing the delay (TOCTOU fix).
 func (r *rateLimiter) Wait(ctx context.Context) error {
 	r.mu.Lock()
 
@@ -49,18 +51,16 @@ func (r *rateLimiter) Wait(ctx context.Context) error {
 		return nil
 	}
 
+	// Claim the slot now so the next caller sees the updated lastCall.
+	r.lastCall = now.Add(remaining)
 	r.mu.Unlock()
 
 	select {
 	case <-time.After(remaining):
+		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-
-	r.mu.Lock()
-	r.lastCall = time.Now()
-	r.mu.Unlock()
-	return nil
 }
 
 // classificationWorker polls the archive for unclassified content and runs

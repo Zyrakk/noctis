@@ -33,7 +33,8 @@ CREATE INDEX IF NOT EXISTS idx_raw_content_collected ON raw_content(collected_at
 CREATE INDEX IF NOT EXISTS idx_raw_content_category ON raw_content(category);
 CREATE INDEX IF NOT EXISTS idx_raw_content_tags ON raw_content USING GIN(tags);
 CREATE INDEX IF NOT EXISTS idx_raw_content_hash ON raw_content(content_hash);
-CREATE INDEX IF NOT EXISTS idx_raw_content_unclassified ON raw_content(classified) WHERE classified = FALSE;
+CREATE INDEX IF NOT EXISTS idx_raw_content_unclassified ON raw_content(collected_at ASC) WHERE classified = FALSE;
+CREATE INDEX IF NOT EXISTS idx_raw_content_unextracted ON raw_content(collected_at ASC) WHERE classified = TRUE AND entities_extracted = FALSE;
 
 -- IOC store: all indicators extracted across all content
 CREATE TABLE IF NOT EXISTS iocs (

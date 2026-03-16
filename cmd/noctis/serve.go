@@ -195,14 +195,18 @@ func newServeCmd() *cobra.Command {
 				}()
 
 				// Fan-in: read from collector channel, process through ingest pipeline
+				collectorWg.Add(1)
 				go func() {
+					defer collectorWg.Done()
 					for f := range ch {
 						if err := ingestPipeline.Process(pipelineCtx, f); err != nil {
 							slog.Error("ingest error", "error", err)
 						}
-						// Feed content to discovery engine
+						// Feed content to discovery engine (inline — fast regex + single DB upsert)
 						if cfg.Discovery.Enabled {
-							go discoveryEngine.ProcessContent(pipelineCtx, f.Content, f.ID)
+							if err := discoveryEngine.ProcessContent(pipelineCtx, f.Content, f.ID); err != nil {
+								slog.Debug("discovery error", "error", err)
+							}
 						}
 					}
 				}()

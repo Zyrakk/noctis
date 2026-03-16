@@ -136,32 +136,24 @@ func (e *Engine) ProcessContent(ctx context.Context, content string, sourceConte
 	for _, u := range urls {
 		srcType := classifySource(u)
 
-		// Check if this identifier already exists.
-		var exists bool
-		err := e.pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM sources WHERE identifier = $1)`, u,
-		).Scan(&exists)
-		if err != nil {
-			return fmt.Errorf("discovery: check existing source %q: %w", u, err)
-		}
-		if exists {
-			continue
-		}
-
-		_, err = e.pool.Exec(ctx, `
+		// Insert with ON CONFLICT to avoid N+1 existence checks.
+		tag, err := e.pool.Exec(ctx, `
 INSERT INTO sources (type, identifier, name, status, discovered_from, metadata)
-VALUES ($1, $2, $3, $4, $5, $6)`,
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (identifier) DO NOTHING`,
 			srcType, u, u, status, nilIfEmpty(sourceContentID), []byte("{}"),
 		)
 		if err != nil {
 			return fmt.Errorf("discovery: insert source %q: %w", u, err)
 		}
 
-		slog.Info("discovered new source",
-			"identifier", u,
-			"type", srcType,
-			"status", status,
-		)
+		if tag.RowsAffected() > 0 {
+			slog.Info("discovered new source",
+				"identifier", u,
+				"type", srcType,
+				"status", status,
+			)
+		}
 	}
 
 	return nil

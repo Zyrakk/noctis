@@ -130,6 +130,12 @@ func (wc *WebCollector) pollRSS(ctx context.Context, feedCfg *config.WebConfig, 
 
 // fetchRSS fetches an RSS/Atom feed URL and emits Findings for each item.
 func (wc *WebCollector) fetchRSS(ctx context.Context, feedCfg *config.WebConfig, client *http.Client, out chan<- models.Finding) {
+	// Cap dedup map to prevent unbounded growth. Archive handles true dedup.
+	wc.mu.Lock()
+	if len(wc.seen) > 100000 {
+		wc.seen = make(map[string]bool)
+	}
+	wc.mu.Unlock()
 	body, err := wc.doGet(ctx, feedCfg.URL, client)
 	if err != nil {
 		log.Printf("[web] RSS feed %q fetch error: %v", feedCfg.Name, err)
@@ -336,6 +342,12 @@ func (wc *WebCollector) fetchSearch(ctx context.Context, feedCfg *config.WebConf
 			resultLinks = append(resultLinks, resolved)
 		})
 
+		// Cap results to prevent fetching hundreds of nav/footer links.
+		const maxSearchResults = 20
+		if len(resultLinks) > maxSearchResults {
+			resultLinks = resultLinks[:maxSearchResults]
+		}
+
 		// Fetch each result link and extract text content.
 		for _, link := range resultLinks {
 			if ctx.Err() != nil {
@@ -409,6 +421,13 @@ func (wc *WebCollector) markSeen(hash string) bool {
 	return false
 }
 
+// resetSeen clears the dedup map to prevent unbounded memory growth.
+func (wc *WebCollector) resetSeen() {
+	wc.mu.Lock()
+	wc.seen = make(map[string]bool)
+	wc.mu.Unlock()
+}
+
 // doGet performs an HTTP GET request with User-Agent rotation and returns the
 // response body.
 func (wc *WebCollector) doGet(ctx context.Context, rawURL string, client *http.Client) ([]byte, error) {
@@ -429,7 +448,9 @@ func (wc *WebCollector) doGet(ctx context.Context, rawURL string, client *http.C
 		return nil, fmt.Errorf("GET %s: status %d", rawURL, resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	// Cap response size at 10 MB to prevent memory exhaustion from large/malicious responses.
+	const maxResponseBytes = 10 * 1024 * 1024
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, fmt.Errorf("reading body from %s: %w", rawURL, err)
 	}

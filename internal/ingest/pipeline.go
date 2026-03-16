@@ -101,13 +101,6 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		return nil
 	}
 
-	// Record matcher match metrics.
-	if p.metrics != nil {
-		for _, rule := range result.MatchedRules {
-			p.metrics.RecordMatcherMatch(rule)
-		}
-	}
-
 	// 4. Alert path: full LLM analysis.
 	enriched := models.EnrichedFinding{
 		Finding:      f,
@@ -158,10 +151,7 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		log.Printf("ingest: mark classified error for %s: %v", rc.ID, err)
 	}
 
-	// 7. Record Prometheus metrics.
-	if p.metrics != nil {
-		p.metrics.RecordFinding(enriched)
-	}
+	// Metrics recording is handled by alertFn callback to avoid double-counting.
 
 	return nil
 }
