@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -39,9 +40,10 @@ type Source struct {
 // URLs found in collected content. It manages the full source lifecycle
 // from discovery through approval and active collection.
 type Engine struct {
-	pool       *pgxpool.Pool
-	config     config.DiscoveryConfig
-	urlRegexes []*regexp.Regexp // compiled URL extraction patterns
+	pool            *pgxpool.Pool
+	config          config.DiscoveryConfig
+	urlRegexes      []*regexp.Regexp    // compiled URL extraction patterns
+	blacklistDomains map[string]struct{} // domains to skip during discovery
 }
 
 // NewEngine creates a discovery Engine with pre-compiled URL extraction
@@ -59,10 +61,16 @@ func NewEngine(pool *pgxpool.Pool, cfg config.DiscoveryConfig) *Engine {
 		regexp.MustCompile("https?://[^\\s<>\"{}|\\\\^`\\[\\]]+"),
 	}
 
+	blacklist := make(map[string]struct{}, len(cfg.DomainBlacklist))
+	for _, d := range cfg.DomainBlacklist {
+		blacklist[strings.ToLower(d)] = struct{}{}
+	}
+
 	return &Engine{
-		pool:       pool,
-		config:     cfg,
-		urlRegexes: regexes,
+		pool:             pool,
+		config:           cfg,
+		urlRegexes:       regexes,
+		blacklistDomains: blacklist,
 	}
 }
 
@@ -86,6 +94,23 @@ func (e *Engine) ExtractURLs(content string) []string {
 	}
 
 	return urls
+}
+
+// isBlacklisted returns true if the URL's domain matches any entry in the
+// domain blacklist, or if the URL is malformed (e.g. bare "https://").
+func (e *Engine) isBlacklisted(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return true // malformed or bare scheme — skip
+	}
+
+	host := strings.ToLower(parsed.Hostname())
+	for domain := range e.blacklistDomains {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	return false
 }
 
 // classifySource determines the source type for a given URL using simple
@@ -134,6 +159,11 @@ func (e *Engine) ProcessContent(ctx context.Context, content string, sourceConte
 	}
 
 	for _, u := range urls {
+		if e.isBlacklisted(u) {
+			slog.Debug("discovery: skipping blacklisted URL", "url", u)
+			continue
+		}
+
 		srcType := classifySource(u)
 
 		// Insert with ON CONFLICT to avoid N+1 existence checks.

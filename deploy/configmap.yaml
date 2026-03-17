@@ -95,6 +95,14 @@ data:
       discovery:
         enabled: true
         autoApprove: false
+        domainBlacklist:
+          - nvd.nist.gov
+          - cwe.mitre.org
+          - first.org
+          - github.com
+          - wikipedia.org
+          - siemens.com
+          - honeywell.com
 
       database:
         driver: postgres

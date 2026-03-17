@@ -46,8 +46,9 @@ type CollectionConfig struct {
 
 // DiscoveryConfig controls the source discovery engine.
 type DiscoveryConfig struct {
-	Enabled     bool `yaml:"enabled"`
-	AutoApprove bool `yaml:"autoApprove"`
+	Enabled         bool     `yaml:"enabled"`
+	AutoApprove     bool     `yaml:"autoApprove"`
+	DomainBlacklist []string `yaml:"domainBlacklist"`
 }
 
 // StorageConfig controls artifact storage on NFS.

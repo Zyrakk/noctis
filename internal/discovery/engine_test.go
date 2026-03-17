@@ -234,6 +234,93 @@ func TestEngine_Construction(t *testing.T) {
 	}
 }
 
+// newBlacklistEngine creates an Engine with the default domain blacklist.
+func newBlacklistEngine() *Engine {
+	return NewEngine(nil, config.DiscoveryConfig{
+		Enabled: true,
+		DomainBlacklist: []string{
+			"nvd.nist.gov",
+			"cwe.mitre.org",
+			"first.org",
+			"github.com",
+			"wikipedia.org",
+			"siemens.com",
+			"honeywell.com",
+		},
+	})
+}
+
+// TestIsBlacklisted_MatchesDomain verifies that URLs on blacklisted
+// domains are correctly identified.
+func TestIsBlacklisted_MatchesDomain(t *testing.T) {
+	e := newBlacklistEngine()
+
+	blocked := []string{
+		"https://nvd.nist.gov/vuln/detail/CVE-2024-1234",
+		"https://cwe.mitre.org/data/definitions/79.html",
+		"https://www.first.org/cvss/calculator/3.1",
+		"https://github.com/some/repo",
+		"https://en.wikipedia.org/wiki/SQL_injection",
+		"https://siemens.com/advisory/ssa-123456",
+		"https://honeywell.com/security",
+	}
+
+	for _, u := range blocked {
+		if !e.isBlacklisted(u) {
+			t.Errorf("expected %q to be blacklisted", u)
+		}
+	}
+}
+
+// TestIsBlacklisted_AllowsLegitSources verifies that non-blacklisted
+// URLs pass through.
+func TestIsBlacklisted_AllowsLegitSources(t *testing.T) {
+	e := newBlacklistEngine()
+
+	allowed := []string{
+		"https://pastebin.com/abc123",
+		"https://t.me/darkleaks",
+		"https://example.com/feed.xml",
+		"http://abc2345678901234567.onion/forum",
+	}
+
+	for _, u := range allowed {
+		if e.isBlacklisted(u) {
+			t.Errorf("expected %q to NOT be blacklisted", u)
+		}
+	}
+}
+
+// TestIsBlacklisted_SubdomainMatch verifies that subdomains of blacklisted
+// domains are also blocked.
+func TestIsBlacklisted_SubdomainMatch(t *testing.T) {
+	e := newBlacklistEngine()
+
+	if !e.isBlacklisted("https://web.nvd.nist.gov/view/vuln/detail") {
+		t.Error("expected subdomain of nvd.nist.gov to be blacklisted")
+	}
+}
+
+// TestIsBlacklisted_BareScheme verifies that bare "https://" with no
+// host is rejected.
+func TestIsBlacklisted_BareScheme(t *testing.T) {
+	e := newBlacklistEngine()
+
+	if !e.isBlacklisted("https://") {
+		t.Error("expected bare https:// to be blacklisted")
+	}
+}
+
+// TestIsBlacklisted_EmptyBlacklist verifies that an engine with no
+// blacklist allows all valid URLs through.
+func TestIsBlacklisted_EmptyBlacklist(t *testing.T) {
+	e := newTestEngine()
+
+	if e.isBlacklisted("https://nvd.nist.gov/vuln/detail/CVE-2024-1234") {
+		t.Error("with empty blacklist, no URLs should be blocked")
+	}
+}
+
 // TestNilIfEmpty verifies the nilIfEmpty helper returns nil for empty
 // strings and a pointer for non-empty strings.
 func TestNilIfEmpty(t *testing.T) {
