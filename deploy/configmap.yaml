@@ -16,7 +16,13 @@ data:
 
       sources:
         telegram:
-          enabled: false
+          enabled: true
+          sessionFile: "/data/telegram.session"
+          channels:
+            - username: "ad_poheque"
+            - username: "RalfHackerChannel"
+            - username: "zer0day1ab"
+          autoDiscovery: true
 
         paste:
           enabled: false
@@ -76,7 +82,7 @@ data:
       llm:
         provider: glm
         baseURL: "https://open.bigmodel.cn/api/coding/paas/v4"
-        model: "glm-4.7"
+        model: "glm-5"
         apiKey: "${NOCTIS_LLM_API_KEY}"
         maxTokens: 1024
         temperature: 0.1

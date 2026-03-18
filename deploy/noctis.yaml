@@ -42,6 +42,9 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
+            - name: telegram-session
+              mountPath: /data/telegram.session
+              subPath: telegram.session
           resources:
             requests:
               memory: "128Mi"
@@ -67,6 +70,9 @@ spec:
             name: noctis-config
         - name: data
           emptyDir: {}
+        - name: telegram-session
+          secret:
+            secretName: noctis-telegram-session
 ---
 apiVersion: v1
 kind: Service
