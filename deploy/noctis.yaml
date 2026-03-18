@@ -21,16 +21,6 @@ spec:
         app.kubernetes.io/component: daemon
         app.kubernetes.io/part-of: noctis
     spec:
-      initContainers:
-        - name: copy-telegram-session
-          image: busybox:latest
-          command: ["cp", "/secret/telegram.session", "/data/telegram.session"]
-          volumeMounts:
-            - name: telegram-session
-              mountPath: /secret
-              readOnly: true
-            - name: data
-              mountPath: /data
       containers:
         - name: noctis
           image: ghcr.io/zyrakk/noctis:latest
@@ -77,9 +67,6 @@ spec:
             name: noctis-config
         - name: data
           emptyDir: {}
-        - name: telegram-session
-          secret:
-            secretName: noctis-telegram-session
 ---
 apiVersion: v1
 kind: Service

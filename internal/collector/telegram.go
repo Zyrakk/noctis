@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"log/slog"
-	"os"
 	"sync"
 	"time"
 
@@ -14,7 +13,9 @@ import (
 
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
+	"github.com/gotd/td/telegram/auth/qrlogin"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 )
 
 // telegramMessage is an internal type that decouples message processing from
@@ -143,23 +144,11 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 		slog.Info("telegram: configured channel", "index", i, "username", ch.Username, "id", ch.ID)
 	}
 
-	// Verify session file is readable.
-	if info, err := os.Stat(tc.cfg.SessionFile); err != nil {
-		slog.Error("telegram: session file not accessible", "path", tc.cfg.SessionFile, "error", err)
-		return fmt.Errorf("telegram session file: %w", err)
-	} else {
-		slog.Info("telegram: session file found", "path", tc.cfg.SessionFile, "size", info.Size())
-		if info.Size() == 0 {
-			slog.Error("telegram: session file is empty", "path", tc.cfg.SessionFile)
-			return fmt.Errorf("telegram session file is empty: %s", tc.cfg.SessionFile)
-		}
-	}
-
-	// Create update dispatcher.
+	// Create update dispatcher — used for both QR login signals and channel messages.
 	dispatcher := tg.NewUpdateDispatcher()
+	loggedIn := qrlogin.OnLoginToken(dispatcher)
 
 	// Create client with file-based session storage.
-	// DeviceConfig must match what was used during telegram-auth to reuse the session.
 	opts := telegram.Options{
 		UpdateHandler: dispatcher,
 		SessionStorage: &session.FileStorage{
@@ -178,22 +167,10 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 	slog.Info("telegram: connecting to Telegram")
 
 	return client.Run(ctx, func(ctx context.Context) error {
-		slog.Info("telegram: connected, checking auth status")
-
-		// Check if the session is already authorized.
-		status, err := client.Auth().Status(ctx)
-		if err != nil {
-			slog.Error("telegram: auth status check failed", "error", err)
-			return fmt.Errorf("telegram auth status: %w", err)
+		// Check if we already have a valid session.
+		if err := tc.ensureAuthorized(ctx, client, loggedIn); err != nil {
+			return err
 		}
-		slog.Info("telegram: auth status", "authorized", status.Authorized)
-
-		if !status.Authorized {
-			slog.Error("telegram: session is not authorized — run 'noctis telegram-auth' to create a valid session")
-			return fmt.Errorf("telegram session not authorized")
-		}
-
-		slog.Info("telegram: auth validated")
 
 		api := client.API()
 
@@ -259,6 +236,64 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 		slog.Info("telegram: shutting down")
 		return ctx.Err()
 	})
+}
+
+// ensureAuthorized checks the session and, if not authorized, runs an inline
+// QR login flow so the user can scan the login URL from kubectl logs.
+func (tc *TelegramCollector) ensureAuthorized(ctx context.Context, client *telegram.Client, loggedIn qrlogin.LoggedIn) error {
+	slog.Info("telegram: checking auth status")
+
+	status, err := client.Auth().Status(ctx)
+	if err != nil {
+		slog.Warn("telegram: auth status check failed, will attempt QR login", "error", err)
+	} else if status.Authorized {
+		slog.Info("telegram: session is valid, skipping auth")
+		return nil
+	} else {
+		slog.Info("telegram: session not authorized, starting QR login")
+	}
+
+	// Run QR login flow with 5-minute timeout.
+	authCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	slog.Info("telegram: starting QR auth — scan the login URL with your Telegram app")
+	slog.Info("telegram: open Telegram → Settings → Devices → Link Desktop Device")
+
+	_, err = client.QR().Auth(authCtx, loggedIn, func(ctx context.Context, token qrlogin.Token) error {
+		slog.Info("telegram: scan this URL on your phone",
+			"url", token.URL(),
+			"expires_in", time.Until(token.Expires()).Truncate(time.Second).String(),
+		)
+		fmt.Printf("\n=== TELEGRAM QR LOGIN ===\nScan this URL on your phone: %s\nExpires in: %s\n=========================\n\n",
+			token.URL(),
+			time.Until(token.Expires()).Truncate(time.Second),
+		)
+		return nil
+	})
+
+	if tgerr.Is(err, "SESSION_PASSWORD_NEEDED") {
+		slog.Info("telegram: QR scan accepted, 2FA password required")
+		password := tc.cfg.Password
+		if password == "" {
+			slog.Error("telegram: 2FA password required but not configured — set 'password' in telegram config")
+			return fmt.Errorf("telegram 2FA password required but not in config")
+		}
+		slog.Info("telegram: submitting 2FA password from config")
+		if _, err := client.Auth().Password(ctx, password); err != nil {
+			slog.Error("telegram: 2FA auth failed", "error", err)
+			return fmt.Errorf("telegram 2FA: %w", err)
+		}
+		slog.Info("telegram: 2FA auth successful")
+		return nil
+	}
+	if err != nil {
+		slog.Error("telegram: QR auth failed", "error", err)
+		return fmt.Errorf("telegram QR auth: %w", err)
+	}
+
+	slog.Info("telegram: QR auth successful, session saved")
+	return nil
 }
 
 // catchupChannels fetches the most recent messages from each configured
