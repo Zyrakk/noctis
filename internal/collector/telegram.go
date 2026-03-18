@@ -160,10 +160,18 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 	dispatcher := tg.NewUpdateDispatcher()
 
 	// Create client with file-based session storage.
+	// DeviceConfig must match what was used during telegram-auth to reuse the session.
 	opts := telegram.Options{
 		UpdateHandler: dispatcher,
 		SessionStorage: &session.FileStorage{
 			Path: tc.cfg.SessionFile,
+		},
+		Device: telegram.DeviceConfig{
+			DeviceModel:    "Noctis",
+			SystemVersion:  "Linux",
+			AppVersion:     "1.0.0",
+			SystemLangCode: "en",
+			LangCode:       "en",
 		},
 	}
 	client := telegram.NewClient(tc.cfg.APIId, tc.cfg.APIHash, opts)
