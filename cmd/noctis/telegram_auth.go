@@ -17,6 +17,7 @@ import (
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/telegram/auth/qrlogin"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 
 	"github.com/Zyrakk/noctis/internal/config"
 )
@@ -118,20 +119,32 @@ func runQRAuth(ctx context.Context, tcfg *config.TelegramConfig) error {
 	fmt.Println("Open Telegram on your phone → Settings → Devices → Link Desktop Device")
 
 	return client.Run(ctx, func(ctx context.Context) error {
-		authorization, err := client.QR().Auth(ctx, loggedIn, func(ctx context.Context, token qrlogin.Token) error {
+		_, err := client.QR().Auth(ctx, loggedIn, func(ctx context.Context, token qrlogin.Token) error {
 			fmt.Println("\nScan this QR code with your Telegram app:")
-			qrterminal.Generate(token.URL(), qrterminal.L, os.Stdout)
+			qrterminal.GenerateHalfBlock(token.URL(), qrterminal.L, os.Stdout)
 			fmt.Printf("Or open: %s\n", token.URL())
 			fmt.Printf("Token expires in %s\n", time.Until(token.Expires()).Truncate(time.Second))
 			return nil
 		})
-		if err != nil {
+		if tgerr.Is(err, "SESSION_PASSWORD_NEEDED") {
+			fmt.Println("\nQR scan accepted. 2FA password required.")
+			password := tcfg.Password
+			if password == "" {
+				fmt.Print("Enter 2FA password: ")
+				if _, err := fmt.Scanln(&password); err != nil {
+					return fmt.Errorf("reading 2FA password: %w", err)
+				}
+				password = strings.TrimSpace(password)
+			} else {
+				fmt.Println("Using 2FA password from config.")
+			}
+			if _, err := client.Auth().Password(ctx, password); err != nil {
+				return fmt.Errorf("2FA auth: %w", err)
+			}
+		} else if err != nil {
 			return fmt.Errorf("QR auth: %w", err)
 		}
 
-		if u, ok := authorization.User.AsNotEmpty(); ok {
-			fmt.Printf("Authenticated as %s (ID: %d)\n", u.Username, u.ID)
-		}
 		fmt.Printf("Authentication successful, session saved to %s\n", tcfg.SessionFile)
 		return nil
 	})
