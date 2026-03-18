@@ -31,7 +31,7 @@ data:
           enabled: false
 
         web:
-          enabled: true
+          enabled: false
           feeds:
             - name: "bleeping-computer"
               url: "https://www.bleepingcomputer.com/feed/"
