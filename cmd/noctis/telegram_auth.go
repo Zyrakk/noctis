@@ -61,6 +61,20 @@ func newTelegramAuthCmd() *cobra.Command {
 				flow := auth.NewFlow(
 					auth.Constant(tcfg.Phone, tcfg.Password,
 						auth.CodeAuthenticatorFunc(func(ctx context.Context, sentCode *tg.AuthSentCode) (string, error) {
+							switch sentCode.Type.(type) {
+							case *tg.AuthSentCodeTypeApp:
+								fmt.Println("Code sent to your Telegram app.")
+							case *tg.AuthSentCodeTypeSMS:
+								fmt.Println("Code sent via SMS.")
+							case *tg.AuthSentCodeTypeCall:
+								fmt.Println("Code will be delivered via phone call.")
+							case *tg.AuthSentCodeTypeFragmentSMS:
+								fmt.Println("Code sent via Fragment SMS.")
+							case *tg.AuthSentCodeTypeEmailCode:
+								fmt.Println("Code sent to your login email.")
+							default:
+								fmt.Printf("Code sent (type: %T).\n", sentCode.Type)
+							}
 							fmt.Print("Enter Telegram auth code: ")
 							var code string
 							if _, err := fmt.Scanln(&code); err != nil {
