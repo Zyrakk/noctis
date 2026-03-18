@@ -63,7 +63,8 @@ func newServeCmd() *cobra.Command {
 			if healthPort == 0 {
 				healthPort = 8080
 			}
-			hs := health.NewServer(fmt.Sprintf(":%d", healthPort))
+			qrAuth := &health.QRAuthState{}
+			hs := health.NewServer(fmt.Sprintf(":%d", healthPort), qrAuth)
 			go func() {
 				if err := hs.ListenAndServe(); err != nil {
 					slog.Error("health server error", "err", err)
@@ -149,7 +150,7 @@ func newServeCmd() *cobra.Command {
 				slog.Info("paste collector enabled")
 			}
 			if cfg.Sources.Telegram.Enabled {
-				tc := collector.NewTelegramCollector(&cfg.Sources.Telegram)
+				tc := collector.NewTelegramCollector(&cfg.Sources.Telegram, qrAuth)
 				collectors = append(collectors, tc)
 				slog.Info("telegram collector enabled")
 			}

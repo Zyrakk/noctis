@@ -15,7 +15,7 @@ type Server struct {
 }
 
 // NewServer creates a Server listening on addr and registers all handlers.
-func NewServer(addr string) *Server {
+func NewServer(addr string, qrAuth *QRAuthState) *Server {
 	s := &Server{
 		mux:  http.NewServeMux(),
 		addr: addr,
@@ -24,6 +24,9 @@ func NewServer(addr string) *Server {
 	s.mux.HandleFunc("/healthz", s.healthzHandler)
 	s.mux.HandleFunc("/readyz", s.readyzHandler)
 	s.mux.Handle("/metrics", promhttp.Handler())
+	if qrAuth != nil {
+		s.mux.HandleFunc("/auth/qr", qrAuth.Handler())
+	}
 
 	return s
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Zyrakk/noctis/internal/config"
+	"github.com/Zyrakk/noctis/internal/health"
 	"github.com/Zyrakk/noctis/internal/models"
 
 	"github.com/gotd/td/session"
@@ -60,16 +61,18 @@ func (m telegramMessage) toFinding() models.Finding {
 // TelegramCollector implements the Collector interface for Telegram channels
 // using the MTProto protocol via gotd/td.
 type TelegramCollector struct {
-	cfg  *config.TelegramConfig
-	seen map[string]bool
-	mu   sync.Mutex
+	cfg    *config.TelegramConfig
+	qrAuth *health.QRAuthState
+	seen   map[string]bool
+	mu     sync.Mutex
 }
 
 // NewTelegramCollector creates a TelegramCollector from the given configuration.
-func NewTelegramCollector(cfg *config.TelegramConfig) *TelegramCollector {
+func NewTelegramCollector(cfg *config.TelegramConfig, qrAuth *health.QRAuthState) *TelegramCollector {
 	return &TelegramCollector{
-		cfg:  cfg,
-		seen: make(map[string]bool),
+		cfg:    cfg,
+		qrAuth: qrAuth,
+		seen:   make(map[string]bool),
 	}
 }
 
@@ -269,6 +272,9 @@ func (tc *TelegramCollector) ensureAuthorized(ctx context.Context, client *teleg
 			token.URL(),
 			time.Until(token.Expires()).Truncate(time.Second),
 		)
+		if tc.qrAuth != nil {
+			tc.qrAuth.SetToken(token.URL(), token.Expires())
+		}
 		return nil
 	})
 
@@ -276,23 +282,38 @@ func (tc *TelegramCollector) ensureAuthorized(ctx context.Context, client *teleg
 		slog.Info("telegram: QR scan accepted, 2FA password required")
 		password := tc.cfg.Password
 		if password == "" {
+			if tc.qrAuth != nil {
+				tc.qrAuth.Clear()
+			}
 			slog.Error("telegram: 2FA password required but not configured — set 'password' in telegram config")
 			return fmt.Errorf("telegram 2FA password required but not in config")
 		}
 		slog.Info("telegram: submitting 2FA password from config")
 		if _, err := client.Auth().Password(ctx, password); err != nil {
+			if tc.qrAuth != nil {
+				tc.qrAuth.Clear()
+			}
 			slog.Error("telegram: 2FA auth failed", "error", err)
 			return fmt.Errorf("telegram 2FA: %w", err)
 		}
 		slog.Info("telegram: 2FA auth successful")
+		if tc.qrAuth != nil {
+			tc.qrAuth.SetSuccess()
+		}
 		return nil
 	}
 	if err != nil {
+		if tc.qrAuth != nil {
+			tc.qrAuth.Clear()
+		}
 		slog.Error("telegram: QR auth failed", "error", err)
 		return fmt.Errorf("telegram QR auth: %w", err)
 	}
 
 	slog.Info("telegram: QR auth successful, session saved")
+	if tc.qrAuth != nil {
+		tc.qrAuth.SetSuccess()
+	}
 	return nil
 }
 
