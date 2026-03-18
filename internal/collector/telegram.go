@@ -14,7 +14,6 @@ import (
 
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
-	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
 )
 
@@ -179,23 +178,19 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 	slog.Info("telegram: connecting to Telegram")
 
 	return client.Run(ctx, func(ctx context.Context) error {
-		slog.Info("telegram: connected, validating auth")
+		slog.Info("telegram: connected, checking auth status")
 
-		// Build auth flow: use phone + password from config, error on code request
-		// (first login must be done interactively; subsequent runs use the session file).
-		flow := auth.NewFlow(
-			auth.Constant(tc.cfg.Phone, tc.cfg.Password,
-				auth.CodeAuthenticatorFunc(func(ctx context.Context, sentCode *tg.AuthSentCode) (string, error) {
-					return "", fmt.Errorf("auth code required — run 'noctis telegram-auth' first")
-				}),
-			),
-			auth.SendCodeOptions{},
-		)
+		// Check if the session is already authorized.
+		status, err := client.Auth().Status(ctx)
+		if err != nil {
+			slog.Error("telegram: auth status check failed", "error", err)
+			return fmt.Errorf("telegram auth status: %w", err)
+		}
+		slog.Info("telegram: auth status", "authorized", status.Authorized)
 
-		// Authenticate if the session is not already valid.
-		if err := client.Auth().IfNecessary(ctx, flow); err != nil {
-			slog.Error("telegram: auth failed", "error", err)
-			return fmt.Errorf("telegram auth: %w", err)
+		if !status.Authorized {
+			slog.Error("telegram: session is not authorized — run 'noctis telegram-auth' to create a valid session")
+			return fmt.Errorf("telegram session not authorized")
 		}
 
 		slog.Info("telegram: auth validated")
