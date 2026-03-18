@@ -21,6 +21,7 @@ func main() {
 	root.AddCommand(newSourceCmd())
 	root.AddCommand(newSearchCmd())
 	root.AddCommand(newStatsCmd())
+	root.AddCommand(newTelegramAuthCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
