@@ -21,6 +21,16 @@ spec:
         app.kubernetes.io/component: daemon
         app.kubernetes.io/part-of: noctis
     spec:
+      initContainers:
+        - name: copy-telegram-session
+          image: busybox:latest
+          command: ["cp", "/secret/telegram.session", "/data/telegram.session"]
+          volumeMounts:
+            - name: telegram-session
+              mountPath: /secret
+              readOnly: true
+            - name: data
+              mountPath: /data
       containers:
         - name: noctis
           image: ghcr.io/zyrakk/noctis:latest
@@ -42,9 +52,6 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
-            - name: telegram-session
-              mountPath: /data/telegram.session
-              subPath: telegram.session
           resources:
             requests:
               memory: "128Mi"
