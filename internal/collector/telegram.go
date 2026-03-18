@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -126,9 +127,33 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 	defer close(out)
 
 	if !tc.cfg.Enabled {
-		slog.Info("telegram collector disabled")
+		slog.Info("telegram: collector disabled")
 		<-ctx.Done()
 		return ctx.Err()
+	}
+
+	// Log configuration for debugging.
+	slog.Info("telegram: starting collector",
+		"apiId", tc.cfg.APIId,
+		"phone", tc.cfg.Phone,
+		"sessionFile", tc.cfg.SessionFile,
+		"channels", len(tc.cfg.Channels),
+		"catchupMessages", tc.cfg.CatchupMessages,
+	)
+	for i, ch := range tc.cfg.Channels {
+		slog.Info("telegram: configured channel", "index", i, "username", ch.Username, "id", ch.ID)
+	}
+
+	// Verify session file is readable.
+	if info, err := os.Stat(tc.cfg.SessionFile); err != nil {
+		slog.Error("telegram: session file not accessible", "path", tc.cfg.SessionFile, "error", err)
+		return fmt.Errorf("telegram session file: %w", err)
+	} else {
+		slog.Info("telegram: session file found", "path", tc.cfg.SessionFile, "size", info.Size())
+		if info.Size() == 0 {
+			slog.Error("telegram: session file is empty", "path", tc.cfg.SessionFile)
+			return fmt.Errorf("telegram session file is empty: %s", tc.cfg.SessionFile)
+		}
 	}
 
 	// Create update dispatcher.
@@ -143,13 +168,17 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 	}
 	client := telegram.NewClient(tc.cfg.APIId, tc.cfg.APIHash, opts)
 
+	slog.Info("telegram: connecting to Telegram")
+
 	return client.Run(ctx, func(ctx context.Context) error {
+		slog.Info("telegram: connected, validating auth")
+
 		// Build auth flow: use phone + password from config, error on code request
 		// (first login must be done interactively; subsequent runs use the session file).
 		flow := auth.NewFlow(
 			auth.Constant(tc.cfg.Phone, tc.cfg.Password,
 				auth.CodeAuthenticatorFunc(func(ctx context.Context, sentCode *tg.AuthSentCode) (string, error) {
-					return "", fmt.Errorf("auth code required — run noctis interactively for first login")
+					return "", fmt.Errorf("auth code required — run 'noctis telegram-auth' first")
 				}),
 			),
 			auth.SendCodeOptions{},
@@ -157,8 +186,11 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 
 		// Authenticate if the session is not already valid.
 		if err := client.Auth().IfNecessary(ctx, flow); err != nil {
+			slog.Error("telegram: auth failed", "error", err)
 			return fmt.Errorf("telegram auth: %w", err)
 		}
+
+		slog.Info("telegram: auth validated")
 
 		api := client.API()
 
@@ -177,6 +209,8 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 					channelName = ch.Title
 				}
 			}
+
+			slog.Info("telegram: received message", "channel", channelName, "channelId", channelID)
 
 			author := ""
 			if msg.FromID != nil {
@@ -213,11 +247,13 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 
 		// Catchup: fetch last N messages from each configured channel.
 		if tc.cfg.CatchupMessages > 0 {
+			slog.Info("telegram: starting catchup", "messagesPerChannel", tc.cfg.CatchupMessages)
 			tc.catchupChannels(ctx, api, out)
 		}
 
-		slog.Info("telegram: listening for updates")
+		slog.Info("telegram: listening for updates", "channels", len(tc.cfg.Channels))
 		<-ctx.Done()
+		slog.Info("telegram: shutting down")
 		return ctx.Err()
 	})
 }
@@ -231,11 +267,15 @@ func (tc *TelegramCollector) catchupChannels(ctx context.Context, api *tg.Client
 		}
 
 		channelName := resolveChannelName(ch)
+		slog.Info("telegram: resolving channel", "channel", channelName)
+
 		peer, err := tc.resolveChannelPeer(ctx, api, ch)
 		if err != nil {
 			slog.Error("telegram: failed to resolve channel", "channel", channelName, "error", err)
 			continue
 		}
+
+		slog.Info("telegram: channel resolved", "channel", channelName, "channelId", peer.ChannelID)
 
 		history, err := api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
 			Peer:  peer,
