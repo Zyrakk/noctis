@@ -10,7 +10,7 @@ import (
 )
 
 func TestHealthzHandler_ReturnsOK(t *testing.T) {
-	s := health.NewServer(":0")
+	s := health.NewServer(":0", nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
@@ -29,7 +29,7 @@ func TestHealthzHandler_ReturnsOK(t *testing.T) {
 }
 
 func TestReadyzHandler_NotReady(t *testing.T) {
-	s := health.NewServer(":0")
+	s := health.NewServer(":0", nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	w := httptest.NewRecorder()
@@ -43,7 +43,7 @@ func TestReadyzHandler_NotReady(t *testing.T) {
 }
 
 func TestReadyzHandler_Ready(t *testing.T) {
-	s := health.NewServer(":0")
+	s := health.NewServer(":0", nil)
 	s.SetReady(true)
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
