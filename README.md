@@ -133,14 +133,12 @@ noctis serve --config config.yaml
 
 ## Telegram Integration
 
-Noctis connects to Telegram using the MTProto protocol via [gotd/td](https://github.com/gotd/td). Before running `noctis serve`, authenticate once with `noctis telegram-auth`. Two authentication flows are supported:
+Noctis connects to Telegram using the MTProto protocol via [gotd/td](https://github.com/gotd/td). Authenticate once with `noctis telegram-auth` or via the `/auth/qr` web page — the session is stored on a PVC and survives pod restarts.
 
-- **QR login** (`--qr`) — displays a QR code in the terminal; scan it with the Telegram mobile app under Settings → Devices → Link Desktop Device.
-- **Code login** (default) — sends an auth code to the configured phone number; `--sms` forces SMS delivery.
-
-After authentication, a session file is written to the path configured in `sessionFile`. Subsequent runs of `noctis serve` reuse this session without re-authenticating.
-
-The daemon also exposes `/auth/qr` on the health port for programmatic QR state queries.
+- **Auto-join** — public channels configured by username are joined automatically via `ChannelsJoinChannel`. No need to manually join from the phone app.
+- **Runtime channel management** — add channels without restarting: `noctis source add --type telegram_channel --identifier "channelname"`. The collector polls the database every 5 minutes and subscribes to new channels automatically.
+- **QR login** (`--qr`) — displays a QR code in the terminal or via `/auth/qr` on the health port. Scan with the Telegram app.
+- **Code login** (default) — sends an auth code to the configured phone; `--sms` forces SMS delivery.
 
 See [docs/telegram.md](docs/telegram.md) for the full setup guide.
 
@@ -294,12 +292,15 @@ noctis telegram-auth --config config.yaml --sms
 Manage the source registry maintained by the discovery engine.
 
 ```
-noctis source list   [--status discovered|approved|active|paused|dead|banned]
-                     [--type telegram_channel|telegram_group|forum|paste_site|web|rss]
+noctis source list    [--status discovered|approved|active|paused|dead|banned]
+                      [--type telegram_channel|telegram_group|forum|paste_site|web|rss]
+noctis source add     --type <type> --identifier <identifier>
 noctis source approve <id>
-noctis source pause  <id>
-noctis source remove <id>
+noctis source pause   <id>
+noctis source remove  <id>
 ```
+
+`source add` inserts a new source with status `active`. For Telegram channels, the collector picks it up within 5 minutes — no restart needed.
 
 ### `noctis search`
 
@@ -336,7 +337,7 @@ noctis config validate --config config.yaml
 
 ### Kubernetes
 
-The `deploy/` directory contains manifests for namespace, secrets, PostgreSQL, ConfigMap, and the Noctis deployment. Apply in order:
+The `deploy/` directory contains manifests for namespace, secrets, PostgreSQL, ConfigMap, and the Noctis deployment (including a PVC for session persistence). Apply in order:
 
 ```sh
 kubectl apply -f deploy/namespace.yaml
@@ -368,17 +369,17 @@ The following numbers come from a live deployment running against 7 sources.
 | Metric | Count |
 |--------|-------|
 | Total archived entries | 387 (241 Telegram, 146 web/RSS) |
-| Classified | 386 |
+| Classified | 387 |
 | IOCs extracted | 322 |
-| Sources auto-discovered | 123 (117 web, 6 Telegram channels) |
+| Sources auto-discovered | 119 (117 web, 2 Telegram channels) |
 
 **Classification breakdown**
 
 | Category | Count |
 |----------|-------|
-| irrelevant | 279 |
-| malware_sample | 54 |
-| threat_actor_comms | 45 |
+| irrelevant | 282 |
+| malware_sample | 58 |
+| threat_actor_comms | 38 |
 | credential_leak | 6 |
 | data_dump | 1 |
 | access_broker | 1 |

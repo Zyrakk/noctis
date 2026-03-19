@@ -54,7 +54,7 @@ Collects messages from Telegram channels via the MTProto protocol using the `got
 1. **Session management:** On startup, checks for a valid stored session (`session.FileStorage` at the path given by `sessionFile`). If the session is not authorized, launches an interactive QR login flow.
 2. **QR login:** Prints a `tg://login?token=…` URL to stdout and to the structured log. The URL is also exposed via the health server's `/qr` endpoint (`health.QRAuthState`). The user must scan the URL from Telegram on their phone within 5 minutes.
 3. **2FA:** If the account has a Two-Step Verification password, the collector reads it from `password` in config and submits it automatically via `client.Auth().Password()`.
-4. **Channel resolution:** For channels configured by `username`, resolves via `ContactsResolveUsername`. For numeric `id` entries, uses the raw ID with a zero access hash (works for already-joined channels).
+4. **Channel resolution:** For channels configured by `username`, resolves via `ContactsResolveUsername` and automatically joins the channel via `ChannelsJoinChannel`. No need to manually join from the phone app. For numeric `id` entries, uses the raw ID with a zero access hash (works for already-joined channels).
 5. **Catchup:** If `catchupMessages > 0`, fetches that many recent messages per channel via `MessagesGetHistory` before entering real-time mode.
 6. **Real-time:** Registers `OnNewChannelMessage` on the update dispatcher. Extracts channel name, author username, forward source, message text, and media caption.
 7. **Deduplication:** SHA-256 of message content, tracked in an in-memory `map[string]bool` guarded by a mutex. Duplicate content is silently dropped.
@@ -66,6 +66,14 @@ The collector accepts an optional `SourceQuerier` interface (the discovery engin
 - **On startup:** merges channels from config with all approved/active sources returned by the `SourceQuerier`. Both sets are deduplicated before the collector subscribes.
 - **Every 5 minutes:** polls the `SourceQuerier` for newly added or approved channels (added via `noctis source add` or `noctis source approve`) and subscribes to any that are not already active.
 - **When `nil`** (tests, standalone usage without a database): the collector falls back to config-only behavior. No database queries are made and no runtime polling occurs.
+
+### Discovery engine filters
+
+The discovery engine applies Telegram-specific normalization before inserting discovered sources:
+
+- **Message ID stripping** — `t.me/channel/123` is normalized to `t.me/channel` to avoid creating duplicate sources for individual message links.
+- **Bot filtering** — usernames ending in "bot" (case-insensitive) are skipped entirely (e.g., `t.me/zerohexbot`, `t.me/SomeToolBot`).
+- **Config deduplication** — channels already listed in `sources.telegram.channels` are skipped to prevent discovered sources from duplicating config entries.
 
 ### Internal type
 

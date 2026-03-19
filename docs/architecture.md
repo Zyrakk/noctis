@@ -254,7 +254,11 @@ VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (identifier) DO NOTHING
 ```
 
-`status` is `"discovered"` by default; `"approved"` if `discovery.autoApprove = true` in config. Domain blacklist is applied before insertion.
+`status` is `"discovered"` by default; `"approved"` if `discovery.autoApprove = true` in config.
+
+**Filtering (applied before insertion):**
+- Domain blacklist — configurable list of domains to skip (e.g., `nvd.nist.gov`, `github.com`)
+- Telegram URL normalization — message-specific URLs like `t.me/channel/123` are stripped to `t.me/channel`; bot usernames (ending in "bot") are skipped; channels already in config are skipped to avoid duplicates
 
 ---
 
