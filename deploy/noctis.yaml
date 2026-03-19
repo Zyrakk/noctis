@@ -1,3 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: noctis-data
+  namespace: noctis
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: nfs-shared
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -66,7 +78,8 @@ spec:
           configMap:
             name: noctis-config
         - name: data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: noctis-data
 ---
 apiVersion: v1
 kind: Service
