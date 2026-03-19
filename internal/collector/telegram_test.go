@@ -83,14 +83,14 @@ func TestTelegramMessageToFinding_ForwardMetadata(t *testing.T) {
 }
 
 func TestTelegramCollector_Name(t *testing.T) {
-	tc := NewTelegramCollector(&config.TelegramConfig{})
+	tc := NewTelegramCollector(&config.TelegramConfig{}, nil)
 	if tc.Name() != "telegram" {
 		t.Errorf("expected Name()=%q, got %q", "telegram", tc.Name())
 	}
 }
 
 func TestTelegramCollector_Dedup(t *testing.T) {
-	tc := NewTelegramCollector(&config.TelegramConfig{})
+	tc := NewTelegramCollector(&config.TelegramConfig{}, nil)
 
 	hash := contentHash("same content twice")
 
@@ -105,5 +105,38 @@ func TestTelegramCollector_Dedup(t *testing.T) {
 	otherHash := contentHash("different content")
 	if tc.isDuplicate(otherHash) {
 		t.Error("different hash should not be duplicate")
+	}
+}
+
+func TestShouldJoinChannel(t *testing.T) {
+	tests := []struct {
+		name     string
+		ch       config.ChannelConfig
+		wantJoin bool
+	}{
+		{
+			name:     "username channel should attempt join",
+			ch:       config.ChannelConfig{Username: "somechannel"},
+			wantJoin: true,
+		},
+		{
+			name:     "id-only channel should not attempt join",
+			ch:       config.ChannelConfig{ID: 12345},
+			wantJoin: false,
+		},
+		{
+			name:     "empty config should not attempt join",
+			ch:       config.ChannelConfig{},
+			wantJoin: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldJoinChannel(tt.ch)
+			if got != tt.wantJoin {
+				t.Errorf("shouldJoinChannel(%+v) = %v, want %v", tt.ch, got, tt.wantJoin)
+			}
+		})
 	}
 }

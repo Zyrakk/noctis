@@ -391,6 +391,21 @@ func (tc *TelegramCollector) resolveChannelPeer(ctx context.Context, api *tg.Cli
 		for _, chatClass := range resolved.Chats {
 			channel, ok := chatClass.(*tg.Channel)
 			if ok && channel.ID == peer.ChannelID {
+				// Auto-join public channels so we receive updates without
+				// the user having to manually join from the Telegram app.
+				if shouldJoinChannel(ch) {
+					_, joinErr := api.ChannelsJoinChannel(ctx, &tg.InputChannel{
+						ChannelID:  channel.ID,
+						AccessHash: channel.AccessHash,
+					})
+					if joinErr != nil {
+						slog.Warn("telegram: auto-join channel failed (may already be joined)",
+							"channel", ch.Username, "error", joinErr)
+					} else {
+						slog.Info("telegram: auto-joined public channel", "channel", ch.Username)
+					}
+				}
+
 				return &tg.InputPeerChannel{
 					ChannelID:  channel.ID,
 					AccessHash: channel.AccessHash,
@@ -411,4 +426,11 @@ func resolveChannelName(ch config.ChannelConfig) string {
 		return ch.Username
 	}
 	return fmt.Sprintf("channel:%d", ch.ID)
+}
+
+// shouldJoinChannel returns true if the channel config uses a username,
+// meaning we should attempt to join the public channel before subscribing.
+// Channels identified only by numeric ID are assumed to be already joined.
+func shouldJoinChannel(ch config.ChannelConfig) bool {
+	return ch.Username != ""
 }
