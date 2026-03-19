@@ -83,14 +83,14 @@ func TestTelegramMessageToFinding_ForwardMetadata(t *testing.T) {
 }
 
 func TestTelegramCollector_Name(t *testing.T) {
-	tc := NewTelegramCollector(&config.TelegramConfig{}, nil)
+	tc := NewTelegramCollector(&config.TelegramConfig{}, nil, nil)
 	if tc.Name() != "telegram" {
 		t.Errorf("expected Name()=%q, got %q", "telegram", tc.Name())
 	}
 }
 
 func TestTelegramCollector_Dedup(t *testing.T) {
-	tc := NewTelegramCollector(&config.TelegramConfig{}, nil)
+	tc := NewTelegramCollector(&config.TelegramConfig{}, nil, nil)
 
 	hash := contentHash("same content twice")
 

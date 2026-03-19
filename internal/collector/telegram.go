@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Zyrakk/noctis/internal/config"
+	"github.com/Zyrakk/noctis/internal/discovery"
 	"github.com/Zyrakk/noctis/internal/health"
 	"github.com/Zyrakk/noctis/internal/models"
 
@@ -59,21 +60,29 @@ func (m telegramMessage) toFinding() models.Finding {
 	return *f
 }
 
+// SourceQuerier is the subset of discovery.Engine that the Telegram collector
+// needs. Using an interface allows nil checks and test doubles.
+type SourceQuerier interface {
+	GetApprovedSources(ctx context.Context, sourceType string) ([]discovery.Source, error)
+}
+
 // TelegramCollector implements the Collector interface for Telegram channels
 // using the MTProto protocol via gotd/td.
 type TelegramCollector struct {
-	cfg    *config.TelegramConfig
-	qrAuth *health.QRAuthState
-	seen   map[string]bool
-	mu     sync.Mutex
+	cfg       *config.TelegramConfig
+	qrAuth    *health.QRAuthState
+	discovery SourceQuerier
+	seen      map[string]bool
+	mu        sync.Mutex
 }
 
 // NewTelegramCollector creates a TelegramCollector from the given configuration.
-func NewTelegramCollector(cfg *config.TelegramConfig, qrAuth *health.QRAuthState) *TelegramCollector {
+func NewTelegramCollector(cfg *config.TelegramConfig, qrAuth *health.QRAuthState, disc SourceQuerier) *TelegramCollector {
 	return &TelegramCollector{
-		cfg:    cfg,
-		qrAuth: qrAuth,
-		seen:   make(map[string]bool),
+		cfg:       cfg,
+		qrAuth:    qrAuth,
+		discovery: disc,
+		seen:      make(map[string]bool),
 	}
 }
 

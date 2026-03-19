@@ -150,7 +150,7 @@ func newServeCmd() *cobra.Command {
 				slog.Info("paste collector enabled")
 			}
 			if cfg.Sources.Telegram.Enabled {
-				tc := collector.NewTelegramCollector(&cfg.Sources.Telegram, qrAuth)
+				tc := collector.NewTelegramCollector(&cfg.Sources.Telegram, qrAuth, discoveryEngine)
 				collectors = append(collectors, tc)
 				slog.Info("telegram collector enabled")
 			}
