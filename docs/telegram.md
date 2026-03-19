@@ -187,6 +187,25 @@ a member of.
 Channel names in logs and findings use the username if available, otherwise
 `channel:<id>`.
 
+### Auto-Join Public Channels
+
+When a channel is configured by `username`, Noctis automatically calls
+`ChannelsJoinChannel` after resolving the username. This means you can add
+new public channels to your config and Noctis will join them on startup
+without you needing to manually join from the Telegram app.
+
+**Behavior:**
+
+- Only public channels resolved by `username` are auto-joined
+- Channels configured by numeric `id` only are assumed already joined
+- Private channels and groups are never auto-joined
+- If the account is already a member, the join is a no-op (logged as warning)
+- Join failures are logged but do not prevent message collection
+
+**OPSEC note:** Auto-joining channels creates a visible membership record.
+Your Telegram account will appear in the channel's member list. Use a
+dedicated/burner account (see [OPSEC](#8-opsec)).
+
 ---
 
 ## 5. Catchup
