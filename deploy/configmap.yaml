@@ -22,10 +22,13 @@ data:
           phone: "${NOCTIS_TELEGRAM_PHONE}"
           password: "${NOCTIS_TELEGRAM_PASSWORD}"
           sessionFile: "/data/telegram.session"
+          catchupMessages: 100
           channels:
             - username: "ad_poheque"
             - username: "RalfHackerChannel"
             - username: "zer0day1ab"
+            - username: "ThreatHuntingFather"
+            - username: "P0x3k_1N73LL1G3NC3"
           autoDiscovery: true
 
         paste:
