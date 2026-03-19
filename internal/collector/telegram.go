@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -433,4 +434,51 @@ func resolveChannelName(ch config.ChannelConfig) string {
 // Channels identified only by numeric ID are assumed to be already joined.
 func shouldJoinChannel(ch config.ChannelConfig) bool {
 	return ch.Username != ""
+}
+
+// extractUsername normalizes a Telegram channel identifier to a bare username.
+// Handles: "channelname", "@channelname", "https://t.me/channelname",
+// "t.me/channelname", "http://t.me/channelname".
+func extractUsername(identifier string) string {
+	if identifier == "" {
+		return ""
+	}
+	s := identifier
+	for _, prefix := range []string{"https://", "http://"} {
+		s = strings.TrimPrefix(s, prefix)
+	}
+	s = strings.TrimPrefix(s, "t.me/")
+	s = strings.TrimPrefix(s, "@")
+	s = strings.TrimSuffix(s, "/")
+	return s
+}
+
+// mergeChannels combines config channels with database-sourced channels,
+// deduplicating by normalized username. Config channels take precedence.
+func mergeChannels(cfgChannels, dbChannels []config.ChannelConfig) []config.ChannelConfig {
+	seen := make(map[string]bool, len(cfgChannels))
+	merged := make([]config.ChannelConfig, 0, len(cfgChannels)+len(dbChannels))
+
+	for _, ch := range cfgChannels {
+		key := extractUsername(ch.Username)
+		if key == "" {
+			key = fmt.Sprintf("id:%d", ch.ID)
+		}
+		seen[key] = true
+		merged = append(merged, ch)
+	}
+
+	for _, ch := range dbChannels {
+		key := extractUsername(ch.Username)
+		if key == "" {
+			continue
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		merged = append(merged, ch)
+	}
+
+	return merged
 }

@@ -140,3 +140,54 @@ func TestShouldJoinChannel(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractUsername(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"channelname", "channelname"},
+		{"@channelname", "channelname"},
+		{"https://t.me/channelname", "channelname"},
+		{"http://t.me/channelname", "channelname"},
+		{"t.me/channelname", "channelname"},
+		{"https://t.me/channelname/", "channelname"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := extractUsername(tt.input)
+			if got != tt.want {
+				t.Errorf("extractUsername(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMergeChannels(t *testing.T) {
+	cfgChannels := []config.ChannelConfig{
+		{Username: "alpha"},
+		{Username: "beta"},
+	}
+	dbChannels := []config.ChannelConfig{
+		{Username: "beta"},
+		{Username: "gamma"},
+	}
+
+	merged := mergeChannels(cfgChannels, dbChannels)
+
+	if len(merged) != 3 {
+		t.Fatalf("expected 3 channels, got %d", len(merged))
+	}
+
+	names := make(map[string]bool)
+	for _, ch := range merged {
+		names[ch.Username] = true
+	}
+	for _, want := range []string{"alpha", "beta", "gamma"} {
+		if !names[want] {
+			t.Errorf("expected channel %q in merged list", want)
+		}
+	}
+}
