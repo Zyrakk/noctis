@@ -228,6 +228,22 @@ func (e *Engine) ApproveSource(ctx context.Context, id string) error {
 	return e.updateStatus(ctx, id, "approved")
 }
 
+// AddSource explicitly adds a new source with status "active". If a source
+// with the same identifier already exists, it is reactivated (status set to
+// "active"). Returns the source ID.
+func (e *Engine) AddSource(ctx context.Context, sourceType, identifier string) (string, error) {
+	var id string
+	err := e.pool.QueryRow(ctx, `
+INSERT INTO sources (type, identifier, name, status)
+VALUES ($1, $2, $2, 'active')
+ON CONFLICT (identifier) DO UPDATE SET status = 'active', updated_at = NOW()
+RETURNING id`, sourceType, identifier).Scan(&id)
+	if err != nil {
+		return "", fmt.Errorf("discovery: add source %q: %w", identifier, err)
+	}
+	return id, nil
+}
+
 // PauseSource pauses collection for a source.
 func (e *Engine) PauseSource(ctx context.Context, id string) error {
 	return e.updateStatus(ctx, id, "paused")
