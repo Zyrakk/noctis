@@ -187,6 +187,24 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 
 		api := client.API()
 
+		// Merge config channels with DB channels.
+		channels := tc.cfg.Channels
+		dbChannels := tc.loadDBChannels(ctx)
+		if len(dbChannels) > 0 {
+			channels = mergeChannels(channels, dbChannels)
+			slog.Info("telegram: merged channels", "config", len(tc.cfg.Channels), "db", len(dbChannels), "total", len(channels))
+		}
+
+		// Track subscribed channels by normalized username.
+		subscribed := make(map[string]bool, len(channels))
+		for _, ch := range channels {
+			key := extractUsername(ch.Username)
+			if key == "" {
+				key = fmt.Sprintf("id:%d", ch.ID)
+			}
+			subscribed[key] = true
+		}
+
 		// Register handler for new channel messages.
 		dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
 			msg, ok := update.Message.(*tg.Message)
@@ -238,16 +256,38 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 			return nil
 		})
 
-		// Catchup: fetch last N messages from each configured channel.
+		// Catchup: fetch last N messages from each channel.
 		if tc.cfg.CatchupMessages > 0 {
 			slog.Info("telegram: starting catchup", "messagesPerChannel", tc.cfg.CatchupMessages)
-			tc.catchupChannels(ctx, api, out)
+			tc.catchupChannels(ctx, api, channels, out)
 		}
 
-		slog.Info("telegram: listening for updates", "channels", len(tc.cfg.Channels))
-		<-ctx.Done()
-		slog.Info("telegram: shutting down")
-		return ctx.Err()
+		slog.Info("telegram: listening for updates", "channels", len(channels))
+
+		// Poll for new channels every 5 minutes.
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				slog.Info("telegram: shutting down")
+				return ctx.Err()
+			case <-ticker.C:
+				if tc.discovery == nil {
+					continue
+				}
+				newChannels := tc.checkForNewChannels(ctx, subscribed)
+				for _, ch := range newChannels {
+					key := extractUsername(ch.Username)
+					subscribed[key] = true
+					tc.subscribeChannel(ctx, api, ch, out)
+				}
+				if len(newChannels) > 0 {
+					slog.Info("telegram: subscribed to new channels", "count", len(newChannels), "total", len(subscribed))
+				}
+			}
+		}
 	})
 }
 
@@ -329,8 +369,8 @@ func (tc *TelegramCollector) ensureAuthorized(ctx context.Context, client *teleg
 
 // catchupChannels fetches the most recent messages from each configured
 // channel and sends them through the processing pipeline.
-func (tc *TelegramCollector) catchupChannels(ctx context.Context, api *tg.Client, out chan<- models.Finding) {
-	for _, ch := range tc.cfg.Channels {
+func (tc *TelegramCollector) catchupChannels(ctx context.Context, api *tg.Client, channels []config.ChannelConfig, out chan<- models.Finding) {
+	for _, ch := range channels {
 		if ctx.Err() != nil {
 			return
 		}
@@ -460,6 +500,91 @@ func extractUsername(identifier string) string {
 	s = strings.TrimPrefix(s, "@")
 	s = strings.TrimSuffix(s, "/")
 	return s
+}
+
+// loadDBChannels queries the sources table for approved/active telegram channels
+// and converts them to ChannelConfig entries.
+func (tc *TelegramCollector) loadDBChannels(ctx context.Context) []config.ChannelConfig {
+	if tc.discovery == nil {
+		return nil
+	}
+
+	sources, err := tc.discovery.GetApprovedSources(ctx, "telegram_channel")
+	if err != nil {
+		slog.Error("telegram: failed to load DB channels", "error", err)
+		return nil
+	}
+
+	channels := make([]config.ChannelConfig, 0, len(sources))
+	for _, src := range sources {
+		username := extractUsername(src.Identifier)
+		if username == "" {
+			continue
+		}
+		channels = append(channels, config.ChannelConfig{Username: username})
+	}
+
+	return channels
+}
+
+// checkForNewChannels queries the DB for telegram channels not yet in the
+// subscribed set and returns them as ChannelConfig entries.
+func (tc *TelegramCollector) checkForNewChannels(ctx context.Context, subscribed map[string]bool) []config.ChannelConfig {
+	dbChannels := tc.loadDBChannels(ctx)
+	var newChannels []config.ChannelConfig
+
+	for _, ch := range dbChannels {
+		key := extractUsername(ch.Username)
+		if key == "" || subscribed[key] {
+			continue
+		}
+		newChannels = append(newChannels, ch)
+	}
+
+	return newChannels
+}
+
+// subscribeChannel resolves, joins, and optionally catches up a single channel
+// that was discovered at runtime.
+func (tc *TelegramCollector) subscribeChannel(ctx context.Context, api *tg.Client, ch config.ChannelConfig, out chan<- models.Finding) {
+	channelName := resolveChannelName(ch)
+	slog.Info("telegram: subscribing to new channel", "channel", channelName)
+
+	peer, err := tc.resolveChannelPeer(ctx, api, ch)
+	if err != nil {
+		slog.Error("telegram: failed to resolve new channel", "channel", channelName, "error", err)
+		return
+	}
+
+	if tc.cfg.CatchupMessages > 0 {
+		history, err := api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
+			Peer:  peer,
+			Limit: tc.cfg.CatchupMessages,
+		})
+		if err != nil {
+			slog.Error("telegram: failed to get history for new channel", "channel", channelName, "error", err)
+			return
+		}
+
+		modified, ok := history.AsModified()
+		if ok {
+			for _, msgClass := range modified.GetMessages() {
+				msg, ok := msgClass.(*tg.Message)
+				if !ok {
+					continue
+				}
+				tc.processMessage(ctx, telegramMessage{
+					ChannelID:   peer.ChannelID,
+					ChannelName: channelName,
+					Text:        msg.Message,
+					Date:        time.Unix(int64(msg.Date), 0),
+				}, out)
+			}
+			slog.Info("telegram: catchup complete for new channel", "channel", channelName, "messages", len(modified.GetMessages()))
+		}
+	}
+
+	slog.Info("telegram: subscribed to new channel", "channel", channelName)
 }
 
 // mergeChannels combines config channels with database-sourced channels,
