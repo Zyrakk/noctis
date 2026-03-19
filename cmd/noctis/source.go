@@ -20,6 +20,7 @@ func newSourceCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(newSourceListCmd())
+	cmd.AddCommand(newSourceAddCmd())
 	cmd.AddCommand(newSourceApproveCmd())
 	cmd.AddCommand(newSourcePauseCmd())
 	cmd.AddCommand(newSourceRemoveCmd())
@@ -170,6 +171,51 @@ func newSourceRemoveCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", "noctis-config.yaml", "path to config file")
+	return cmd
+}
+
+func newSourceAddCmd() *cobra.Command {
+	var configPath string
+	var sourceType string
+	var identifier string
+
+	cmd := &cobra.Command{
+		Use:   "add",
+		Short: "Add a new source for collection",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if sourceType == "" {
+				return fmt.Errorf("--type is required")
+			}
+			if identifier == "" {
+				return fmt.Errorf("--identifier is required")
+			}
+
+			eng, cleanup, err := getDiscoveryEngine(configPath)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+
+			ctx := context.Background()
+			id, err := eng.AddSource(ctx, sourceType, identifier)
+			if err != nil {
+				return fmt.Errorf("adding source: %w", err)
+			}
+
+			shortID := id
+			if len(shortID) > 8 {
+				shortID = shortID[:8]
+			}
+
+			fmt.Printf("source %s added (type=%s, identifier=%s, status=active)\n", shortID, sourceType, identifier)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", "noctis-config.yaml", "path to config file")
+	cmd.Flags().StringVar(&sourceType, "type", "", "source type (telegram_channel, telegram_group, forum, paste_site, web, rss)")
+	cmd.Flags().StringVar(&identifier, "identifier", "", "source identifier (username for telegram, URL for others)")
+
 	return cmd
 }
 
