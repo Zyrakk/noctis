@@ -114,6 +114,19 @@ func newServeCmd() *cobra.Command {
 			// Build discovery engine
 			discoveryEngine := discovery.NewEngine(pool, cfg.Discovery)
 
+			// Register monitored Telegram channels so discovery skips them.
+			if cfg.Sources.Telegram.Enabled {
+				var usernames []string
+				for _, ch := range cfg.Sources.Telegram.Channels {
+					if ch.Username != "" {
+						usernames = append(usernames, ch.Username)
+					}
+				}
+				if len(usernames) > 0 {
+					discoveryEngine.SetMonitoredChannels(usernames)
+				}
+			}
+
 			// Alert callback — called for real-time matched findings
 			alertFn := func(ef models.EnrichedFinding) {
 				metrics.RecordFinding(ef)

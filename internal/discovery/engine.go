@@ -40,10 +40,11 @@ type Source struct {
 // URLs found in collected content. It manages the full source lifecycle
 // from discovery through approval and active collection.
 type Engine struct {
-	pool            *pgxpool.Pool
-	config          config.DiscoveryConfig
-	urlRegexes      []*regexp.Regexp    // compiled URL extraction patterns
-	blacklistDomains map[string]struct{} // domains to skip during discovery
+	pool              *pgxpool.Pool
+	config            config.DiscoveryConfig
+	urlRegexes        []*regexp.Regexp     // compiled URL extraction patterns
+	blacklistDomains  map[string]struct{}  // domains to skip during discovery
+	monitoredChannels map[string]struct{}  // telegram usernames already in config (lowercase)
 }
 
 // NewEngine creates a discovery Engine with pre-compiled URL extraction
@@ -67,11 +68,67 @@ func NewEngine(pool *pgxpool.Pool, cfg config.DiscoveryConfig) *Engine {
 	}
 
 	return &Engine{
-		pool:             pool,
-		config:           cfg,
-		urlRegexes:       regexes,
-		blacklistDomains: blacklist,
+		pool:              pool,
+		config:            cfg,
+		urlRegexes:        regexes,
+		blacklistDomains:  blacklist,
+		monitoredChannels: make(map[string]struct{}),
 	}
+}
+
+// SetMonitoredChannels registers Telegram channel usernames that are already
+// in the config. Discovered t.me URLs matching these usernames are skipped
+// to avoid creating duplicate sources.
+func (e *Engine) SetMonitoredChannels(usernames []string) {
+	e.monitoredChannels = make(map[string]struct{}, len(usernames))
+	for _, u := range usernames {
+		e.monitoredChannels[strings.ToLower(u)] = struct{}{}
+	}
+}
+
+// normalizeTelegramURL cleans up a t.me URL for source storage:
+//   - Strips message ID suffixes: t.me/channel/123 → t.me/channel
+//   - Returns "" for bot usernames (ending in "bot", case-insensitive)
+//   - Returns "" for usernames already in the monitored channels set
+//
+// Returns the cleaned URL or "" if it should be skipped.
+func (e *Engine) normalizeTelegramURL(rawURL string) string {
+	// Extract the path after t.me/
+	lower := strings.ToLower(rawURL)
+	idx := strings.Index(lower, "t.me/")
+	if idx == -1 {
+		return rawURL
+	}
+
+	path := rawURL[idx+5:] // everything after "t.me/"
+	path = strings.TrimSuffix(path, "/")
+
+	// Skip invite/group links — these are handled by classifySource separately
+	if strings.HasPrefix(strings.ToLower(path), "joinchat/") || strings.HasPrefix(path, "+") {
+		return rawURL
+	}
+
+	// Split on / — first segment is the username, rest is message ID or subpath
+	parts := strings.SplitN(path, "/", 2)
+	username := parts[0]
+
+	if username == "" {
+		return ""
+	}
+
+	// Skip bots
+	if strings.HasSuffix(strings.ToLower(username), "bot") {
+		return ""
+	}
+
+	// Skip channels already in config
+	if _, monitored := e.monitoredChannels[strings.ToLower(username)]; monitored {
+		return ""
+	}
+
+	// Reconstruct with just the username (strip message ID)
+	prefix := rawURL[:idx+5] // preserve original scheme + "t.me/"
+	return prefix + username
 }
 
 // ExtractURLs returns a deduplicated list of URLs found in the given content.
@@ -165,6 +222,14 @@ func (e *Engine) ProcessContent(ctx context.Context, content string, sourceConte
 		}
 
 		srcType := classifySource(u)
+
+		// Normalize telegram URLs: strip message IDs, skip bots and monitored channels.
+		if srcType == "telegram_channel" {
+			u = e.normalizeTelegramURL(u)
+			if u == "" {
+				continue
+			}
+		}
 
 		// Insert with ON CONFLICT to avoid N+1 existence checks.
 		tag, err := e.pool.Exec(ctx, `

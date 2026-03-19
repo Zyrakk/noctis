@@ -333,3 +333,80 @@ func TestNilIfEmpty(t *testing.T) {
 		t.Errorf("nilIfEmpty(\"abc\") = %v, want pointer to \"abc\"", got)
 	}
 }
+
+// TestNormalizeTelegramURL_StripMessageID verifies that message-specific
+// URLs like t.me/channel/123 are normalized to t.me/channel.
+func TestNormalizeTelegramURL_StripMessageID(t *testing.T) {
+	e := newTestEngine()
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"https://t.me/darkleaks/456", "https://t.me/darkleaks"},
+		{"https://t.me/darkleaks/123456", "https://t.me/darkleaks"},
+		{"t.me/darkleaks/99", "t.me/darkleaks"},
+		{"https://t.me/darkleaks", "https://t.me/darkleaks"},       // no message ID
+		{"https://t.me/darkleaks/", "https://t.me/darkleaks"},      // trailing slash only
+		{"https://t.me/joinchat/abc123", "https://t.me/joinchat/abc123"}, // invite link unchanged
+		{"https://t.me/+xyz789", "https://t.me/+xyz789"},           // group invite unchanged
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := e.normalizeTelegramURL(tt.input)
+			if got != tt.want {
+				t.Errorf("normalizeTelegramURL(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNormalizeTelegramURL_SkipBots verifies that bot usernames are filtered.
+func TestNormalizeTelegramURL_SkipBots(t *testing.T) {
+	e := newTestEngine()
+
+	bots := []string{
+		"https://t.me/zerohexbot",
+		"https://t.me/SomeToolBot",
+		"https://t.me/MyBot",
+		"t.me/testbot",
+	}
+
+	for _, u := range bots {
+		t.Run(u, func(t *testing.T) {
+			got := e.normalizeTelegramURL(u)
+			if got != "" {
+				t.Errorf("normalizeTelegramURL(%q) = %q, want empty (bot should be skipped)", u, got)
+			}
+		})
+	}
+}
+
+// TestNormalizeTelegramURL_SkipMonitored verifies that channels already
+// in config are skipped.
+func TestNormalizeTelegramURL_SkipMonitored(t *testing.T) {
+	e := newTestEngine()
+	e.SetMonitoredChannels([]string{"ad_poheque", "RalfHackerChannel"})
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"https://t.me/ad_poheque", ""},
+		{"https://t.me/ad_poheque/123", ""},
+		{"https://t.me/RalfHackerChannel", ""},
+		{"https://t.me/ralfhackerchannel/456", ""},  // case-insensitive
+		{"https://t.me/newchannel", "https://t.me/newchannel"},     // not monitored — keep
+		{"https://t.me/newchannel/789", "https://t.me/newchannel"}, // not monitored — strip msg ID
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := e.normalizeTelegramURL(tt.input)
+			if got != tt.want {
+				t.Errorf("normalizeTelegramURL(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
