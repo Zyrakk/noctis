@@ -61,6 +61,7 @@ New subcommand: `noctis source add --type <type> --identifier <identifier> -c <c
 
 **Behavior:**
 - Calls `discovery.Engine.AddSource(ctx, sourceType, identifier)` (new method)
+- CLI truncates the returned UUID to 8 chars for display (matching `source list` behavior)
 - Prints: `source <shortID> added (type=telegram_channel, identifier=channelname, status=active)`
 
 **New method on `discovery.Engine`:**
@@ -69,9 +70,9 @@ New subcommand: `noctis source add --type <type> --identifier <identifier> -c <c
 func (e *Engine) AddSource(ctx context.Context, sourceType, identifier string) (string, error)
 ```
 
-- Inserts with status `"active"` and name = identifier
+- Inserts with `status = 'active'`, `name = identifier`, relies on DB column defaults for `metadata`, `collection_interval`, etc.
 - Uses `ON CONFLICT (identifier) DO UPDATE SET status = 'active', updated_at = NOW()` so re-adding reactivates
-- Returns the source ID
+- Returns the full source UUID (CLI handles truncation for display)
 
 Register `newSourceAddCmd()` alongside existing subcommands in `newSourceCmd()`.
 
@@ -107,6 +108,8 @@ Inside `client.Run`, before catchup:
 6. Run `catchupChannels` with the merged list
 
 The `catchupChannels` method changes from reading `tc.cfg.Channels` to accepting a channels parameter.
+
+**Note:** DB-sourced `ChannelConfig` values have `ID = 0` (zero value). This is fine because `resolveChannelPeer` uses the username path when `ch.Username != ""` and ignores the ID field entirely.
 
 ### 3c. `extractUsername` Helper
 
@@ -157,10 +160,11 @@ for {
 
 **`subscribeChannel`:**
 - Resolves the peer via `resolveChannelPeer` (which already auto-joins)
-- Runs catchup for this single channel (fetch last N messages)
+- Runs catchup for this single channel: fetches last `tc.cfg.CatchupMessages` messages via `MessagesGetHistory`. If `CatchupMessages` is 0 (catchup disabled), still resolve+join but skip history fetch. The channel will receive new messages going forward via the update handler.
+- Messages from catchup go through `tc.processMessage` (which uses the existing `tc.mu` mutex for dedup — thread-safe with the concurrent update handler)
 - Logs the subscription
 
-**Thread safety:** The `subscribed` map and poll loop run inside `client.Run`'s callback goroutine. The `OnNewChannelMessage` handler runs in dispatcher goroutines but never touches `subscribed`. No mutex needed.
+**Thread safety:** The `subscribed` map and poll loop run inside `client.Run`'s callback goroutine. The `OnNewChannelMessage` handler runs in dispatcher goroutines but never touches `subscribed`. No mutex needed for `subscribed`. The existing `tc.mu` mutex protects the `seen` dedup map, which IS accessed from both the poll loop (via catchup's `processMessage`) and the dispatcher (via the message handler's `processMessage`) — this is already safe.
 
 **Key insight:** The `OnNewChannelMessage` handler fires for ALL channels the account has joined. Once we resolve+join a new channel, messages flow automatically. Catchup just fetches historical messages we missed.
 
@@ -203,6 +207,8 @@ for {
 | Modify | `cmd/noctis/serve.go` | Pass discoveryEngine to NewTelegramCollector |
 
 No new files. No schema changes (sources table already has everything needed).
+
+**Note on test breakage:** Adding `*discovery.Engine` to `NewTelegramCollector` breaks all existing test calls. Fix by passing `nil` as the third argument — nil discovery engine means config-only mode (existing behavior).
 
 ---
 
