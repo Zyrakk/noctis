@@ -187,6 +187,12 @@ Run management commands directly in the container using `kubectl exec`:
 kubectl exec deployment/noctis -n noctis -- /noctis source list --status discovered -c /etc/noctis/config.yaml
 ```
 
+**Add a channel at runtime (no restart required):**
+
+```bash
+kubectl exec deployment/noctis -n noctis -- /noctis source add --type telegram_channel --identifier "channelname" -c /etc/noctis/config.yaml
+```
+
 **Approve a discovered source:**
 
 ```bash
@@ -268,7 +274,7 @@ QR tokens expire in approximately 30 seconds. The `/auth/qr` page auto-refreshes
 
 **Telegram session lost after pod restart**
 
-The session file is stored on an `emptyDir` volume at `/data/telegram.session`. This volume is ephemeral and is wiped when the pod is deleted or restarted. After any restart, port-forward to `/auth/qr` and re-authenticate. For persistent sessions, replace the `emptyDir` with a PVC.
+The default manifests now use a PVC at `/data`, so the session file persists across pod restarts and redeployments — no QR re-scan is needed. If you are running a custom manifest that uses `emptyDir` instead, the session is ephemeral and is wiped on every pod restart. In that case, port-forward to `/auth/qr` and re-authenticate after each restart, or replace the `emptyDir` with a PVC.
 
 **Discovery produces too much noise**
 

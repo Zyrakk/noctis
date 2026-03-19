@@ -208,6 +208,51 @@ dedicated/burner account (see [OPSEC](#8-opsec)).
 
 ---
 
+## 4.1. Runtime Channel Management
+
+Channels can be added while Noctis is running — no restart required.
+
+**Add a channel at runtime:**
+
+```
+noctis source add --type telegram_channel --identifier "channelname" -c config.yaml
+```
+
+This writes a new entry to the sources database. The Telegram collector polls
+the database every 5 minutes for newly added or approved channels and
+subscribes to them automatically.
+
+**How config channels and database channels interact:**
+
+- Config channels (`sources.telegram.channels`) are the initial seed. They are
+  loaded on startup and merged with approved/active sources from the database.
+- All runtime additions go through the database via `source add` or
+  `source approve`.
+- There is no overlap conflict: the collector deduplicates channels by ID
+  before subscribing.
+
+**Approving auto-discovered channels:**
+
+Channels discovered passively (from `t.me/` links or forwarded message
+metadata) appear in the sources table with status `discovered`. Approve them
+with:
+
+```
+noctis source approve <id>
+```
+
+Approved channels are picked up within 5 minutes by the next poll cycle.
+
+**Summary of timing:**
+
+| Action | When it takes effect |
+|--------|----------------------|
+| `source add` | Within 5 minutes (next poll cycle) |
+| `source approve` | Within 5 minutes (next poll cycle) |
+| Config channel added, pod restarted | Immediately on startup |
+
+---
+
 ## 5. Catchup
 
 Setting `catchupMessages: N` causes Noctis to fetch the last N messages from
@@ -251,18 +296,11 @@ The session file at `sessionFile` contains the encrypted MTProto session
 credentials. Once written, Noctis reuses it on every startup and skips
 re-authentication.
 
-**On Kubernetes with emptyDir (default):**
+**Default deployment — PVC at `/data`:**
 
-```yaml
-volumes:
-  - name: data
-    emptyDir: {}
-```
-
-The `/data` volume is ephemeral. The session file is lost on every pod
-restart, and you must scan the QR code again.
-
-**For persistence across restarts — mount a PVC:**
+The default manifests provision a PVC mounted at `/data`. The session file
+survives pod restarts and redeployments. No QR re-scan is needed after a
+normal pod restart or rolling update.
 
 ```yaml
 volumes:
@@ -271,8 +309,17 @@ volumes:
       claimName: noctis-data
 ```
 
-With a PVC at `/data`, the session survives pod restarts and redeployments.
-This is strongly recommended for any persistent deployment.
+**Custom manifests using emptyDir:**
+
+```yaml
+volumes:
+  - name: data
+    emptyDir: {}
+```
+
+If you use `emptyDir`, the `/data` volume is ephemeral. The session file is
+lost on every pod restart, and you must scan the QR code again. Replace the
+`emptyDir` with a PVC for any persistent deployment.
 
 ---
 
@@ -301,8 +348,9 @@ The `/auth/qr` page auto-refreshes every 10 seconds and always shows the
 latest token. Use the browser page rather than copying the URL from logs.
 
 **Session lost after pod restart**
-The default emptyDir volume is ephemeral. Mount a PVC at `/data` to persist
-the session across restarts.
+The default manifests use a PVC at `/data`, so sessions persist across
+restarts. If you are using a custom manifest with `emptyDir`, replace it with
+a PVC — see [Session Persistence](#7-session-persistence).
 
 **"telegram 2FA password required but not in config"**
 The account has cloud password (2FA) enabled. Set the `password` field in the

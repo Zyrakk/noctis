@@ -59,6 +59,14 @@ Collects messages from Telegram channels via the MTProto protocol using the `got
 6. **Real-time:** Registers `OnNewChannelMessage` on the update dispatcher. Extracts channel name, author username, forward source, message text, and media caption.
 7. **Deduplication:** SHA-256 of message content, tracked in an in-memory `map[string]bool` guarded by a mutex. Duplicate content is silently dropped.
 
+### Discovery engine integration
+
+The collector accepts an optional `SourceQuerier` interface (the discovery engine) for runtime channel management.
+
+- **On startup:** merges channels from config with all approved/active sources returned by the `SourceQuerier`. Both sets are deduplicated before the collector subscribes.
+- **Every 5 minutes:** polls the `SourceQuerier` for newly added or approved channels (added via `noctis source add` or `noctis source approve`) and subscribes to any that are not already active.
+- **When `nil`** (tests, standalone usage without a database): the collector falls back to config-only behavior. No database queries are made and no runtime polling occurs.
+
 ### Internal type
 
 `telegramMessage` decouples message data from `gotd/td` types, enabling unit testing without a live Telegram connection. `toFinding()` converts it to `models.Finding`, using `MediaCaption` as fallback content when `Text` is empty.
