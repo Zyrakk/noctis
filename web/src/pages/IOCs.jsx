@@ -115,7 +115,7 @@ export default function IOCs() {
     },
       React.createElement('table', { className: 'w-full text-sm' },
         React.createElement('thead', null,
-          React.createElement('tr', { className: 'border-b border-noctis-border' },
+          React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
             ['Type', 'Value', 'Context', 'First Seen', 'Sightings'].map(h =>
               React.createElement('th', {
                 key: h,
@@ -135,10 +135,10 @@ export default function IOCs() {
                   ),
                 )
               )
-            : iocs.map(ioc =>
+            : iocs.map((ioc, i) =>
                 React.createElement('tr', {
                   key: ioc.id,
-                  className: 'border-b border-noctis-border/50 hover:bg-noctis-surface2 transition-colors duration-150'
+                  className: `border-b border-noctis-border/50 hover:bg-white/[0.04] transition-colors duration-150 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`
                 },
                   React.createElement('td', { className: 'px-4 py-3' },
                     React.createElement('span', {

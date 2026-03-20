@@ -1,8 +1,8 @@
 import React from 'react'
 
 const severityConfig = {
-  critical: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/40', glow: 'shadow-[0_0_8px_rgba(239,68,68,0.3)]' },
-  high:     { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/40', glow: '' },
+  critical: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/40', glow: 'shadow-[0_0_8px_rgba(239,68,68,0.2)]' },
+  high:     { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/40', glow: 'shadow-[0_0_6px_rgba(249,115,22,0.15)]' },
   medium:   { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/40', glow: '' },
   low:      { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/40', glow: '' },
   info:     { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/40', glow: '' },

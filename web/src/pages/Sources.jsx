@@ -203,7 +203,7 @@ export default function Sources() {
           },
             React.createElement('table', { className: 'w-full text-sm' },
               React.createElement('thead', null,
-                React.createElement('tr', { className: 'border-b border-noctis-border' },
+                React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
                   ['Type', 'Identifier', 'Discovered', tab === 'discovered' ? 'Actions' : 'Status'].map(h =>
                     React.createElement('th', {
                       key: h,
@@ -223,13 +223,13 @@ export default function Sources() {
                         ),
                       )
                     )
-                  : list.map(s => {
+                  : list.map((s, i) => {
                       const Icon = TYPE_ICONS[s.type] || Globe
                       return React.createElement('tr', {
                         key: s.id,
-                        className: `border-b border-noctis-border/50 hover:bg-noctis-surface/50 transition-all duration-500 ${
+                        className: `border-b border-noctis-border/50 hover:bg-white/[0.04] transition-all duration-500 ${
                           fadingIds.has(s.id) ? 'opacity-0' : 'opacity-100'
-                        }`
+                        } ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`
                       },
                         React.createElement('td', { className: 'px-4 py-3' },
                           React.createElement('div', { className: 'flex items-center gap-2' },

@@ -140,7 +140,7 @@ export default function Findings() {
       },
         React.createElement('table', { className: 'w-full text-sm' },
           React.createElement('thead', null,
-            React.createElement('tr', { className: 'border-b border-noctis-border' },
+            React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
               ['Time', 'Source', 'Category', 'Severity', 'Summary'].map(h =>
                 React.createElement('th', {
                   key: h,
@@ -160,11 +160,11 @@ export default function Findings() {
                     ),
                   )
                 )
-              : findings.map(f =>
+              : findings.map((f, i) =>
                   React.createElement('tr', {
                     key: f.id,
                     onClick: () => loadDetail(f.id),
-                    className: `border-b border-noctis-border/50 cursor-pointer transition-colors duration-150 hover:bg-noctis-surface2 ${selectedId === f.id ? 'bg-noctis-purple/5' : ''}`
+                    className: `border-b border-noctis-border/50 cursor-pointer transition-colors duration-150 hover:bg-white/[0.04] ${selectedId === f.id ? 'bg-noctis-purple/5' : i % 2 === 0 ? '' : 'bg-white/[0.02]'}`
                   },
                     React.createElement('td', { className: 'px-4 py-3 text-xs font-mono text-noctis-dim whitespace-nowrap' },
                       new Date(f.collectedAt).toLocaleString(),
