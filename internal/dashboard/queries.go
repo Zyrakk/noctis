@@ -662,3 +662,79 @@ func queryGraph(ctx context.Context, pool *pgxpool.Pool, entityID string, hops i
 
 	return &GraphResponse{Nodes: nodes, Edges: edges}, nil
 }
+
+// --- Public (unauthenticated) queries ---
+
+// PublicStats holds aggregate counts safe for unauthenticated display.
+type PublicStats struct {
+	TotalFindings int64 `json:"totalFindings"`
+	TotalIOCs     int64 `json:"totalIocs"`
+	ActiveSources int64 `json:"activeSources"`
+	TotalEntities int64 `json:"totalEntities"`
+}
+
+func queryPublicStats(ctx context.Context, pool *pgxpool.Pool) (*PublicStats, error) {
+	s := &PublicStats{}
+
+	err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM raw_content`).Scan(&s.TotalFindings)
+	if err != nil {
+		return nil, fmt.Errorf("public stats: findings: %w", err)
+	}
+
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM iocs`).Scan(&s.TotalIOCs)
+	if err != nil {
+		return nil, fmt.Errorf("public stats: iocs: %w", err)
+	}
+
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM sources WHERE status = 'active'`).Scan(&s.ActiveSources)
+	if err != nil {
+		return nil, fmt.Errorf("public stats: sources: %w", err)
+	}
+
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM entities`).Scan(&s.TotalEntities)
+	if err != nil {
+		return nil, fmt.Errorf("public stats: entities: %w", err)
+	}
+
+	return s, nil
+}
+
+// PublicFinding is a sanitized finding for unauthenticated display.
+type PublicFinding struct {
+	Category   *string   `json:"category"`
+	Severity   *string   `json:"severity"`
+	SourceType string    `json:"sourceType"`
+	Summary    string    `json:"summary"`
+	CollectedAt time.Time `json:"collectedAt"`
+}
+
+func queryPublicRecent(ctx context.Context, pool *pgxpool.Pool) ([]PublicFinding, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT category, severity, source_type,
+		       CASE WHEN length(summary) > 100 THEN left(summary, 100) || '...' ELSE summary END,
+		       collected_at
+		FROM raw_content
+		WHERE classified = true AND category IS NOT NULL AND category != 'irrelevant' AND summary IS NOT NULL
+		ORDER BY collected_at DESC
+		LIMIT 4`)
+	if err != nil {
+		return nil, fmt.Errorf("public recent: %w", err)
+	}
+	defer rows.Close()
+
+	var findings []PublicFinding
+	for rows.Next() {
+		var f PublicFinding
+		if err := rows.Scan(&f.Category, &f.Severity, &f.SourceType, &f.Summary, &f.CollectedAt); err != nil {
+			return nil, fmt.Errorf("public recent scan: %w", err)
+		}
+		findings = append(findings, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("public recent rows: %w", err)
+	}
+	if findings == nil {
+		findings = []PublicFinding{}
+	}
+	return findings, nil
+}

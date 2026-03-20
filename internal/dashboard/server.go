@@ -70,6 +70,10 @@ func (s *Server) registerRoutes() {
 		writeJSON(w, http.StatusOK, map[string]bool{"valid": true})
 	})))
 
+	// Public endpoints (no auth — safe aggregate data only)
+	s.mux.HandleFunc("GET /api/public-stats", s.handlePublicStats)
+	s.mux.HandleFunc("GET /api/public-recent", s.handlePublicRecent)
+
 	// SPA catch-all: serve static files, fall back to index.html for client routes
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path

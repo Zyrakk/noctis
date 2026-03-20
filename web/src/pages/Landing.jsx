@@ -1,151 +1,153 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Activity, Radio, Brain, Shield, Network, Bell,
-  ChevronRight, Zap, Eye, Database
+  Activity, Radio, Brain, Shield, Network, Bell, Radar,
+  ArrowRight, ExternalLink
 } from 'lucide-react'
 
 const features = [
   {
     icon: Radio,
     title: 'Multi-Source Collection',
-    desc: 'Telegram channels, dark web forums, paste sites, RSS feeds. Real-time ingestion from dozens of threat intelligence sources.',
+    desc: 'Telegram MTProto, dark web forums via Tor, paste sites, RSS/Atom feeds. Concurrent collectors with per-source dedup and circuit breakers.',
   },
   {
     icon: Brain,
-    title: 'AI Classification',
-    desc: 'LLM-powered classification categorizes every piece of content: credential leaks, malware samples, access broker ads, and more.',
+    title: 'LLM Classification',
+    desc: 'Every collected item is classified by category and severity via an OpenAI-compatible LLM. Background workers process the queue continuously.',
   },
   {
     icon: Shield,
     title: 'IOC Extraction',
-    desc: 'Automated extraction of IPs, domains, hashes, CVEs, emails, and crypto wallets with full context preservation.',
+    desc: 'IPs, domains, hashes, CVEs, emails, crypto wallets. Only confirmed malicious indicators are stored — research references are filtered out.',
   },
   {
     icon: Network,
     title: 'Entity Graph',
-    desc: 'Knowledge graph connecting actors, IOCs, and sources. Traverse relationships to uncover threat clusters.',
+    desc: 'Actors, IOCs, channels, and findings linked in a traversable graph. BFS queries expose relationship chains across the dataset.',
   },
   {
     icon: Bell,
     title: 'Real-Time Alerts',
-    desc: 'Webhook dispatch, Wazuh integration, and Kubernetes network policy generation. Automated response at machine speed.',
+    desc: 'Keyword and regex rule engine evaluates every finding inline. Matched content triggers webhooks, Wazuh alerts, or Kubernetes NetworkPolicies.',
+  },
+  {
+    icon: Radar,
+    title: 'Autonomous Discovery',
+    desc: 'URLs extracted from collected content are classified and queued as new sources. The intelligence net grows itself. Operator approval required by default.',
   },
 ]
 
-function AnimatedCounter({ end, duration = 2000, prefix = '', suffix = '' }) {
-  const [count, setCount] = useState(0)
-  useEffect(() => {
-    let start = 0
-    const increment = end / (duration / 16)
-    const timer = setInterval(() => {
-      start += increment
-      if (start >= end) {
-        setCount(end)
-        clearInterval(timer)
-      } else {
-        setCount(Math.floor(start))
-      }
-    }, 16)
-    return () => clearInterval(timer)
-  }, [end, duration])
-  return React.createElement('span', null, `${prefix}${count.toLocaleString()}${suffix}`)
+const sevColors = {
+  critical: 'text-red-400 bg-red-500/10 border-red-500/30',
+  high: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
+  medium: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
+  low: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+  info: 'text-gray-400 bg-gray-500/10 border-gray-500/30',
 }
 
 export default function Landing({ navigate }) {
-  return React.createElement('div', { className: 'min-h-screen bg-noctis-bg text-noctis-text' },
+  const [stats, setStats] = useState(null)
+  const [recent, setRecent] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/public-stats').then(r => r.ok ? r.json() : null).then(setStats).catch(() => {})
+    fetch('/api/public-recent').then(r => r.ok ? r.json() : null).then(setRecent).catch(() => {})
+  }, [])
+
+  return React.createElement('div', { className: 'min-h-screen bg-noctis-bg text-noctis-text font-body' },
+
+    // Nav — minimal
+    React.createElement('nav', {
+      className: 'fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 bg-noctis-bg/90 backdrop-blur-sm border-b border-noctis-border/50'
+    },
+      React.createElement('div', { className: 'flex items-center gap-2.5' },
+        React.createElement(Activity, { className: 'w-4 h-4 text-noctis-purple' }),
+        React.createElement('span', { className: 'font-heading font-semibold text-sm tracking-widest uppercase text-noctis-text' }, 'Noctis'),
+      ),
+      React.createElement('button', {
+        onClick: () => navigate('/login'),
+        className: 'text-sm text-noctis-muted hover:text-noctis-text cursor-pointer transition-colors duration-200 flex items-center gap-1.5'
+      },
+        'Dashboard',
+        React.createElement(ArrowRight, { className: 'w-3.5 h-3.5' }),
+      ),
+    ),
 
     // Hero
     React.createElement('section', {
-      className: 'animated-gradient grid-bg relative min-h-screen flex flex-col items-center justify-center px-6 text-center'
+      className: 'relative pt-32 pb-24 px-8'
     },
-      // Floating nav
-      React.createElement('nav', {
-        className: 'fixed top-4 left-4 right-4 z-50 flex items-center justify-between px-6 py-3 bg-noctis-surface/80 backdrop-blur-md border border-noctis-border rounded-xl'
-      },
-        React.createElement('div', { className: 'flex items-center gap-2' },
-          React.createElement(Activity, { className: 'w-5 h-5 text-noctis-purple' }),
-          React.createElement('span', { className: 'font-heading font-bold text-lg tracking-tight' }, 'NOCTIS'),
-        ),
-        React.createElement('button', {
-          onClick: () => navigate('/login'),
-          className: 'px-4 py-2 bg-noctis-purple hover:bg-noctis-purple-light text-white text-sm font-medium rounded-lg cursor-pointer transition-colors duration-200'
-        }, 'Access Dashboard'),
-      ),
-
-      // Hero content
-      React.createElement('div', { className: 'max-w-4xl mx-auto relative z-10 mt-20' },
-        React.createElement('div', {
-          className: 'inline-flex items-center gap-2 px-4 py-1.5 bg-noctis-purple/10 border border-noctis-purple/30 rounded-full text-sm text-noctis-purple-light mb-8'
+      // Subtle grid — very low opacity
+      React.createElement('div', {
+        className: 'absolute inset-0 opacity-[0.04]',
+        style: {
+          backgroundImage: 'linear-gradient(rgba(124,58,237,1) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,1) 1px, transparent 1px)',
+          backgroundSize: '60px 60px',
         },
-          React.createElement(Zap, { className: 'w-3.5 h-3.5' }),
-          'AI-Powered Threat Intelligence',
-        ),
+      }),
+      React.createElement('div', { className: 'max-w-3xl mx-auto relative z-10' },
         React.createElement('h1', {
-          className: 'font-heading font-bold text-5xl md:text-7xl leading-tight tracking-tight mb-6'
-        },
-          React.createElement('span', { className: 'text-noctis-text' }, 'See the threats'),
-          React.createElement('br'),
-          React.createElement('span', {
-            className: 'bg-gradient-to-r from-noctis-purple to-noctis-blue bg-clip-text text-transparent'
-          }, 'before they strike.'),
-        ),
+          className: 'font-heading font-normal text-4xl md:text-5xl leading-tight tracking-tight text-noctis-text mb-6'
+        }, 'Autonomous Threat Intelligence Collection & Analysis'),
         React.createElement('p', {
-          className: 'text-lg md:text-xl text-noctis-muted max-w-2xl mx-auto mb-10 leading-relaxed'
+          className: 'text-base md:text-lg text-noctis-muted leading-relaxed max-w-2xl mb-10'
         },
-          'Noctis monitors dark web forums, Telegram channels, paste sites, and RSS feeds. AI classifies every finding, extracts IOCs, and maps entity relationships in real time.',
+          'Noctis continuously monitors Telegram channels, dark web forums, paste sites, and RSS feeds \u2014 classifying threats, extracting IOCs, and building entity graphs with AI. Self-hosted. Open source.',
         ),
-        React.createElement('div', { className: 'flex items-center justify-center gap-4' },
+        React.createElement('div', { className: 'flex items-center gap-6' },
           React.createElement('button', {
             onClick: () => navigate('/login'),
-            className: 'flex items-center gap-2 px-8 py-3.5 bg-noctis-purple hover:bg-noctis-purple-light text-white font-semibold rounded-xl cursor-pointer transition-all duration-200 glow-purple'
+            className: 'px-5 py-2.5 border border-noctis-muted/40 text-sm text-noctis-text hover:bg-noctis-surface hover:border-noctis-muted/60 rounded cursor-pointer transition-all duration-200'
+          }, 'Access Dashboard'),
+          React.createElement('a', {
+            href: 'https://github.com/Zyrakk/noctis',
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            className: 'text-sm text-noctis-dim hover:text-noctis-muted cursor-pointer transition-colors duration-200 flex items-center gap-1.5'
           },
-            'Access Dashboard',
-            React.createElement(ChevronRight, { className: 'w-4 h-4' }),
+            'View on GitHub',
+            React.createElement(ExternalLink, { className: 'w-3 h-3' }),
           ),
         ),
       ),
+    ),
 
-      // Scroll indicator
+    // Live stats bar
+    stats && React.createElement('div', {
+      className: 'px-8 pb-16'
+    },
       React.createElement('div', {
-        className: 'absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce'
+        className: 'max-w-3xl mx-auto flex items-center gap-6 text-xs text-noctis-dim font-mono'
       },
-        React.createElement('div', { className: 'w-6 h-10 border-2 border-noctis-border rounded-full flex items-start justify-center p-1.5' },
-          React.createElement('div', { className: 'w-1.5 h-1.5 bg-noctis-purple rounded-full animate-pulse' }),
-        ),
+        React.createElement('span', null, `${stats.totalFindings.toLocaleString()} findings collected`),
+        React.createElement('span', { className: 'text-noctis-border' }, '\u00b7'),
+        React.createElement('span', null, `${stats.totalIocs.toLocaleString()} IOCs extracted`),
+        React.createElement('span', { className: 'text-noctis-border' }, '\u00b7'),
+        React.createElement('span', null, `${stats.activeSources} active sources`),
+        stats.totalEntities > 0 && React.createElement('span', { className: 'text-noctis-border' }, '\u00b7'),
+        stats.totalEntities > 0 && React.createElement('span', null, `${stats.totalEntities.toLocaleString()} entities mapped`),
       ),
     ),
 
     // Features
     React.createElement('section', {
-      className: 'py-24 px-6 border-t border-noctis-border'
+      className: 'py-20 px-8 border-t border-noctis-border/50'
     },
-      React.createElement('div', { className: 'max-w-6xl mx-auto' },
-        React.createElement('div', { className: 'text-center mb-16' },
-          React.createElement('h2', {
-            className: 'font-heading font-bold text-3xl md:text-4xl mb-4'
-          }, 'Full-Spectrum Intelligence'),
-          React.createElement('p', {
-            className: 'text-noctis-muted text-lg max-w-2xl mx-auto'
-          }, 'From raw collection to actionable insight, every step is automated.'),
-        ),
-        React.createElement('div', {
-          className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-        },
+      React.createElement('div', { className: 'max-w-5xl mx-auto' },
+        React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6' },
           features.map((f, i) =>
             React.createElement('div', {
               key: i,
-              className: 'group p-6 bg-noctis-surface border border-noctis-border rounded-xl cursor-pointer transition-all duration-200 hover:border-noctis-purple/40 hover:-translate-y-1'
+              className: 'py-4 pl-4 border-l-2 border-noctis-border hover:border-noctis-purple/60 transition-colors duration-200'
             },
-              React.createElement('div', {
-                className: 'w-10 h-10 flex items-center justify-center bg-noctis-purple/10 rounded-lg mb-4'
-              },
-                React.createElement(f.icon, { className: 'w-5 h-5 text-noctis-purple-light' }),
+              React.createElement('div', { className: 'flex items-center gap-2.5 mb-2' },
+                React.createElement(f.icon, { className: 'w-4 h-4 text-noctis-dim' }),
+                React.createElement('h3', {
+                  className: 'font-heading font-medium text-sm text-noctis-text'
+                }, f.title),
               ),
-              React.createElement('h3', {
-                className: 'font-heading font-semibold text-lg mb-2 text-noctis-text'
-              }, f.title),
               React.createElement('p', {
-                className: 'text-sm text-noctis-muted leading-relaxed'
+                className: 'text-xs text-noctis-muted leading-relaxed'
               }, f.desc),
             )
           ),
@@ -153,67 +155,101 @@ export default function Landing({ navigate }) {
       ),
     ),
 
-    // Stats
-    React.createElement('section', {
-      className: 'py-20 px-6 bg-noctis-surface border-y border-noctis-border'
+    // Recent findings preview
+    recent && recent.length > 0 && React.createElement('section', {
+      className: 'py-16 px-8 border-t border-noctis-border/50'
     },
-      React.createElement('div', {
-        className: 'max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8'
-      },
-        [
-          { icon: Eye, value: 150, suffix: '+', label: 'Sources Monitored' },
-          { icon: Database, value: 50000, suffix: '+', label: 'Findings Classified' },
-          { icon: Shield, value: 12000, suffix: '+', label: 'IOCs Extracted' },
-          { icon: Network, value: 8500, suffix: '+', label: 'Entity Relationships' },
-        ].map((s, i) =>
-          React.createElement('div', {
-            key: i,
-            className: 'text-center'
-          },
-            React.createElement('div', { className: 'flex justify-center mb-3' },
-              React.createElement(s.icon, { className: 'w-6 h-6 text-noctis-purple-light' }),
+      React.createElement('div', { className: 'max-w-5xl mx-auto' },
+        React.createElement('h2', {
+          className: 'font-heading font-normal text-sm uppercase tracking-widest text-noctis-dim mb-6'
+        }, 'Recent Classified Findings'),
+        React.createElement('div', {
+          className: 'border border-noctis-border/50 rounded overflow-hidden'
+        },
+          React.createElement('table', { className: 'w-full text-xs' },
+            React.createElement('thead', null,
+              React.createElement('tr', { className: 'bg-noctis-surface/50 border-b border-noctis-border/50' },
+                ['Category', 'Severity', 'Source', 'Summary'].map(h =>
+                  React.createElement('th', {
+                    key: h,
+                    className: 'px-4 py-2.5 text-left font-medium text-noctis-dim uppercase tracking-wider'
+                  }, h)
+                ),
+              ),
             ),
-            React.createElement('div', {
-              className: 'font-mono font-bold text-3xl md:text-4xl text-noctis-text mb-1'
-            },
-              React.createElement(AnimatedCounter, { end: s.value, suffix: s.suffix }),
+            React.createElement('tbody', null,
+              recent.map((f, i) => {
+                const sev = f.severity?.toLowerCase() || 'info'
+                const sevClass = sevColors[sev] || sevColors.info
+                return React.createElement('tr', {
+                  key: i,
+                  className: 'border-b border-noctis-border/30 last:border-0'
+                },
+                  React.createElement('td', { className: 'px-4 py-2.5 text-noctis-muted font-mono' },
+                    f.category?.replace(/_/g, ' ') || '-',
+                  ),
+                  React.createElement('td', { className: 'px-4 py-2.5' },
+                    React.createElement('span', {
+                      className: `inline-block px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border ${sevClass}`
+                    }, sev),
+                  ),
+                  React.createElement('td', { className: 'px-4 py-2.5 text-noctis-dim' }, f.sourceType),
+                  React.createElement('td', { className: 'px-4 py-2.5 text-noctis-muted max-w-md truncate' }, f.summary),
+                )
+              }),
             ),
-            React.createElement('div', {
-              className: 'text-sm text-noctis-muted'
-            }, s.label),
-          )
+          ),
         ),
       ),
     ),
 
     // CTA
     React.createElement('section', {
-      className: 'py-24 px-6 text-center'
+      className: 'py-20 px-8 border-t border-noctis-border/50'
     },
-      React.createElement('div', { className: 'max-w-2xl mx-auto' },
+      React.createElement('div', { className: 'max-w-3xl mx-auto' },
         React.createElement('h2', {
-          className: 'font-heading font-bold text-3xl md:text-4xl mb-6'
-        }, 'Ready to see what\'s out there?'),
+          className: 'font-heading font-normal text-2xl md:text-3xl text-noctis-text mb-3'
+        }, 'Deploy Noctis on your infrastructure.'),
         React.createElement('p', {
-          className: 'text-noctis-muted text-lg mb-8'
-        }, 'Access the Noctis dashboard and start monitoring your threat landscape.'),
-        React.createElement('button', {
-          onClick: () => navigate('/login'),
-          className: 'inline-flex items-center gap-2 px-8 py-4 bg-noctis-purple hover:bg-noctis-purple-light text-white font-semibold text-lg rounded-xl cursor-pointer transition-all duration-200 glow-purple'
-        },
-          'Access Dashboard',
-          React.createElement(ChevronRight, { className: 'w-5 h-5' }),
+          className: 'text-noctis-muted text-base mb-8'
+        }, 'Monitor your threat landscape with a single binary. Kubernetes-native, PostgreSQL-backed, MIT licensed.'),
+        React.createElement('div', { className: 'flex items-center gap-6' },
+          React.createElement('a', {
+            href: 'https://github.com/Zyrakk/noctis',
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            className: 'px-5 py-2.5 border border-noctis-muted/40 text-sm text-noctis-text hover:bg-noctis-surface hover:border-noctis-muted/60 rounded cursor-pointer transition-all duration-200 flex items-center gap-2'
+          },
+            'View on GitHub',
+            React.createElement(ExternalLink, { className: 'w-3.5 h-3.5' }),
+          ),
+          React.createElement('button', {
+            onClick: () => navigate('/login'),
+            className: 'text-sm text-noctis-muted hover:text-noctis-text cursor-pointer transition-colors duration-200 flex items-center gap-1.5'
+          },
+            'Access Dashboard',
+            React.createElement(ArrowRight, { className: 'w-3.5 h-3.5' }),
+          ),
         ),
       ),
     ),
 
     // Footer
     React.createElement('footer', {
-      className: 'py-8 px-6 border-t border-noctis-border text-center'
+      className: 'py-8 px-8 border-t border-noctis-border/30'
     },
-      React.createElement('div', { className: 'flex items-center justify-center gap-2 text-noctis-dim text-sm' },
-        React.createElement(Activity, { className: 'w-4 h-4' }),
-        'Noctis Threat Intelligence Platform',
+      React.createElement('div', { className: 'max-w-5xl mx-auto flex items-center justify-between text-xs text-noctis-dim' },
+        React.createElement('span', null, 'Noctis'),
+        React.createElement('div', { className: 'flex items-center gap-4' },
+          React.createElement('span', null, 'MIT License'),
+          React.createElement('a', {
+            href: 'https://github.com/Zyrakk/noctis',
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            className: 'hover:text-noctis-muted transition-colors duration-200 cursor-pointer'
+          }, 'GitHub'),
+        ),
       ),
     ),
   )

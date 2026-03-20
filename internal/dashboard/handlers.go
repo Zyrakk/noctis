@@ -199,6 +199,28 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, graph)
 }
 
+// --- public endpoints (no auth) ---
+
+func (s *Server) handlePublicStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := queryPublicStats(r.Context(), s.pool)
+	if err != nil {
+		slog.Error("dashboard: public-stats", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch stats"})
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (s *Server) handlePublicRecent(w http.ResponseWriter, r *http.Request) {
+	findings, err := queryPublicRecent(r.Context(), s.pool)
+	if err != nil {
+		slog.Error("dashboard: public-recent", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch recent findings"})
+		return
+	}
+	writeJSON(w, http.StatusOK, findings)
+}
+
 // --- helpers ---
 
 func parseIntParam(s string, defaultVal int) int {
