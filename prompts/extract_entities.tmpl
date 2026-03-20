@@ -1,0 +1,39 @@
+You are a cyber threat intelligence analyst. Extract named entities and their relationships from the following content.
+
+Content:
+---
+{{.Content}}
+---
+
+Category: {{.Category}}
+Source: {{.SourceName}} ({{.SourceType}})
+
+Extract these entity types:
+- threat_actor: Named threat actors, APT groups, hacker groups, individual hackers (e.g., "Lazarus Group", "APT29", "IntelBroker")
+- malware: Malware families, tools, RATs, ransomware strains (e.g., "Cobalt Strike", "LockBit", "AsyncRAT")
+- campaign: Named campaigns or operations (e.g., "Operation Windigo", "SolarWinds")
+- ttp: MITRE ATT&CK techniques or tactics when explicitly named (e.g., "credential dumping", "DLL sideloading")
+- organization: Victim organizations, targeted companies, or industries (e.g., "Microsoft", "healthcare sector")
+
+For each entity, extract:
+- type: one of the types above
+- name: the entity name as it appears in the text
+- aliases: any alternative names mentioned (array, can be empty)
+
+For relationships between entities, extract:
+- source: the entity name (must match a name from the entities list)
+- target: the related entity name (must match a name from the entities list)
+- relationship: one of: "uses", "targets", "deploys", "attributed_to", "variant_of", "exploits", "associated_with"
+
+DO NOT extract:
+- Generic terms ("the attacker", "the malware", "unknown actor")
+- IOCs (IPs, domains, hashes) — those are extracted separately
+- Security vendor names (CrowdStrike, Mandiant, etc.) unless they are victims
+- The source channel itself
+
+Respond with ONLY a JSON object:
+{
+  "entities": [{"type": "<type>", "name": "<name>", "aliases": ["<alias1>"]}],
+  "relationships": [{"source": "<name>", "target": "<name>", "relationship": "<rel>"}]
+}
+If nothing found, respond with: {"entities": [], "relationships": []}

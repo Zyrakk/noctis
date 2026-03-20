@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/Zyrakk/noctis/internal/analyzer"
 	"github.com/Zyrakk/noctis/internal/archive"
 	"github.com/Zyrakk/noctis/internal/models"
 )
@@ -214,6 +216,21 @@ func (p *IngestPipeline) entityExtractionWorker(ctx context.Context, workerID in
 				p.bridgeEntitiesToGraph(ctx, entry, iocs, workerID)
 			}
 
+			// LLM entity extraction for non-irrelevant findings.
+			if entry.Category != "" && entry.Category != "irrelevant" {
+				if err := limiter.Wait(ctx); err != nil {
+					return
+				}
+
+				finding2 := findingFromRawContent(entry)
+				result, err := p.analyzer.ExtractEntities(ctx, &finding2, entry.Category, entry.SourceName, entry.SourceType)
+				if err != nil {
+					log.Printf("ingest: entity extraction worker %d: extract entities error for %s: %v", workerID, entry.ID, err)
+				} else {
+					p.bridgeLLMEntitiesToGraph(ctx, entry, result, workerID)
+				}
+			}
+
 			// Mark as entity-extracted.
 			if err := p.archive.MarkEntitiesExtracted(ctx, entry.ID); err != nil {
 				log.Printf("ingest: entity extraction worker %d: mark extracted error for %s: %v", workerID, entry.ID, err)
@@ -285,6 +302,58 @@ func (p *IngestPipeline) bridgeEntitiesToGraph(ctx context.Context, entry archiv
 		edgeID := fmt.Sprintf("edge:%s:%s:found_in", entityID, sourceEntityID)
 		if err := p.archive.UpsertEdge(ctx, edgeID, entityID, sourceEntityID, "found_in"); err != nil {
 			log.Printf("ingest: entity bridge worker %d: upsert edge: %v", workerID, err)
+		}
+	}
+}
+
+// bridgeLLMEntitiesToGraph creates entities and edges from LLM-extracted named
+// entities (actors, malware, campaigns) and their relationships.
+func (p *IngestPipeline) bridgeLLMEntitiesToGraph(ctx context.Context, entry archive.RawContent, result *analyzer.EntityExtractionResult, workerID int) {
+	if result == nil {
+		return
+	}
+
+	// Build a name→ID map for relationship resolution.
+	nameToID := make(map[string]string)
+
+	for _, ent := range result.Entities {
+		if ent.Name == "" {
+			continue
+		}
+		entityID := fmt.Sprintf("entity:%s:%s", ent.Type, strings.ToLower(strings.ReplaceAll(ent.Name, " ", "_")))
+		props := map[string]interface{}{
+			"name": ent.Name,
+		}
+		if len(ent.Aliases) > 0 {
+			props["aliases"] = ent.Aliases
+		}
+
+		if err := p.archive.UpsertEntity(ctx, entityID, ent.Type, props); err != nil {
+			log.Printf("ingest: entity bridge worker %d: upsert llm entity: %v", workerID, err)
+			continue
+		}
+		nameToID[ent.Name] = entityID
+
+		// Also link this entity to the source channel.
+		sourceName := entry.SourceName
+		if sourceName == "" {
+			sourceName = entry.SourceID
+		}
+		sourceEntityID := fmt.Sprintf("source:%s", sourceName)
+		edgeID := fmt.Sprintf("edge:%s:%s:mentioned_in", entityID, sourceEntityID)
+		p.archive.UpsertEdge(ctx, edgeID, entityID, sourceEntityID, "mentioned_in")
+	}
+
+	// Create relationship edges between named entities.
+	for _, rel := range result.Relationships {
+		srcID, srcOK := nameToID[rel.Source]
+		tgtID, tgtOK := nameToID[rel.Target]
+		if !srcOK || !tgtOK || rel.Relationship == "" {
+			continue
+		}
+		edgeID := fmt.Sprintf("edge:%s:%s:%s", srcID, tgtID, rel.Relationship)
+		if err := p.archive.UpsertEdge(ctx, edgeID, srcID, tgtID, rel.Relationship); err != nil {
+			log.Printf("ingest: entity bridge worker %d: upsert llm edge: %v", workerID, err)
 		}
 	}
 }

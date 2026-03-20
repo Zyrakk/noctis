@@ -185,6 +185,58 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 	return iocs, nil
 }
 
+// EntityEntry is one element of the entities array returned by extract_entities.
+type EntityEntry struct {
+	Type    string   `json:"type"`
+	Name    string   `json:"name"`
+	Aliases []string `json:"aliases"`
+}
+
+// RelationshipEntry is one element of the relationships array returned by extract_entities.
+type RelationshipEntry struct {
+	Source       string `json:"source"`
+	Target       string `json:"target"`
+	Relationship string `json:"relationship"`
+}
+
+// EntityExtractionResult holds the parsed result of the extract_entities prompt.
+type EntityExtractionResult struct {
+	Entities      []EntityEntry      `json:"entities"`
+	Relationships []RelationshipEntry `json:"relationships"`
+}
+
+// ExtractEntities asks the LLM to extract named entities (actors, malware,
+// campaigns, TTPs) and their relationships from the finding content.
+func (a *Analyzer) ExtractEntities(ctx context.Context, finding *models.Finding, category, sourceName, sourceType string) (*EntityExtractionResult, error) {
+	prompt, err := a.renderTemplate("extract_entities", struct {
+		Content    string
+		Category   string
+		SourceName string
+		SourceType string
+	}{
+		Content:    finding.Content,
+		Category:   category,
+		SourceName: sourceName,
+		SourceType: sourceType,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := a.client.ChatCompletion(ctx, []llm.Message{
+		{Role: "user", Content: prompt},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("analyzer: extract_entities LLM call: %w", err)
+	}
+
+	var result EntityExtractionResult
+	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
+		return nil, fmt.Errorf("analyzer: extract_entities parse response %q: %w", truncate(resp.Content, 200), err)
+	}
+	return &result, nil
+}
+
 // AssessSeverity asks the LLM to assign a severity level to the finding.
 func (a *Analyzer) AssessSeverity(ctx context.Context, finding *models.Finding, category string, matchedRules []string) (models.Severity, error) {
 	prompt, err := a.renderTemplate("severity", struct {
