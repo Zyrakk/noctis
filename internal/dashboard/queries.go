@@ -455,9 +455,13 @@ func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType st
 	}
 
 	if status != "" {
-		p := nextArg()
-		conditions = append(conditions, fmt.Sprintf("s.status = %s", p))
-		args = append(args, status)
+		if status == "active" {
+			conditions = append(conditions, "s.status IN ('active', 'approved')")
+		} else {
+			p := nextArg()
+			conditions = append(conditions, fmt.Sprintf("s.status = %s", p))
+			args = append(args, status)
+		}
 	}
 	if sourceType != "" {
 		p := nextArg()
