@@ -200,6 +200,8 @@ func tagsFromCategory(category string) []string {
 		tags = append(tags, "access_sale")
 	case models.CategoryDataDump:
 		tags = append(tags, "data_breach")
+	case models.CategoryVulnerability:
+		tags = append(tags, "cve")
 	case models.CategoryCanaryHit:
 		tags = append(tags, "canary")
 	}

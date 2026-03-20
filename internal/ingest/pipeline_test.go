@@ -112,7 +112,7 @@ func makeFakeLLM() *fakeLLMClient {
 	return &fakeLLMClient{
 		responses: map[string]string{
 			"Classify": `{"category":"credential_leak","confidence":0.95}`,
-			"Extract":  `[{"type":"domain","value":"example.com","context":"leaked creds"}]`,
+			"Extract":  `[{"type":"domain","value":"example.com","context":"leaked creds","malicious":true}]`,
 			"Assess":   `{"severity":"critical","reasoning":"Active credentials exposed"}`,
 			"Write":    "Credentials for example.com were leaked on Telegram.",
 		},
@@ -384,6 +384,7 @@ func TestTagsFromCategory(t *testing.T) {
 		{"threat_actor_comms", 2, "threat_actor_comms"},
 		{"access_broker", 2, "access_broker"},
 		{"data_dump", 2, "data_dump"},
+		{"vulnerability", 2, "vulnerability"},
 		{"canary_hit", 2, "canary_hit"},
 		{"irrelevant", 1, "irrelevant"},
 		{"unknown_category", 1, "unknown_category"},

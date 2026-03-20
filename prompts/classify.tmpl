@@ -9,12 +9,20 @@ Content:
 
 Classify into exactly ONE of these categories:
 - credential_leak: Leaked usernames, passwords, session tokens, API keys
-- malware_sample: Malware hashes, download links, C2 infrastructure
+- malware_sample: Malware hashes, download links, C2 infrastructure details
+- vulnerability: CVE disclosures, exploit proof-of-concepts, security advisories with technical details, weaponized exploit code
 - threat_actor_comms: Threat actor discussions, planning, coordination
 - access_broker: Initial access being sold (RDP, VPN, shell access)
 - data_dump: Bulk data leaks (databases, PII, financial records)
 - canary_hit: A known planted honeytoken was detected
-- irrelevant: Content matched a rule but is not a real threat
+- irrelevant: Content matched a rule but contains NO actionable threat intelligence
+
+Classification guidance:
+- A blog post sharing an exploit PoC for a CVE is "vulnerability", NOT "irrelevant"
+- A research writeup detailing new malware with IOCs is "malware_sample", NOT "irrelevant"
+- A tool release that can be used for offensive security (exploit frameworks, C2 tools) is "vulnerability" or "malware_sample" depending on context
+- Security vendor reports describing active campaigns with IOCs are "malware_sample" or the relevant category, NOT "irrelevant"
+- Only classify as "irrelevant" if the content has NO threat intelligence value: general news without IOCs, marketing content, off-topic discussions, or non-security content that matched a rule by keyword coincidence
 
 Respond with ONLY a JSON object:
 {"category": "<category>", "confidence": <0.0-1.0>}

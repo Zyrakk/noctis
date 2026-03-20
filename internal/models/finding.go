@@ -78,6 +78,7 @@ const (
 	CategoryThreatActorComms  Category = "threat_actor_comms"
 	CategoryAccessBroker      Category = "access_broker"
 	CategoryDataDump          Category = "data_dump"
+	CategoryVulnerability     Category = "vulnerability"
 	CategoryCanaryHit         Category = "canary_hit"
 	CategoryIrrelevant        Category = "irrelevant"
 )

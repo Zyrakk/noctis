@@ -16,9 +16,21 @@ Consider:
 4. Are there verifiable IOCs?
 
 Severity levels:
-- critical: Immediate action required (active breach, live credentials, canary triggered)
-- high: Significant threat requiring prompt investigation
-- medium: Notable activity worth tracking
+- critical: Immediate action required. Assign critical when ANY of these apply:
+  * Active breach indicators (live credentials, canary triggered, confirmed compromise)
+  * Working remote code execution (RCE) exploit with PoC for a widely deployed target
+  * Credential leaks containing active, valid credentials (not old/rotated dumps)
+  * Zero-day vulnerabilities being actively exploited in the wild
+  * Ransomware deployment targeting specific organizations
+- high: Significant threat requiring prompt investigation. Examples:
+  * Exploit PoC for a critical CVE (pre-auth, high CVSS) without confirmed wild exploitation yet
+  * Access broker selling access to relevant infrastructure
+  * New malware variant with IOCs but no confirmed targeting of monitored entities
+  * Credential leaks of unknown freshness
+- medium: Notable activity worth tracking. Examples:
+  * Vulnerability disclosures without working exploits
+  * Threat actor discussions that reference relevant targets
+  * Stale or partial credential dumps
 - low: Background noise with some intelligence value
 - info: Contextual information, no direct threat
 

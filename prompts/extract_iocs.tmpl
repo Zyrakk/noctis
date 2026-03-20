@@ -1,4 +1,4 @@
-You are a cyber threat intelligence analyst. Extract ALL indicators of compromise (IOCs) from the following content.
+You are a cyber threat intelligence analyst. Extract indicators of compromise (IOCs) from the following content that are ACTUALLY PART OF MALICIOUS INFRASTRUCTURE or malicious activity.
 
 Content:
 ---
@@ -6,15 +6,27 @@ Content:
 ---
 
 Extract IOCs of these types:
-- ip: IPv4 or IPv6 addresses
-- domain: Domain names (not common ones like google.com, github.com)
-- hash_md5: MD5 hashes (32 hex chars)
-- hash_sha1: SHA-1 hashes (40 hex chars)
-- hash_sha256: SHA-256 hashes (64 hex chars)
-- email: Email addresses involved in malicious activity
-- crypto_wallet: Bitcoin, Ethereum, or Monero wallet addresses
-- url: Full URLs pointing to malicious resources
-- cve: CVE identifiers (CVE-YYYY-NNNNN)
+- ip: IPv4 or IPv6 addresses used by attackers (C2, exfil, scanning, staging)
+- domain: Domains used by attackers (C2, phishing, malware delivery, DGA)
+- hash_md5: MD5 hashes of malicious files/binaries (32 hex chars)
+- hash_sha1: SHA-1 hashes of malicious files/binaries (40 hex chars)
+- hash_sha256: SHA-256 hashes of malicious files/binaries (64 hex chars)
+- email: Email addresses used in phishing, BEC, or attacker registration
+- crypto_wallet: Cryptocurrency wallet addresses used for ransom or fraud
+- url: Full URLs pointing to malicious payloads, phishing pages, or C2 endpoints
+- cve: CVE identifiers (CVE-YYYY-NNNNN) referenced in the attack
 
-Respond with ONLY a JSON array. Each element: {"type": "<type>", "value": "<value>", "context": "<brief context>"}
+DO NOT extract:
+- Domains of security research companies, blogs, or documentation sites (e.g., watchtowr.com, synacktiv.com, eye.security, securelist.com, kaspersky.com, mandiant.com, crowdstrike.com, trellix.com, unit42.paloaltonetworks.com, blog.google, github.com, microsoft.com, docs.*)
+- Domains hosting the blog post or research report — only extract domains that are part of the ATTACK INFRASTRUCTURE
+- Private/reserved IP addresses (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, ::1, fe80::)
+- Example or placeholder values (example.com, example.org, test.local, foo.bar, *.example.*, *.test, *.invalid, *.localhost)
+- Git commit hashes — only extract file hashes of actual malicious binaries or samples
+- Version numbers, build identifiers, or other non-IOC hex strings
+- Legitimate tool domains (github.com, pypi.org, npmjs.com, docker.io, hub.docker.com)
+- Social media profile URLs unless they are confirmed attacker accounts
+
+For each IOC, set "malicious" to true ONLY if you are confident it is part of actual attack infrastructure, a malware sample hash, or an attacker-controlled resource. Set to false for anything ambiguous, educational, or referenced only as context.
+
+Respond with ONLY a JSON array. Each element: {"type": "<type>", "value": "<value>", "context": "<brief context>", "malicious": <true|false>}
 If no IOCs found, respond with: []

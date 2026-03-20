@@ -96,7 +96,7 @@ func TestPipeline_EndToEnd(t *testing.T) {
 			// classify.tmpl contains "Classify"
 			"Classify": `{"category":"credential_leak","confidence":0.95}`,
 			// extract_iocs.tmpl contains "Extract"
-			"Extract": `[{"type":"domain","value":"example.com","context":"leaked creds"}]`,
+			"Extract": `[{"type":"domain","value":"example.com","context":"leaked creds","malicious":true}]`,
 			// severity.tmpl contains "Assess"
 			"Assess": `{"severity":"critical","reasoning":"Active credentials exposed"}`,
 			// summarize.tmpl contains "Write"

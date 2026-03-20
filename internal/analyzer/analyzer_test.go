@@ -124,7 +124,7 @@ func TestAnalyzer_ExtractIOCs(t *testing.T) {
 	client := &mockLLMClient{
 		responses: map[string]string{
 			// extract_iocs.tmpl contains the word "Extract"
-			"Extract": `[{"type":"ip","value":"192.168.1.100","context":"C2 server"}]`,
+			"Extract": `[{"type":"ip","value":"192.168.1.100","context":"C2 server","malicious":true}]`,
 		},
 	}
 
@@ -141,6 +141,35 @@ func TestAnalyzer_ExtractIOCs(t *testing.T) {
 	}
 	if iocs[0].Value != "192.168.1.100" {
 		t.Errorf("IOC.Value = %q; want %q", iocs[0].Value, "192.168.1.100")
+	}
+}
+
+// TestAnalyzer_ExtractIOCs_FiltersMalicious verifies that IOCs with
+// malicious=false are filtered out and only malicious IOCs are returned.
+func TestAnalyzer_ExtractIOCs_FiltersMalicious(t *testing.T) {
+	client := &mockLLMClient{
+		responses: map[string]string{
+			"Extract": `[
+				{"type":"ip","value":"45.33.32.156","context":"C2 server","malicious":true},
+				{"type":"domain","value":"watchtowr.com","context":"research blog","malicious":false},
+				{"type":"hash_sha256","value":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","context":"malware sample","malicious":true}
+			]`,
+		},
+	}
+
+	a := newTestAnalyzer(t, client)
+	iocs, err := a.ExtractIOCs(context.Background(), testFinding())
+	if err != nil {
+		t.Fatalf("ExtractIOCs() unexpected error: %v", err)
+	}
+	if len(iocs) != 2 {
+		t.Fatalf("len(IOCs) = %d; want 2 (non-malicious should be filtered)", len(iocs))
+	}
+	if iocs[0].Value != "45.33.32.156" {
+		t.Errorf("IOC[0].Value = %q; want %q", iocs[0].Value, "45.33.32.156")
+	}
+	if iocs[1].Type != "hash_sha256" {
+		t.Errorf("IOC[1].Type = %q; want %q", iocs[1].Type, "hash_sha256")
 	}
 }
 

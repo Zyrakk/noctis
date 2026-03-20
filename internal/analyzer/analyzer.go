@@ -29,9 +29,10 @@ type severityResponse struct {
 
 // iocEntry is one element of the JSON array returned by the extract_iocs prompt.
 type iocEntry struct {
-	Type    string `json:"type"`
-	Value   string `json:"value"`
-	Context string `json:"context"`
+	Type      string `json:"type"`
+	Value     string `json:"value"`
+	Context   string `json:"context"`
+	Malicious bool   `json:"malicious"`
 }
 
 // Analyzer uses an LLM client to classify, enrich, and summarise findings.
@@ -170,13 +171,16 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 		return nil, fmt.Errorf("analyzer: extract_iocs parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
-	iocs := make([]models.IOC, len(entries))
-	for i, e := range entries {
-		iocs[i] = models.IOC{
+	iocs := make([]models.IOC, 0, len(entries))
+	for _, e := range entries {
+		if !e.Malicious {
+			continue
+		}
+		iocs = append(iocs, models.IOC{
 			Type:    e.Type,
 			Value:   e.Value,
 			Context: e.Context,
-		}
+		})
 	}
 	return iocs, nil
 }
