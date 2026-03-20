@@ -6,6 +6,7 @@ export default function Login({ navigate }) {
   const { login, error: authError } = useAuth()
   const [key, setKey] = useState('')
   const [loading, setLoading] = useState(false)
+  const [shaking, setShaking] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -13,7 +14,12 @@ export default function Login({ navigate }) {
     setLoading(true)
     const ok = await login(key.trim())
     setLoading(false)
-    if (ok) navigate('/dashboard')
+    if (ok) {
+      navigate('/dashboard')
+    } else {
+      setShaking(true)
+      setTimeout(() => setShaking(false), 500)
+    }
   }
 
   return React.createElement('div', {
@@ -45,7 +51,7 @@ export default function Login({ navigate }) {
       // Card
       React.createElement('form', {
         onSubmit: handleSubmit,
-        className: 'border border-noctis-border/50 rounded p-5'
+        className: `border border-noctis-border/50 rounded p-5 ${shaking ? 'shake' : ''}`
       },
         React.createElement('label', {
           htmlFor: 'apikey',

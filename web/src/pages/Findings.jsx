@@ -14,6 +14,7 @@ export default function Findings() {
   const [selectedId, setSelectedId] = useState(null)
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [copiedIOC, setCopiedIOC] = useState(null)
 
   const params = new URLSearchParams()
   if (filters.category) params.set('category', filters.category)
@@ -221,7 +222,7 @@ export default function Findings() {
 
     // Detail panel
     selectedId && React.createElement('div', {
-      className: 'w-96 flex-shrink-0 border border-noctis-border/50 rounded p-5 overflow-y-auto max-h-[calc(100vh-3rem)] sticky top-0'
+      className: 'w-96 flex-shrink-0 border border-noctis-border/50 rounded p-5 overflow-y-auto max-h-[calc(100vh-3rem)] sticky top-0 animate-slide-in'
     },
       React.createElement('div', { className: 'flex items-center justify-between mb-4' },
         React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted' }, 'Finding Detail'),
@@ -279,11 +280,19 @@ export default function Findings() {
                 detail.iocs.map((ioc, i) =>
                   React.createElement('div', {
                     key: i,
-                    className: 'flex items-center gap-2 p-2 bg-noctis-bg rounded-lg'
+                    onClick: () => {
+                      navigator.clipboard.writeText(ioc.value).then(() => {
+                        setCopiedIOC(ioc.value)
+                        setTimeout(() => setCopiedIOC(null), 2000)
+                      })
+                    },
+                    className: 'flex items-center gap-2 p-2 bg-noctis-bg rounded-lg cursor-pointer hover:bg-noctis-surface transition-colors duration-150',
+                    title: 'Click to copy',
                   },
                     React.createElement(Shield, { className: 'w-3.5 h-3.5 text-noctis-cyan flex-shrink-0' }),
                     React.createElement('span', { className: 'text-xs px-1.5 py-0.5 bg-noctis-surface2 rounded text-noctis-dim' }, ioc.type),
                     React.createElement('span', { className: 'text-xs font-mono text-noctis-text truncate' }, ioc.value),
+                    copiedIOC === ioc.value && React.createElement('span', { className: 'text-[10px] text-green-400 flex-shrink-0' }, 'copied'),
                   )
                 ),
               ),
