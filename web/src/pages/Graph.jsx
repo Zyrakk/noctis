@@ -171,7 +171,7 @@ export default function Graph() {
   return React.createElement('div', { className: 'space-y-6' },
     // Header
     React.createElement('div', { className: 'flex items-center justify-between' },
-      React.createElement('h1', { className: 'font-heading font-bold text-2xl' }, 'Entity Graph'),
+      React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'Entity Graph'),
     ),
 
     // Search
@@ -199,7 +199,7 @@ export default function Graph() {
       React.createElement('button', {
         onClick: () => fetchGraph(query),
         disabled: loading || !query.trim(),
-        className: 'px-4 py-2.5 bg-noctis-purple hover:bg-noctis-purple-light text-white text-sm font-medium rounded-lg cursor-pointer disabled:opacity-50 transition-colors duration-200'
+        className: 'px-4 py-2.5 border border-noctis-muted/40 text-sm text-noctis-text hover:bg-noctis-surface hover:border-noctis-muted/60 rounded cursor-pointer disabled:opacity-40 transition-all duration-200'
       }, loading ? 'Loading...' : 'Explore'),
     ),
 
@@ -218,7 +218,7 @@ export default function Graph() {
 
     // Canvas
     React.createElement('div', {
-      className: 'bg-noctis-surface border border-noctis-border rounded-xl overflow-hidden relative',
+      className: 'border border-noctis-border/50 rounded overflow-hidden relative',
       style: { height: '500px' },
     },
       graphData && graphData.nodes?.length > 0

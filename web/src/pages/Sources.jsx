@@ -72,10 +72,10 @@ export default function Sources() {
   return React.createElement('div', { className: 'space-y-6' },
     // Header
     React.createElement('div', { className: 'flex items-center justify-between' },
-      React.createElement('h1', { className: 'font-heading font-bold text-2xl' }, 'Sources'),
+      React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'Sources'),
       React.createElement('button', {
         onClick: () => setShowModal(true),
-        className: 'flex items-center gap-2 px-4 py-2 bg-noctis-purple hover:bg-noctis-purple-light text-white text-sm font-medium rounded-lg cursor-pointer transition-colors duration-200'
+        className: 'flex items-center gap-2 px-4 py-2 border border-noctis-muted/40 text-sm text-noctis-text hover:bg-noctis-surface hover:border-noctis-muted/60 rounded cursor-pointer transition-all duration-200'
       },
         React.createElement(Plus, { className: 'w-4 h-4' }),
         'Add Source',
@@ -83,7 +83,7 @@ export default function Sources() {
     ),
 
     // Tabs
-    React.createElement('div', { className: 'flex items-center gap-1 bg-noctis-surface border border-noctis-border rounded-xl p-1' },
+    React.createElement('div', { className: 'flex items-center gap-1 border border-noctis-border/50 rounded p-1' },
       TABS.map(t =>
         React.createElement('button', {
           key: t.value,
@@ -113,7 +113,7 @@ export default function Sources() {
                   const Icon = TYPE_ICONS[s.type] || Globe
                   return React.createElement('div', {
                     key: s.id,
-                    className: 'bg-noctis-surface border border-noctis-border rounded-xl p-5 hover:border-noctis-purple/30 transition-colors duration-200'
+                    className: 'border-l-2 border-noctis-border hover:border-noctis-purple/40 pl-5 py-4 transition-colors duration-200'
                   },
                     React.createElement('div', { className: 'flex items-start justify-between mb-3' },
                       React.createElement('div', { className: 'flex items-center gap-3' },
@@ -153,7 +153,7 @@ export default function Sources() {
         )
       // Table for discovered/paused
       : React.createElement('div', {
-          className: 'bg-noctis-surface border border-noctis-border rounded-xl overflow-hidden'
+          className: 'border border-noctis-border/50 rounded overflow-hidden'
         },
           React.createElement('table', { className: 'w-full text-sm' },
             React.createElement('thead', null,
@@ -227,7 +227,7 @@ export default function Sources() {
       React.createElement('div', { className: 'fixed inset-0 bg-black/60 backdrop-blur-sm' }),
       React.createElement('form', {
         onSubmit: handleAdd,
-        className: 'relative bg-noctis-surface border border-noctis-border rounded-xl p-6 w-full max-w-md z-10'
+        className: 'relative border border-noctis-border/50 rounded p-6 w-full max-w-md z-10'
       },
         React.createElement('div', { className: 'flex items-center justify-between mb-5' },
           React.createElement('h2', { className: 'font-heading font-semibold text-lg' }, 'Add Source'),
@@ -274,7 +274,7 @@ export default function Sources() {
           React.createElement('button', {
             type: 'submit',
             disabled: submitting || !newIdentifier.trim(),
-            className: 'px-4 py-2 bg-noctis-purple hover:bg-noctis-purple-light text-white text-sm font-medium rounded-lg cursor-pointer disabled:opacity-50 transition-colors duration-200'
+            className: 'px-4 py-2 border border-noctis-muted/40 text-sm text-noctis-text hover:bg-noctis-surface hover:border-noctis-muted/60 rounded cursor-pointer disabled:opacity-40 transition-all duration-200'
           }, submitting ? 'Adding...' : 'Add Source'),
         ),
       ),

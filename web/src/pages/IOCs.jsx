@@ -61,7 +61,7 @@ export default function IOCs() {
   return React.createElement('div', { className: 'space-y-6' },
     // Header
     React.createElement('div', { className: 'flex items-center justify-between' },
-      React.createElement('h1', { className: 'font-heading font-bold text-2xl' }, 'IOC Explorer'),
+      React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'IOC Explorer'),
       React.createElement('div', { className: 'flex items-center gap-3' },
         React.createElement('span', { className: 'text-sm text-noctis-muted' },
           `${total.toLocaleString()} indicators`,
@@ -69,7 +69,7 @@ export default function IOCs() {
         React.createElement('button', {
           onClick: exportCSV,
           disabled: !iocs.length,
-          className: 'flex items-center gap-2 px-3 py-1.5 bg-noctis-surface border border-noctis-border rounded-lg text-sm text-noctis-muted hover:text-noctis-text hover:border-noctis-purple/40 cursor-pointer disabled:opacity-30 transition-colors duration-200'
+          className: 'flex items-center gap-2 px-3 py-1.5 border border-noctis-muted/30 rounded text-sm text-noctis-muted hover:text-noctis-text hover:bg-noctis-surface hover:border-noctis-muted/50 cursor-pointer disabled:opacity-30 transition-all duration-200'
         },
           React.createElement(Download, { className: 'w-4 h-4' }),
           'Export CSV',
@@ -111,7 +111,7 @@ export default function IOCs() {
 
     // Table
     React.createElement('div', {
-      className: 'bg-noctis-surface border border-noctis-border rounded-xl overflow-hidden'
+      className: 'border border-noctis-border/50 rounded overflow-hidden'
     },
       React.createElement('table', { className: 'w-full text-sm' },
         React.createElement('thead', null,

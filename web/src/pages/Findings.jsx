@@ -128,7 +128,7 @@ export default function Findings() {
     React.createElement('div', { className: 'flex-1 min-w-0' },
       // Header
       React.createElement('div', { className: 'flex items-center justify-between mb-4' },
-        React.createElement('h1', { className: 'font-heading font-bold text-2xl' }, 'Findings'),
+        React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'Findings'),
         React.createElement('span', { className: 'text-sm text-noctis-muted' },
           `${total.toLocaleString()} results`,
         ),
@@ -136,7 +136,7 @@ export default function Findings() {
 
       // Table
       React.createElement('div', {
-        className: 'bg-noctis-surface border border-noctis-border rounded-xl overflow-hidden'
+        className: 'border border-noctis-border/50 rounded overflow-hidden'
       },
         React.createElement('table', { className: 'w-full text-sm' },
           React.createElement('thead', null,
@@ -221,7 +221,7 @@ export default function Findings() {
 
     // Detail panel
     selectedId && React.createElement('div', {
-      className: 'w-96 flex-shrink-0 bg-noctis-surface border border-noctis-border rounded-xl p-5 overflow-y-auto max-h-[calc(100vh-3rem)] sticky top-0'
+      className: 'w-96 flex-shrink-0 border border-noctis-border/50 rounded p-5 overflow-y-auto max-h-[calc(100vh-3rem)] sticky top-0'
     },
       React.createElement('div', { className: 'flex items-center justify-between mb-4' },
         React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted' }, 'Finding Detail'),

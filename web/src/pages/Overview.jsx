@@ -13,20 +13,16 @@ import {
 const CHART_COLORS = ['#7c3aed', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6']
 const SEV_COLORS = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#3b82f6', info: '#6b7280', unclassified: '#374151' }
 
-function StatCard({ icon: Icon, label, value, color = 'text-noctis-purple-light' }) {
+function StatCard({ icon: Icon, label, value }) {
   return React.createElement('div', {
-    className: 'bg-noctis-surface border border-noctis-border rounded-xl p-5 flex items-start gap-4'
+    className: 'border-l-2 border-noctis-border hover:border-noctis-purple/40 pl-4 py-3 transition-colors duration-200'
   },
-    React.createElement('div', {
-      className: `w-10 h-10 flex items-center justify-center rounded-lg bg-noctis-purple/10`
-    },
-      React.createElement(Icon, { className: `w-5 h-5 ${color}` }),
+    React.createElement('div', { className: 'flex items-center gap-2 mb-1' },
+      React.createElement(Icon, { className: 'w-3.5 h-3.5 text-noctis-dim' }),
+      React.createElement('span', { className: 'text-xs text-noctis-dim' }, label),
     ),
-    React.createElement('div', null,
-      React.createElement('div', { className: 'text-sm text-noctis-muted' }, label),
-      React.createElement('div', { className: 'text-2xl font-mono font-bold text-noctis-text mt-0.5' },
-        value != null ? value.toLocaleString() : React.createElement('span', { className: 'skeleton inline-block w-16 h-7' }),
-      ),
+    React.createElement('div', { className: 'text-xl font-mono font-normal text-noctis-text' },
+      value != null ? value.toLocaleString() : React.createElement('span', { className: 'skeleton inline-block w-14 h-6' }),
     ),
   )
 }
@@ -62,7 +58,7 @@ export default function Overview({ navigate }) {
   return React.createElement('div', { className: 'space-y-6' },
     // Header
     React.createElement('div', { className: 'flex items-center justify-between' },
-      React.createElement('h1', { className: 'font-heading font-bold text-2xl' }, 'Overview'),
+      React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'Overview'),
       React.createElement('div', { className: 'text-sm text-noctis-muted' },
         'Last 7 days',
       ),
@@ -81,7 +77,7 @@ export default function Overview({ navigate }) {
     React.createElement('div', { className: 'grid grid-cols-1 lg:grid-cols-2 gap-6' },
       // Category donut
       React.createElement('div', {
-        className: 'bg-noctis-surface border border-noctis-border rounded-xl p-5'
+        className: 'border border-noctis-border/50 rounded p-5'
       },
         React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted mb-4' }, 'Category Distribution'),
         catData.length > 0
@@ -98,7 +94,7 @@ export default function Overview({ navigate }) {
                   ),
                 ),
                 React.createElement(Tooltip, {
-                  contentStyle: { background: '#12121a', border: '1px solid #2a2a3e', borderRadius: '8px', color: '#e2e8f0', fontSize: '12px' }
+                  contentStyle: { background: '#12121a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#e2e8f0', fontSize: '12px' }
                 }),
               ),
             )
@@ -125,7 +121,7 @@ export default function Overview({ navigate }) {
 
       // Severity bar
       React.createElement('div', {
-        className: 'bg-noctis-surface border border-noctis-border rounded-xl p-5'
+        className: 'border border-noctis-border/50 rounded p-5'
       },
         React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted mb-4' }, 'Severity Distribution'),
         sevData.length > 0
@@ -135,7 +131,7 @@ export default function Overview({ navigate }) {
                 React.createElement(XAxis, { dataKey: 'name', tick: { fill: '#94a3b8', fontSize: 12 }, axisLine: { stroke: '#2a2a3e' } }),
                 React.createElement(YAxis, { tick: { fill: '#94a3b8', fontSize: 12 }, axisLine: { stroke: '#2a2a3e' } }),
                 React.createElement(Tooltip, {
-                  contentStyle: { background: '#12121a', border: '1px solid #2a2a3e', borderRadius: '8px', color: '#e2e8f0', fontSize: '12px' }
+                  contentStyle: { background: '#12121a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#e2e8f0', fontSize: '12px' }
                 }),
                 React.createElement(Bar, { dataKey: 'value', radius: [4, 4, 0, 0] },
                   sevData.map((entry, i) =>
@@ -150,7 +146,7 @@ export default function Overview({ navigate }) {
 
     // Timeline
     React.createElement('div', {
-      className: 'bg-noctis-surface border border-noctis-border rounded-xl p-5'
+      className: 'border border-noctis-border/50 rounded p-5'
     },
       React.createElement('div', { className: 'flex items-center gap-2 mb-4' },
         React.createElement(TrendingUp, { className: 'w-4 h-4 text-noctis-purple-light' }),
@@ -163,7 +159,7 @@ export default function Overview({ navigate }) {
               React.createElement(XAxis, { dataKey: 'time', tick: { fill: '#94a3b8', fontSize: 11 }, axisLine: { stroke: '#2a2a3e' }, interval: 'preserveStartEnd' }),
               React.createElement(YAxis, { tick: { fill: '#94a3b8', fontSize: 11 }, axisLine: { stroke: '#2a2a3e' } }),
               React.createElement(Tooltip, {
-                contentStyle: { background: '#12121a', border: '1px solid #2a2a3e', borderRadius: '8px', color: '#e2e8f0', fontSize: '12px' }
+                contentStyle: { background: '#12121a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#e2e8f0', fontSize: '12px' }
               }),
               React.createElement(Area, {
                 type: 'monotone', dataKey: 'count',
@@ -182,7 +178,7 @@ export default function Overview({ navigate }) {
 
     // Recent findings
     React.createElement('div', {
-      className: 'bg-noctis-surface border border-noctis-border rounded-xl p-5'
+      className: 'border border-noctis-border/50 rounded p-5'
     },
       React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted mb-4' }, 'Recent Critical Findings'),
       findings.length > 0

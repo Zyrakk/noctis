@@ -686,7 +686,7 @@ func queryPublicStats(ctx context.Context, pool *pgxpool.Pool) (*PublicStats, er
 		return nil, fmt.Errorf("public stats: iocs: %w", err)
 	}
 
-	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM sources WHERE status = 'active'`).Scan(&s.ActiveSources)
+	err = pool.QueryRow(ctx, `SELECT COUNT(DISTINCT source_name) FROM raw_content`).Scan(&s.ActiveSources)
 	if err != nil {
 		return nil, fmt.Errorf("public stats: sources: %w", err)
 	}

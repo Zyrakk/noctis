@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Noctis - AI-Powered Threat Intelligence</title>
   <meta name="description" content="Noctis: AI-Powered Threat Intelligence Platform. Multi-source collection, AI classification, IOC extraction, entity graph analysis." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='4' y='26' font-family='system-ui' font-size='28' font-weight='300' fill='%237c3aed'>N</text></svg>" />
 
   <!-- Tailwind CSS Play CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -99,19 +100,34 @@
       animation: shimmer 1.5s infinite;
       border-radius: 4px;
     }
-    /* Glow effects */
-    .glow-purple { box-shadow: 0 0 20px rgba(124, 58, 237, 0.3); }
-    .glow-blue { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
-    .glow-critical { box-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
-    /* Animated gradient for landing hero */
-    @keyframes gradient-shift {
-      0%, 100% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
+    /* Slow ambient background blobs */
+    @keyframes drift-1 {
+      0%, 100% { transform: translate(0, 0); }
+      33% { transform: translate(60px, -40px); }
+      66% { transform: translate(-30px, 30px); }
     }
-    .animated-gradient {
-      background: linear-gradient(-45deg, #0a0a0f, #1a1a2e, #2d1b69, #1e3a5f);
-      background-size: 400% 400%;
-      animation: gradient-shift 15s ease infinite;
+    @keyframes drift-2 {
+      0%, 100% { transform: translate(0, 0); }
+      33% { transform: translate(-50px, 50px); }
+      66% { transform: translate(40px, -20px); }
+    }
+    .hero-blob-1 {
+      position: absolute;
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(124,58,237,0.06) 0%, transparent 70%);
+      border-radius: 50%;
+      top: 10%; left: 15%;
+      animation: drift-1 80s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .hero-blob-2 {
+      position: absolute;
+      width: 250px; height: 250px;
+      background: radial-gradient(circle, rgba(59,130,246,0.05) 0%, transparent 70%);
+      border-radius: 50%;
+      top: 40%; right: 10%;
+      animation: drift-2 70s ease-in-out infinite;
+      pointer-events: none;
     }
     /* Grid pattern background */
     .grid-bg {
