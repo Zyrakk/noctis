@@ -3,7 +3,7 @@ import { useApi, apiFetch } from '../hooks/useApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
   Globe, Radio, MessageSquare, Rss, FileText, Plus, Check, X,
-  Clock, AlertTriangle, Wifi, ChevronLeft, ChevronRight
+  Clock, AlertTriangle, Wifi, ChevronLeft, ChevronRight, Inbox
 } from 'lucide-react'
 
 const TABS = [
@@ -51,6 +51,8 @@ export default function Sources() {
   const [newType, setNewType] = useState('telegram_channel')
   const [newIdentifier, setNewIdentifier] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [toast, setToast] = useState(null)
+  const [fadingIds, setFadingIds] = useState(new Set())
 
   const params = new URLSearchParams()
   params.set('status', tab)
@@ -66,9 +68,17 @@ export default function Sources() {
   const handleApprove = useCallback(async (id) => {
     try {
       await apiFetch(apiKey, `/api/sources/${id}/approve`, { method: 'POST' })
-      refetch()
+      setFadingIds(prev => new Set(prev).add(id))
+      setToast('Source approved — will be collected within 5 minutes')
+      setTimeout(() => {
+        setFadingIds(prev => { const next = new Set(prev); next.delete(id); return next })
+        refetch()
+      }, 500)
+      setTimeout(() => setToast(null), 3000)
     } catch (err) {
       console.error('Failed to approve:', err)
+      setToast('Failed to approve source')
+      setTimeout(() => setToast(null), 3000)
     }
   }, [apiKey, refetch])
 
@@ -181,8 +191,9 @@ export default function Sources() {
                     ),
                   )
                 })
-              : React.createElement('div', { className: 'col-span-full text-center py-12 text-sm text-noctis-dim' },
-                  'No active sources.',
+              : React.createElement('div', { className: 'col-span-full flex flex-col items-center justify-center py-16 text-noctis-dim' },
+                  React.createElement(Inbox, { className: 'w-8 h-8 mb-2 opacity-40' }),
+                  React.createElement('span', { className: 'text-sm' }, 'No active sources.'),
                 ),
         )
       // Table for discovered/paused
@@ -216,7 +227,9 @@ export default function Sources() {
                       const Icon = TYPE_ICONS[s.type] || Globe
                       return React.createElement('tr', {
                         key: s.id,
-                        className: 'border-b border-noctis-border/50 hover:bg-noctis-surface/50 transition-colors duration-150'
+                        className: `border-b border-noctis-border/50 hover:bg-noctis-surface/50 transition-all duration-500 ${
+                          fadingIds.has(s.id) ? 'opacity-0' : 'opacity-100'
+                        }`
                       },
                         React.createElement('td', { className: 'px-4 py-3' },
                           React.createElement('div', { className: 'flex items-center gap-2' },
@@ -249,8 +262,9 @@ export default function Sources() {
             ),
 
             !loading && list.length === 0 &&
-              React.createElement('div', { className: 'py-12 text-center text-sm text-noctis-dim' },
-                `No ${tab} sources.`,
+              React.createElement('div', { className: 'py-16 flex flex-col items-center text-noctis-dim' },
+                React.createElement(Inbox, { className: 'w-8 h-8 mb-2 opacity-40' }),
+                React.createElement('span', { className: 'text-sm' }, `No ${tab} sources.`),
               ),
           ),
 
@@ -339,6 +353,12 @@ export default function Sources() {
           }, submitting ? 'Adding...' : 'Add Source'),
         ),
       ),
+    ),
+
+    toast && React.createElement('div', {
+      className: 'fixed bottom-6 right-6 z-50 px-4 py-3 bg-noctis-surface border border-noctis-border/50 rounded-lg text-sm text-noctis-text shadow-lg'
+    },
+      toast,
     ),
   )
 }
