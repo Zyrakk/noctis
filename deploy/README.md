@@ -225,6 +225,41 @@ kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c \
 - Check metrics: `curl -s localhost:9090/metrics | grep llm_errors`
 - Workers only classify after content is collected — wait for RSS feeds to populate first
 
+## Public Access
+
+The dashboard can be exposed publicly via a Traefik IngressRoute with automatic TLS.
+
+### Prerequisites
+
+- Traefik ingress controller running in the cluster with a `letsencrypt` cert resolver configured
+- A DNS A record pointing `noctis.zyrak.cloud` to the cluster's public IP
+
+### Deploy the IngressRoute
+
+```bash
+kubectl apply -f deploy/ingress.yaml
+```
+
+This routes `https://noctis.zyrak.cloud` to the Noctis dashboard on port 3000 via the `noctis-metrics` Service. Traefik handles TLS termination with a Let's Encrypt certificate.
+
+**Requirements:**
+
+1. The `noctis-metrics` Service must expose port 3000. If it currently only exposes 8080 and 9090, add a port entry:
+
+   ```yaml
+   - name: dashboard
+     port: 3000
+     targetPort: 3000
+   ```
+
+2. `dashboard.enabled: true` must be set in the Noctis ConfigMap.
+
+3. `NOCTIS_DASHBOARD_API_KEY` must be set in the secrets — the dashboard login page requires it.
+
+**Security:** The dashboard is protected by the API key, but the landing page is public. For additional protection, consider adding Traefik middleware for IP allowlisting or basic auth in front of the IngressRoute.
+
+---
+
 ## Scaling Up
 
 Once RSS-only is verified, enable additional sources by editing the ConfigMap:

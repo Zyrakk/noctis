@@ -124,6 +124,11 @@ data:
       graph:
         enabled: true
 
+      dashboard:
+        enabled: true
+        port: 3000
+        apiKey: "${NOCTIS_DASHBOARD_API_KEY}"
+
       dispatch:
         wazuh:
           enabled: false

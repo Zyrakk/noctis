@@ -8,12 +8,12 @@ export default defineConfig({
       input: 'index.html',
       external: [
         'react',
+        'react-dom',
         'react-dom/client',
         'react/jsx-runtime',
         'react-router-dom',
         'recharts',
         'lucide-react',
-        'd3-force',
       ],
       output: {
         entryFileNames: 'app.js',
