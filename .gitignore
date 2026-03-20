@@ -4,3 +4,5 @@ bin/
 *.session
 vendor/
 deploy/secrets.yaml
+web/node_modules/
+

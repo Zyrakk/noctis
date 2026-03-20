@@ -33,6 +33,7 @@ type Config struct {
 	Collection  CollectionConfig `yaml:"collection"`
 	Discovery   DiscoveryConfig  `yaml:"discovery"`
 	Storage     StorageConfig    `yaml:"storage"`
+	Dashboard   DashboardConfig  `yaml:"dashboard"`
 }
 
 // CollectionConfig controls archive-everything behavior and background workers.
@@ -55,6 +56,13 @@ type DiscoveryConfig struct {
 type StorageConfig struct {
 	ArtifactPath      string `yaml:"artifactPath"`
 	MaxArtifactSizeMB int    `yaml:"maxArtifactSizeMB"`
+}
+
+// DashboardConfig controls the web dashboard server.
+type DashboardConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Port    int    `yaml:"port"`
+	APIKey  string `yaml:"apiKey"`
 }
 
 // SourcesConfig groups all ingest source configurations.

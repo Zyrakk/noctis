@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
@@ -16,6 +18,7 @@ import (
 	"github.com/Zyrakk/noctis/internal/archive"
 	"github.com/Zyrakk/noctis/internal/collector"
 	"github.com/Zyrakk/noctis/internal/config"
+	"github.com/Zyrakk/noctis/internal/dashboard"
 	"github.com/Zyrakk/noctis/internal/database"
 	"github.com/Zyrakk/noctis/internal/discovery"
 	"github.com/Zyrakk/noctis/internal/dispatcher"
@@ -94,6 +97,22 @@ func newServeCmd() *cobra.Command {
 				return fmt.Errorf("running migrations: %w", err)
 			}
 			slog.Info("database migrations applied")
+
+			// Start dashboard server if enabled
+			var dashServer *dashboard.Server
+			if cfg.Dashboard.Enabled {
+				dashPort := cfg.Dashboard.Port
+				if dashPort == 0 {
+					dashPort = 3000
+				}
+				dashServer = dashboard.NewServer(fmt.Sprintf(":%d", dashPort), pool, cfg.Dashboard.APIKey)
+				go func() {
+					if err := dashServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+						slog.Error("dashboard server error", "err", err)
+					}
+				}()
+				slog.Info("dashboard enabled", "port", dashPort)
+			}
 
 			// Build archive store
 			archiveStore := archive.New(pool)
@@ -240,6 +259,11 @@ func newServeCmd() *cobra.Command {
 			slog.Info("received shutdown signal, initiating graceful shutdown")
 
 			// Graceful shutdown
+			if dashServer != nil {
+				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer shutdownCancel()
+				dashServer.Shutdown(shutdownCtx)
+			}
 			pipelineCancel()
 			collectorWg.Wait()
 			slog.Info("noctis shutdown complete")
