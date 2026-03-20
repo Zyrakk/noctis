@@ -158,6 +158,13 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 
 // Run starts all background workers and blocks until ctx is cancelled.
 func (p *IngestPipeline) Run(ctx context.Context) {
+	// Backfill entities from existing IOCs on startup.
+	if count, err := p.archive.BackfillEntitiesFromIOCs(ctx); err != nil {
+		log.Printf("ingest: entity backfill error: %v", err)
+	} else if count > 0 {
+		log.Printf("ingest: backfilled %d entities from existing IOCs", count)
+	}
+
 	var wg sync.WaitGroup
 
 	// Start classification workers.

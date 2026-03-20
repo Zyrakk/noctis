@@ -2,6 +2,7 @@ package ingest
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -208,6 +209,11 @@ func (p *IngestPipeline) entityExtractionWorker(ctx context.Context, workerID in
 				}
 			}
 
+			// Bridge IOCs into the entity graph.
+			if len(iocs) > 0 {
+				p.bridgeEntitiesToGraph(ctx, entry, iocs, workerID)
+			}
+
 			// Mark as entity-extracted.
 			if err := p.archive.MarkEntitiesExtracted(ctx, entry.ID); err != nil {
 				log.Printf("ingest: entity extraction worker %d: mark extracted error for %s: %v", workerID, entry.ID, err)
@@ -218,6 +224,67 @@ func (p *IngestPipeline) entityExtractionWorker(ctx context.Context, workerID in
 			if totalExtracted%workerLogInterval == 0 {
 				log.Printf("ingest: entity extraction worker %d: extracted %d items", workerID, totalExtracted)
 			}
+		}
+	}
+}
+
+// bridgeEntitiesToGraph creates entities and edges from extracted IOCs and the
+// source channel. Each IOC becomes a graph entity linked to the source entity.
+func (p *IngestPipeline) bridgeEntitiesToGraph(ctx context.Context, entry archive.RawContent, iocs []models.IOC, workerID int) {
+	// Map IOC types to entity graph types.
+	iocEntityType := func(iocType string) string {
+		switch iocType {
+		case "ip":
+			return "ip"
+		case "domain":
+			return "domain"
+		case "hash_md5", "hash_sha1", "hash_sha256":
+			return "hash"
+		case "cve":
+			return "cve"
+		case "url":
+			return "url"
+		case "email":
+			return "email"
+		default:
+			return "ioc"
+		}
+	}
+
+	// Upsert source entity.
+	sourceName := entry.SourceName
+	if sourceName == "" {
+		sourceName = entry.SourceID
+	}
+	sourceEntityID := fmt.Sprintf("source:%s", sourceName)
+	sourceProps := map[string]interface{}{
+		"name":        sourceName,
+		"source_type": entry.SourceType,
+	}
+	if err := p.archive.UpsertEntity(ctx, sourceEntityID, "channel", sourceProps); err != nil {
+		log.Printf("ingest: entity bridge worker %d: upsert source entity: %v", workerID, err)
+	}
+
+	// Upsert each IOC as an entity and create an edge to the source.
+	for _, ioc := range iocs {
+		entityID := fmt.Sprintf("ioc:%s:%s", ioc.Type, ioc.Value)
+		entityType := iocEntityType(ioc.Type)
+		props := map[string]interface{}{
+			"value": ioc.Value,
+		}
+		if ioc.Context != "" {
+			props["context"] = ioc.Context
+		}
+
+		if err := p.archive.UpsertEntity(ctx, entityID, entityType, props); err != nil {
+			log.Printf("ingest: entity bridge worker %d: upsert ioc entity: %v", workerID, err)
+			continue
+		}
+
+		// Edge: IOC → source (found_in)
+		edgeID := fmt.Sprintf("edge:%s:%s:found_in", entityID, sourceEntityID)
+		if err := p.archive.UpsertEdge(ctx, edgeID, entityID, sourceEntityID, "found_in"); err != nil {
+			log.Printf("ingest: entity bridge worker %d: upsert edge: %v", workerID, err)
 		}
 	}
 }

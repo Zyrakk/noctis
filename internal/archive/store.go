@@ -232,6 +232,111 @@ SET sighting_count = iocs.sighting_count + 1,
 	return nil
 }
 
+// UpsertEntity inserts an entity or updates its properties if it already exists.
+func (s *Store) UpsertEntity(ctx context.Context, id, entityType string, properties map[string]interface{}) error {
+	propsJSON, err := json.Marshal(properties)
+	if err != nil {
+		return fmt.Errorf("archive: marshal entity properties: %w", err)
+	}
+
+	const query = `
+INSERT INTO entities (id, type, properties)
+VALUES ($1, $2, $3)
+ON CONFLICT (id) DO UPDATE
+SET properties = entities.properties || $3,
+    updated_at = NOW()`
+
+	_, err = s.pool.Exec(ctx, query, id, entityType, propsJSON)
+	if err != nil {
+		return fmt.Errorf("archive: upsert entity (%s): %w", id, err)
+	}
+	return nil
+}
+
+// UpsertEdge inserts an edge or ignores if it already exists.
+func (s *Store) UpsertEdge(ctx context.Context, id, sourceID, targetID, relationship string) error {
+	const query = `
+INSERT INTO edges (id, source_id, target_id, relationship)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (id) DO NOTHING`
+
+	_, err := s.pool.Exec(ctx, query, id, sourceID, targetID, relationship)
+	if err != nil {
+		return fmt.Errorf("archive: upsert edge (%s -> %s): %w", sourceID, targetID, err)
+	}
+	return nil
+}
+
+// BackfillEntitiesFromIOCs creates entities and edges from existing IOCs that
+// don't yet have corresponding entities in the graph. Returns the number of
+// entities created.
+func (s *Store) BackfillEntitiesFromIOCs(ctx context.Context) (int, error) {
+	// Find IOCs that don't have a corresponding entity yet.
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT i.type, i.value, i.context, rc.source_name, rc.source_type
+		FROM iocs i
+		JOIN raw_content rc ON rc.id = i.source_content_id
+		WHERE NOT EXISTS (
+			SELECT 1 FROM entities WHERE id = 'ioc:' || i.type || ':' || i.value
+		)
+		LIMIT 5000`)
+	if err != nil {
+		return 0, fmt.Errorf("archive: backfill query: %w", err)
+	}
+	defer rows.Close()
+
+	type iocRow struct {
+		iocType, value, iocContext, sourceName, sourceType string
+	}
+	var toBackfill []iocRow
+	for rows.Next() {
+		var r iocRow
+		if err := rows.Scan(&r.iocType, &r.value, &r.iocContext, &r.sourceName, &r.sourceType); err != nil {
+			return 0, fmt.Errorf("archive: backfill scan: %w", err)
+		}
+		toBackfill = append(toBackfill, r)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("archive: backfill rows: %w", err)
+	}
+
+	count := 0
+	for _, r := range toBackfill {
+		// IOC entity type mapping.
+		entityType := r.iocType
+		switch r.iocType {
+		case "hash_md5", "hash_sha1", "hash_sha256":
+			entityType = "hash"
+		}
+
+		entityID := fmt.Sprintf("ioc:%s:%s", r.iocType, r.value)
+		props := map[string]interface{}{"value": r.value}
+		if r.iocContext != "" {
+			props["context"] = r.iocContext
+		}
+
+		if err := s.UpsertEntity(ctx, entityID, entityType, props); err != nil {
+			continue
+		}
+
+		// Source entity.
+		sourceEntityID := fmt.Sprintf("source:%s", r.sourceName)
+		sourceProps := map[string]interface{}{
+			"name":        r.sourceName,
+			"source_type": r.sourceType,
+		}
+		s.UpsertEntity(ctx, sourceEntityID, "channel", sourceProps)
+
+		// Edge.
+		edgeID := fmt.Sprintf("edge:%s:%s:found_in", entityID, sourceEntityID)
+		s.UpsertEdge(ctx, edgeID, entityID, sourceEntityID, "found_in")
+
+		count++
+	}
+
+	return count, nil
+}
+
 // Search queries the archive with dynamic filtering. Only non-empty fields in
 // the SearchQuery are included in the WHERE clause.
 func (s *Store) Search(ctx context.Context, query SearchQuery) ([]RawContent, error) {

@@ -695,6 +695,111 @@ func queryGraph(ctx context.Context, pool *pgxpool.Pool, entityID string, hops i
 	return &GraphResponse{Nodes: nodes, Edges: edges}, nil
 }
 
+// --- Entity listing ---
+
+// EntitySummary is a compact representation of an entity for list views.
+type EntitySummary struct {
+	ID         string         `json:"id"`
+	Type       string         `json:"type"`
+	Properties map[string]any `json:"properties"`
+	EdgeCount  int64          `json:"edgeCount"`
+	CreatedAt  time.Time      `json:"createdAt"`
+}
+
+// EntitiesResponse wraps paginated entities.
+type EntitiesResponse struct {
+	Entities []EntitySummary `json:"entities"`
+	Total    int64           `json:"total"`
+}
+
+func queryEntities(ctx context.Context, pool *pgxpool.Pool, entityType, query string, limit, offset int) (*EntitiesResponse, error) {
+	var conditions []string
+	var args []interface{}
+	argIdx := 0
+
+	nextArg := func() string {
+		argIdx++
+		return fmt.Sprintf("$%d", argIdx)
+	}
+
+	if entityType != "" {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("e.type = %s", p))
+		args = append(args, entityType)
+	}
+	if query != "" {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("(e.id ILIKE '%%' || %s || '%%' OR e.properties::text ILIKE '%%' || %s || '%%')", p, p))
+		args = append(args, query)
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int64
+	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM entities e "+where, args...).Scan(&total)
+	if err != nil {
+		return nil, fmt.Errorf("entities count: %w", err)
+	}
+
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	limitP := nextArg()
+	offsetP := nextArg()
+	sql := fmt.Sprintf(`
+		SELECT e.id, e.type, e.properties, e.created_at,
+		       COALESCE(ec.cnt, 0) AS edge_count
+		FROM entities e
+		LEFT JOIN (
+			SELECT id, COUNT(*) AS cnt FROM (
+				SELECT source_id AS id FROM edges
+				UNION ALL
+				SELECT target_id AS id FROM edges
+			) sub GROUP BY id
+		) ec ON ec.id = e.id
+		%s
+		ORDER BY e.created_at DESC
+		LIMIT %s OFFSET %s`, where, limitP, offsetP)
+	args = append(args, limit, offset)
+
+	rows, err := pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("entities query: %w", err)
+	}
+	defer rows.Close()
+
+	var entities []EntitySummary
+	for rows.Next() {
+		var es EntitySummary
+		var propsJSON []byte
+		if err := rows.Scan(&es.ID, &es.Type, &propsJSON, &es.CreatedAt, &es.EdgeCount); err != nil {
+			return nil, fmt.Errorf("entities scan: %w", err)
+		}
+		if len(propsJSON) > 0 {
+			json.Unmarshal(propsJSON, &es.Properties)
+		}
+		if es.Properties == nil {
+			es.Properties = map[string]any{}
+		}
+		entities = append(entities, es)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("entities rows: %w", err)
+	}
+	if entities == nil {
+		entities = []EntitySummary{}
+	}
+
+	return &EntitiesResponse{Entities: entities, Total: total}, nil
+}
+
 // --- Public (unauthenticated) queries ---
 
 // PublicStats holds aggregate counts safe for unauthenticated display.

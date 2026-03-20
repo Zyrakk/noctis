@@ -182,6 +182,18 @@ func (s *Server) handleTimeline(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, points)
 }
 
+func (s *Server) handleEntities(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	resp, err := queryEntities(r.Context(), s.pool, q.Get("type"), q.Get("q"),
+		parseIntParam(q.Get("limit"), 20), parseIntParam(q.Get("offset"), 0))
+	if err != nil {
+		slog.Error("dashboard: entities", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch entities"})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	entityID := q.Get("entity_id")
