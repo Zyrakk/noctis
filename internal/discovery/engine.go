@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -62,7 +64,20 @@ func NewEngine(pool *pgxpool.Pool, cfg config.DiscoveryConfig) *Engine {
 		regexp.MustCompile("https?://[^\\s<>\"{}|\\\\^`\\[\\]]+"),
 	}
 
-	blacklist := make(map[string]struct{}, len(cfg.DomainBlacklist))
+	// Hardcoded domains that should never be discovered as sources,
+	// regardless of config. These are social media, URL shorteners,
+	// search engines, and documentation sites.
+	hardcoded := []string{
+		"lnkd.in", "youtube.com", "youtu.be", "docs.google.com",
+		"google.com", "linkedin.com", "twitter.com", "x.com",
+		"discord.gg", "mega.nz", "boosty.to", "skillbox.ru",
+		"habr.com", "medium.com", "yandex.com", "localhost",
+		"127.0.0.1", "w3.org", "schemas.xmlsoap.org", "microsoft.com",
+	}
+	blacklist := make(map[string]struct{}, len(cfg.DomainBlacklist)+len(hardcoded))
+	for _, d := range hardcoded {
+		blacklist[d] = struct{}{}
+	}
 	for _, d := range cfg.DomainBlacklist {
 		blacklist[strings.ToLower(d)] = struct{}{}
 	}
@@ -170,6 +185,79 @@ func (e *Engine) isBlacklisted(rawURL string) bool {
 	return false
 }
 
+// shouldSkipURL returns true for URLs that are clearly not useful intelligence
+// sources: fuzzing templates, private IPs, truncated addresses, localhost, and
+// URLs too short to be meaningful.
+func shouldSkipURL(rawURL string) bool {
+	// Skip fuzzing templates
+	if strings.Contains(rawURL, "FUZZ") {
+		return true
+	}
+	// Skip localhost references
+	if strings.Contains(strings.ToLower(rawURL), "localhost") {
+		return true
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return true
+	}
+
+	host := parsed.Hostname()
+
+	// Skip private/reserved IPs
+	if net.ParseIP(host) != nil {
+		ip := net.ParseIP(host)
+		if ip != nil {
+			// Check private ranges
+			privateRanges := []string{"10.", "127.", "192.168.", "169.254.", "::1", "fe80:"}
+			for _, prefix := range privateRanges {
+				if strings.HasPrefix(host, prefix) {
+					return true
+				}
+			}
+			// 172.16.0.0/12
+			if strings.HasPrefix(host, "172.") {
+				parts := strings.SplitN(host, ".", 3)
+				if len(parts) >= 2 {
+					if octet, err := strconv.Atoi(parts[1]); err == nil && octet >= 16 && octet <= 31 {
+						return true
+					}
+				}
+			}
+		}
+	}
+
+	// Skip truncated IPs (like http://45.76.155 — only 3 octets, no path)
+	if net.ParseIP(host) == nil && isPartialIP(host) {
+		return true
+	}
+
+	// Skip URLs too short to be meaningful (domain + less than 2 chars of path)
+	path := strings.TrimRight(parsed.Path, "/")
+	if len(path) < 2 && parsed.RawQuery == "" {
+		return true
+	}
+
+	return false
+}
+
+// isPartialIP returns true for strings that look like truncated IP addresses
+// (e.g., "45.76.155" — three numeric octets with no further path).
+func isPartialIP(host string) bool {
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 || len(parts) > 4 {
+		return false
+	}
+	for _, p := range parts {
+		if _, err := strconv.Atoi(p); err != nil {
+			return false
+		}
+	}
+	// 2 or 3 octets is a partial IP; 4 octets is handled by net.ParseIP
+	return len(parts) < 4
+}
+
 // classifySource determines the source type for a given URL using simple
 // heuristic rules. No LLM call is needed for this classification.
 func classifySource(url string) string {
@@ -216,8 +304,8 @@ func (e *Engine) ProcessContent(ctx context.Context, content string, sourceConte
 	}
 
 	for _, u := range urls {
-		if e.isBlacklisted(u) {
-			slog.Debug("discovery: skipping blacklisted URL", "url", u)
+		if e.isBlacklisted(u) || shouldSkipURL(u) {
+			slog.Debug("discovery: skipping filtered URL", "url", u)
 			continue
 		}
 

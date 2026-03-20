@@ -137,8 +137,14 @@ func queryStats(ctx context.Context, pool *pgxpool.Pool) (*StatsResponse, error)
 		return nil, fmt.Errorf("stats: ioc total: %w", err)
 	}
 
-	// Source counts by status
-	rows, err := pool.Query(ctx, `SELECT status, COUNT(*) FROM sources GROUP BY status`)
+	// Active sources: count distinct sources that have actually produced content
+	err = pool.QueryRow(ctx, `SELECT COUNT(DISTINCT source_name) FROM raw_content`).Scan(&stats.ActiveSources)
+	if err != nil {
+		return nil, fmt.Errorf("stats: active sources: %w", err)
+	}
+
+	// Discovered and paused counts from the sources table
+	rows, err := pool.Query(ctx, `SELECT status, COUNT(*) FROM sources WHERE status IN ('discovered', 'paused') GROUP BY status`)
 	if err != nil {
 		return nil, fmt.Errorf("stats: source counts: %w", err)
 	}
@@ -150,8 +156,6 @@ func queryStats(ctx context.Context, pool *pgxpool.Pool) (*StatsResponse, error)
 			return nil, err
 		}
 		switch status {
-		case "active":
-			stats.ActiveSources = cnt
 		case "discovered":
 			stats.DiscoveredSrc = cnt
 		case "paused":
@@ -434,7 +438,13 @@ func queryIOCs(ctx context.Context, pool *pgxpool.Pool, f iocsFilter) (*IOCsResp
 	return &IOCsResponse{IOCs: iocs, Total: total}, nil
 }
 
-func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType string) ([]SourceItem, error) {
+// SourcesResponse wraps paginated sources.
+type SourcesResponse struct {
+	Sources []SourceItem `json:"sources"`
+	Total   int64        `json:"total"`
+}
+
+func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType string, limit, offset int) (*SourcesResponse, error) {
 	var conditions []string
 	var args []interface{}
 	argIdx := 0
@@ -460,6 +470,22 @@ func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType st
 		where = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
+	// Count total
+	var total int64
+	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM sources s "+where, args...).Scan(&total)
+	if err != nil {
+		return nil, fmt.Errorf("sources count: %w", err)
+	}
+
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	limitP := nextArg()
+	offsetP := nextArg()
 	sql := fmt.Sprintf(`
 		SELECT s.id, s.type, s.identifier, s.name, s.status, s.last_collected,
 		       s.error_count, s.created_at,
@@ -471,7 +497,9 @@ func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType st
 			GROUP BY source_id
 		) c ON c.source_id = s.identifier
 		%s
-		ORDER BY s.created_at DESC`, where)
+		ORDER BY s.created_at DESC
+		LIMIT %s OFFSET %s`, where, limitP, offsetP)
+	args = append(args, limit, offset)
 
 	rows, err := pool.Query(ctx, sql, args...)
 	if err != nil {
@@ -494,7 +522,7 @@ func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType st
 		sources = []SourceItem{}
 	}
 
-	return sources, nil
+	return &SourcesResponse{Sources: sources, Total: total}, nil
 }
 
 func approveSource(ctx context.Context, pool *pgxpool.Pool, id string) error {
