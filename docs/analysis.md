@@ -49,7 +49,7 @@ Both options are applied to an `Options` struct before the request is serialised
 | Field | Purpose |
 |---|---|
 | `llm.provider` | Provider label (informational) |
-| `llm.baseURL` | Base URL without trailing path (e.g. `https://open.bigmodel.cn/api/paas/v4`) |
+| `llm.baseURL` | Base URL without trailing path (e.g. `https://open.bigmodel.cn/api/coding/paas/v4`) |
 | `llm.model` | Model identifier forwarded in each request body |
 | `llm.apiKey` | API key for Bearer auth |
 
@@ -139,12 +139,20 @@ Content:
 
 Classify into exactly ONE of these categories:
 - credential_leak: Leaked usernames, passwords, session tokens, API keys
-- malware_sample: Malware hashes, download links, C2 infrastructure
+- malware_sample: Malware hashes, download links, C2 infrastructure details
+- vulnerability: CVE disclosures, exploit proof-of-concepts, security advisories with technical details, weaponized exploit code
 - threat_actor_comms: Threat actor discussions, planning, coordination
 - access_broker: Initial access being sold (RDP, VPN, shell access)
 - data_dump: Bulk data leaks (databases, PII, financial records)
 - canary_hit: A known planted honeytoken was detected
-- irrelevant: Content matched a rule but is not a real threat
+- irrelevant: Content matched a rule but contains NO actionable threat intelligence
+
+Classification guidance:
+- A blog post sharing an exploit PoC for a CVE is "vulnerability", NOT "irrelevant"
+- A research writeup detailing new malware with IOCs is "malware_sample", NOT "irrelevant"
+- A tool release that can be used for offensive security (exploit frameworks, C2 tools) is "vulnerability" or "malware_sample" depending on context
+- Security vendor reports describing active campaigns with IOCs are "malware_sample" or the relevant category, NOT "irrelevant"
+- Only classify as "irrelevant" if the content has NO threat intelligence value: general news without IOCs, marketing content, off-topic discussions, or non-security content that matched a rule by keyword coincidence
 
 Respond with ONLY a JSON object:
 {"category": "<category>", "confidence": <0.0-1.0>}
@@ -152,12 +160,12 @@ Respond with ONLY a JSON object:
 
 ### `extract_iocs.tmpl`
 
-Extracts all indicators of compromise from raw content.
+Extracts indicators of compromise from raw content, distinguishing malicious indicators from research references.
 
 **Full template:**
 
 ```
-You are a cyber threat intelligence analyst. Extract ALL indicators of compromise (IOCs) from the following content.
+You are a cyber threat intelligence analyst. Extract indicators of compromise (IOCs) from the following content that are ACTUALLY PART OF MALICIOUS INFRASTRUCTURE or malicious activity.
 
 Content:
 ---
@@ -165,19 +173,33 @@ Content:
 ---
 
 Extract IOCs of these types:
-- ip: IPv4 or IPv6 addresses
-- domain: Domain names (not common ones like google.com, github.com)
-- hash_md5: MD5 hashes (32 hex chars)
-- hash_sha1: SHA-1 hashes (40 hex chars)
-- hash_sha256: SHA-256 hashes (64 hex chars)
-- email: Email addresses involved in malicious activity
-- crypto_wallet: Bitcoin, Ethereum, or Monero wallet addresses
-- url: Full URLs pointing to malicious resources
-- cve: CVE identifiers (CVE-YYYY-NNNNN)
+- ip: IPv4 or IPv6 addresses used by attackers (C2, exfil, scanning, staging)
+- domain: Domains used by attackers (C2, phishing, malware delivery, DGA)
+- hash_md5: MD5 hashes of malicious files/binaries (32 hex chars)
+- hash_sha1: SHA-1 hashes of malicious files/binaries (40 hex chars)
+- hash_sha256: SHA-256 hashes of malicious files/binaries (64 hex chars)
+- email: Email addresses used in phishing, BEC, or attacker registration
+- crypto_wallet: Cryptocurrency wallet addresses used for ransom or fraud
+- url: Full URLs pointing to malicious payloads, phishing pages, or C2 endpoints
+- cve: CVE identifiers (CVE-YYYY-NNNNN) referenced in the attack
 
-Respond with ONLY a JSON array. Each element: {"type": "<type>", "value": "<value>", "context": "<brief context>"}
+DO NOT extract:
+- Domains of security research companies, blogs, or documentation sites (e.g., watchtowr.com, synacktiv.com, securelist.com, kaspersky.com, mandiant.com, crowdstrike.com, github.com, microsoft.com, docs.*)
+- Domains hosting the blog post or research report — only extract domains that are part of the ATTACK INFRASTRUCTURE
+- Private/reserved IP addresses (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, ::1, fe80::)
+- Example or placeholder values (example.com, example.org, test.local, foo.bar)
+- Git commit hashes — only extract file hashes of actual malicious binaries or samples
+- Version numbers, build identifiers, or other non-IOC hex strings
+- Legitimate tool domains (github.com, pypi.org, npmjs.com, docker.io)
+- Social media profile URLs unless they are confirmed attacker accounts
+
+For each IOC, set "malicious" to true ONLY if you are confident it is part of actual attack infrastructure, a malware sample hash, or an attacker-controlled resource. Set to false for anything ambiguous, educational, or referenced only as context.
+
+Respond with ONLY a JSON array. Each element: {"type": "<type>", "value": "<value>", "context": "<brief context>", "malicious": <true|false>}
 If no IOCs found, respond with: []
 ```
+
+**IOC filtering:** Only IOCs with `malicious: true` are stored in the `iocs` table. IOCs marked as `malicious: false` (research references, documentation domains, benign infrastructure) are discarded before the `UpsertIOC` call. This prevents pollution of the IOC database with non-threatening indicators that happen to appear in security research content.
 
 ### `severity.tmpl`
 
@@ -284,11 +306,12 @@ Defined in `internal/models/finding.go`:
 |---|---|
 | `credential_leak` | Leaked credentials — usernames, passwords, API keys, session tokens |
 | `malware_sample` | Malware hashes, C2 infrastructure, download links |
+| `vulnerability` | CVE disclosures, exploit PoCs, security advisories with technical details, weaponized exploit code |
 | `threat_actor_comms` | Actor discussions, planning, coordination |
 | `access_broker` | Initial access being sold (RDP, VPN, shell) |
 | `data_dump` | Bulk data leaks — databases, PII, financial records |
 | `canary_hit` | A planted honeytoken was triggered |
-| `irrelevant` | False positive — content matched a rule but is not a real threat |
+| `irrelevant` | False positive — content matched a rule but has no actionable threat intelligence value |
 
 ---
 

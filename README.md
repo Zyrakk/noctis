@@ -49,6 +49,13 @@ Noctis is a long-running daemon that ingests threat intelligence from Telegram c
 │                         Dispatch                                │
 │    Alerts (log / webhook / Wazuh)  │  Prometheus metrics        │
 └─────────────────────────────────────────────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Web Dashboard                              │
+│   Landing page  │  Stats  │  Findings  │  IOCs  │  Sources      │
+│   Entity graph  │  Bearer-token auth  │  Embedded in binary     │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -62,6 +69,7 @@ Noctis is a long-running daemon that ingests threat intelligence from Telegram c
 - **Entity graph with relationship mapping** — IOCs, actors, and findings are linked in a graph structure for relationship traversal.
 - **Real-time alerts on keyword/regex matches** — A rule engine evaluates each finding against configurable keyword and regex rules before it reaches the archive. Matched findings trigger alert callbacks.
 - **Prometheus metrics** — `/metrics`, `/healthz`, and `/readyz` are served by the built-in health server (default port 8080).
+- **Web dashboard** — A React SPA embedded in the Go binary, served on a dedicated port. Provides an overview with charts, a findings browser, IOC explorer, source management, and entity graph visualization. Secured with a Bearer-token API key.
 - **Canary token system** — Planned (Phase 2C).
 - **Humanlike forum scraping scheduler** — Planned (Phase 2C).
 - **Interactive investigation CLI** — Planned (Phase 2C).
@@ -248,6 +256,11 @@ noctis:
     driver: postgres
     dsn: "${NOCTIS_DB_DSN}"
 
+  dashboard:
+    enabled: true               # web dashboard served on a dedicated port
+    port: 3000                  # default 3000
+    apiKey: "${NOCTIS_DASHBOARD_API_KEY}"
+
   graph:
     enabled: true               # entity graph (IOCs, actors, relationships)
 
@@ -308,7 +321,7 @@ Query the full-text archive.
 
 ```
 noctis search [text]
-              [--category credential_leak|malware|threat_actor_comms|...]
+              [--category credential_leak|malware_sample|vulnerability|threat_actor_comms|...]
               [--tag <tag>]        # repeatable
               [--since 7d|24h]     # h (hours) or d (days)
               [--author <handle>]
@@ -360,40 +373,70 @@ The binary runs migrations automatically on startup. No init containers or sidec
 
 ---
 
+## Dashboard
+
+Noctis includes a built-in web dashboard for browsing findings, exploring IOCs, managing sources, and visualizing entity relationships. The dashboard is a React SPA embedded in the Go binary — no separate frontend deployment required.
+
+**Enable it** by adding the dashboard block to your config:
+
+```yaml
+noctis:
+  dashboard:
+    enabled: true
+    apiKey: "${NOCTIS_DASHBOARD_API_KEY}"
+```
+
+**Access it** via port-forward (Kubernetes) or directly (standalone):
+
+```sh
+# Kubernetes
+kubectl port-forward deployment/noctis -n noctis 3000:3000
+
+# Standalone — already accessible at http://localhost:3000
+```
+
+The dashboard serves a public landing page at `/` and requires the API key to access data pages. Pages include an overview with charts, a findings browser with filters and detail panel, an IOC explorer with CSV export, a source manager with approve/add functionality, and an entity graph visualizer.
+
+See [docs/dashboard.md](docs/dashboard.md) for the full setup guide and API reference.
+
+---
+
 ## Production Stats
 
-The following numbers come from a live deployment running against 7 sources.
+The following numbers come from a live deployment running against 13 sources (8 Telegram channels, 4 RSS feeds, 1 security blog).
 
 **Archive**
 
 | Metric | Count |
 |--------|-------|
-| Total archived entries | 387 (241 Telegram, 146 web/RSS) |
-| Classified | 387 |
-| IOCs extracted | 322 |
-| Sources auto-discovered | 119 (117 web, 2 Telegram channels) |
+| Total archived entries | 674 (528 Telegram, 146 web/RSS) |
+| Classified | 674 |
+| IOCs extracted | 607 |
+| Sources auto-discovered | 310 |
 
 **Classification breakdown**
 
 | Category | Count |
 |----------|-------|
-| irrelevant | 282 |
-| malware_sample | 58 |
-| threat_actor_comms | 38 |
-| credential_leak | 6 |
-| data_dump | 1 |
+| irrelevant | 493 |
+| malware_sample | 111 |
+| threat_actor_comms | 55 |
+| credential_leak | 9 |
+| data_dump | 4 |
 | access_broker | 1 |
 
 **IOC breakdown**
 
 | Type | Count |
 |------|-------|
-| CVE | 210 |
-| URL | 86 |
-| domain | 18 |
-| email | 6 |
-| MD5 | 1 |
-| SHA1 | 1 |
+| CVE | 303 |
+| URL | 176 |
+| domain | 65 |
+| SHA-1 | 27 |
+| IP | 19 |
+| email | 13 |
+| SHA-256 | 2 |
+| MD5 | 2 |
 
 **Per-source collection**
 
@@ -401,9 +444,13 @@ The following numbers come from a live deployment running against 7 sources.
 |--------|---------|
 | RalfHackerChannel | 98 |
 | ad_poheque | 90 |
+| APT_Notes | 86 |
+| securixy_kz | 84 |
+| P0x3k_1N73LL1G3NC3 | 79 |
 | the-hacker-news | 63 |
 | zer0day1ab | 53 |
 | cisa-advisories | 40 |
+| ThreatHuntingFather | 36 |
 | bleeping-computer | 33 |
 | krebs-on-security | 10 |
 

@@ -40,6 +40,7 @@ Edit `deploy/secrets.yaml` and fill in each field:
 | `NOCTIS_TELEGRAM_PHONE` | (Optional) Phone number in international format |
 | `NOCTIS_TELEGRAM_PASSWORD` | (Optional) Telegram 2FA password, if set |
 | `NOCTIS_PASTEBIN_API_KEY` | (Optional) Pastebin PRO API key |
+| `NOCTIS_DASHBOARD_API_KEY` | (Optional) API key for the web dashboard — required if `dashboard.enabled: true` |
 
 **Important:** `deploy/secrets.yaml` contains credentials. Add it to `.gitignore` and never commit it.
 
@@ -82,6 +83,7 @@ Edit `deploy/configmap.yaml` to configure your sources and matching rules before
 - `matching.rules` — keyword and regex rules for alert matching
 - `llm.provider` / `llm.model` — LLM backend settings
 - `discovery.domainBlacklist` — domains to exclude from auto-discovery
+- `dashboard.enabled` / `dashboard.apiKey` — enable the web dashboard (see [Dashboard](dashboard.md))
 
 ```bash
 kubectl apply -f deploy/configmap.yaml
@@ -147,6 +149,7 @@ You can supply the DSN directly or via environment variable:
 ```bash
 export NOCTIS_DB_DSN="postgres://noctis:your-password@localhost:5432/noctis?sslmode=disable"
 export NOCTIS_LLM_API_KEY="your-api-key"
+export NOCTIS_DASHBOARD_API_KEY="your-dashboard-key"  # optional, for dashboard
 ```
 
 ### 4. Run
@@ -155,7 +158,7 @@ export NOCTIS_LLM_API_KEY="your-api-key"
 ./noctis serve --config config.yaml
 ```
 
-Migrations run automatically on startup.
+Migrations run automatically on startup. If `dashboard.enabled: true`, the dashboard is available at `http://localhost:3000`.
 
 ---
 
@@ -223,6 +226,8 @@ The `noctis-metrics` Service exposes two ports:
 | 8080 | `/readyz` | Readiness — 200 when collectors are running, 503 otherwise |
 | 8080 | `/auth/qr` | Telegram QR authentication page |
 | 9090 | `/metrics` | Prometheus-format metrics |
+| 3000 | `/` | Web dashboard (when `dashboard.enabled: true`) |
+| 3000 | `/api/*` | Dashboard JSON API (Bearer token required) |
 
 Port-forward to access locally:
 
@@ -232,6 +237,9 @@ kubectl port-forward svc/noctis-metrics 8080:8080 -n noctis
 
 # Prometheus metrics
 kubectl port-forward svc/noctis-metrics 9090:9090 -n noctis
+
+# Web dashboard
+kubectl port-forward deployment/noctis 3000:3000 -n noctis
 ```
 
 ---
@@ -290,6 +298,48 @@ Config field names are camelCase. Common mistakes:
 **Empty UUID errors on insert**
 
 If you see UUID-related errors in logs, this indicates a race in the archive insert path. The fix is present in the CTE-based INSERT implementation. Verify you are running the latest image.
+
+**Telegram collector logs "enabled" but produces no messages**
+
+The most common cause is a missing or unwritable session file. The session file path (`sessionFile` in config, typically `/data/telegram.session`) must be on a writable volume. If the volume is read-only or the path does not exist, the collector starts successfully but cannot persist or read the session, so no messages are collected. Verify the `/data` PVC is mounted and writable:
+
+```bash
+kubectl exec deployment/noctis -n noctis -- ls -la /data/
+```
+
+**Discovery engine produces too much noise**
+
+Common noisy domains that generate false discovered sources: `lnkd.in`, `youtube.com`, `docs.google.com`, `t.co`, `bit.ly`. Add these to `discovery.domainBlacklist` in your ConfigMap:
+
+```yaml
+discovery:
+  domainBlacklist:
+    - nvd.nist.gov
+    - github.com
+    - wikipedia.org
+    - lnkd.in
+    - youtube.com
+    - docs.google.com
+    - t.co
+    - bit.ly
+```
+
+After editing, `kubectl apply -f deploy/configmap.yaml` and restart the pod.
+
+**GLM returns malformed JSON**
+
+The `stripCodeFences` function in the analyzer handles the common case of GLM wrapping JSON in markdown fences. Occasionally GLM-5 returns extra closing braces (e.g., `}}}`), which causes a JSON parse error. These are logged as warnings and the finding is retried on the next worker cycle. If this happens frequently, check that `llm.temperature` is set low (0.1) and `llm.maxTokens` is sufficient (1024+).
+
+**Private IPs appearing as IOCs**
+
+Earlier prompt versions did not exclude private/reserved IP ranges. The current `extract_iocs.tmpl` explicitly instructs the LLM to skip 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, and 127.0.0.0/8. If you see private IPs in your IOC table from before this fix, they can be cleaned up:
+
+```sql
+DELETE FROM iocs WHERE type = 'ip' AND (
+  value LIKE '10.%' OR value LIKE '172.16.%' OR value LIKE '172.17.%' OR
+  value LIKE '172.18.%' OR value LIKE '192.168.%' OR value LIKE '127.%'
+);
+```
 
 **Config not mounted / changes not picked up**
 

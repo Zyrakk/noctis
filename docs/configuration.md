@@ -238,6 +238,20 @@ Controls the automatic source discovery engine.
 
 ---
 
+## `dashboard`
+
+Configures the web dashboard server. When enabled, Noctis serves a React SPA and JSON API on a dedicated port, separate from the health/metrics server.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the web dashboard. |
+| `port` | int | `3000` | Port on which the dashboard server listens. |
+| `apiKey` | string | — | Bearer token required for all `/api/*` endpoints. Use `${VAR}` to inject from an environment variable. |
+
+When `enabled` is `false`, no dashboard server is started and no port is bound. The dashboard serves a public landing page at `/` and requires the API key for all data endpoints.
+
+---
+
 ## `database`
 
 Configures the persistence layer.
@@ -433,6 +447,11 @@ noctis:
         patterns:
           - '203\.0\.113\.\d+'
         severity: medium
+
+  dashboard:
+    enabled: true
+    port: 3000
+    apiKey: ${NOCTIS_DASHBOARD_API_KEY}
 
   llm:
     provider: openai

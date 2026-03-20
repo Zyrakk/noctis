@@ -21,6 +21,7 @@ internal/
   llm/             OpenAI-compatible LLM client
   database/        pgx connection pool setup
   health/          HTTP health/readiness endpoints, QR auth state
+  dashboard/       Web dashboard server, API handlers, embedded React SPA
 migrations/
   001_init.sql     findings, canary_tokens, actor_profiles
   002_graph.sql    entities, edges
@@ -170,7 +171,7 @@ Wraps an `llm.LLMClient` and four Go `text/template` prompt files loaded from `p
 
 LLM responses that wrap JSON in markdown code fences are cleaned before unmarshalling. Template render failures and LLM errors are propagated to the caller, which logs them and continues.
 
-**Categories** (`models.Category`): `credential_leak`, `malware_sample`, `threat_actor_comms`, `access_broker`, `data_dump`, `canary_hit`, `irrelevant`.
+**Categories** (`models.Category`): `credential_leak`, `malware_sample`, `vulnerability`, `threat_actor_comms`, `access_broker`, `data_dump`, `canary_hit`, `irrelevant`.
 
 **Severity** (`models.Severity`): `info (0)` < `low (1)` < `medium (2)` < `high (3)` < `critical (4)`.
 
@@ -376,6 +377,7 @@ main goroutine
   │     ├── classificationWorker goroutine × N (default 2)
   │     └── entityExtractionWorker goroutine × M (default 1)
   │
+  ├── Dashboard server goroutine (:3000, if enabled)
   └── HTTP servers (metrics :8080, health :8081)
 ```
 
