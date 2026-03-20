@@ -29,7 +29,7 @@ export default function Login({ navigate }) {
       // Back link
       React.createElement('button', {
         onClick: () => navigate('/'),
-        className: 'flex items-center gap-1.5 text-xs text-noctis-dim hover:text-noctis-muted cursor-pointer transition-colors duration-200 mb-8'
+        className: 'flex items-center gap-1.5 text-xs text-noctis-dim hover:text-noctis-muted cursor-pointer transition-colors duration-200 mb-8 py-2'
       },
         React.createElement(ArrowLeft, { className: 'w-3 h-3' }),
         'Back to home',
@@ -69,7 +69,7 @@ export default function Login({ navigate }) {
             onChange: (e) => setKey(e.target.value),
             placeholder: 'Enter your API key',
             autoFocus: true,
-            className: 'w-full pl-9 pr-4 py-2.5 bg-noctis-bg border border-noctis-border/50 rounded text-sm text-noctis-text placeholder-noctis-dim focus:outline-none focus:border-noctis-muted/50 transition-colors duration-200 font-mono'
+            className: 'w-full pl-9 pr-4 py-3 bg-noctis-bg border border-noctis-border/50 rounded text-sm text-noctis-text placeholder-noctis-dim focus:outline-none focus:border-noctis-muted/50 transition-colors duration-200 font-mono'
           }),
         ),
 
@@ -84,7 +84,7 @@ export default function Login({ navigate }) {
         React.createElement('button', {
           type: 'submit',
           disabled: loading || !key.trim(),
-          className: 'w-full mt-4 flex items-center justify-center gap-2 py-2.5 border border-noctis-muted/40 text-sm text-noctis-text hover:bg-noctis-surface hover:border-noctis-muted/60 disabled:opacity-40 disabled:cursor-not-allowed rounded cursor-pointer transition-all duration-200'
+          className: 'w-full mt-4 flex items-center justify-center gap-2 py-3 border border-noctis-muted/40 text-sm text-noctis-text hover:bg-noctis-surface hover:border-noctis-muted/60 disabled:opacity-40 disabled:cursor-not-allowed rounded cursor-pointer transition-all duration-200'
         },
           loading ? 'Authenticating...' : 'Access Dashboard',
           !loading && React.createElement(ArrowRight, { className: 'w-3.5 h-3.5' }),

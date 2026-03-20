@@ -60,7 +60,7 @@ export default function IOCs() {
 
   return React.createElement('div', { className: 'space-y-6' },
     // Header
-    React.createElement('div', { className: 'flex items-center justify-between' },
+    React.createElement('div', { className: 'flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2' },
       React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'IOC Explorer'),
       React.createElement('div', { className: 'flex items-center gap-3' },
         React.createElement('span', { className: 'text-sm text-noctis-muted' },
@@ -72,7 +72,7 @@ export default function IOCs() {
           className: 'flex items-center gap-2 px-3 py-1.5 border border-noctis-muted/30 rounded text-sm text-noctis-muted hover:text-noctis-text hover:bg-noctis-surface hover:border-noctis-muted/50 cursor-pointer disabled:opacity-30 transition-all duration-200'
         },
           React.createElement(Download, { className: 'w-4 h-4' }),
-          'Export CSV',
+          React.createElement('span', { className: 'hidden lg:inline' }, 'Export CSV'),
         ),
       ),
     ),
@@ -82,7 +82,7 @@ export default function IOCs() {
       className: 'flex items-center gap-4 flex-wrap'
     },
       // Type pills
-      React.createElement('div', { className: 'flex items-center gap-1.5' },
+      React.createElement('div', { className: 'flex items-center gap-1.5 overflow-x-auto flex-nowrap whitespace-nowrap' },
         IOC_TYPES.map(t =>
           React.createElement('button', {
             key: t.value,
@@ -97,7 +97,7 @@ export default function IOCs() {
       ),
 
       // Search
-      React.createElement('div', { className: 'relative flex-1 max-w-xs' },
+      React.createElement('div', { className: 'relative flex-1' },
         React.createElement(Search, { className: 'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-noctis-dim' }),
         React.createElement('input', {
           type: 'text',
@@ -109,9 +109,9 @@ export default function IOCs() {
       ),
     ),
 
-    // Table
+    // Table (desktop)
     React.createElement('div', {
-      className: 'border border-noctis-border/50 rounded overflow-x-auto'
+      className: 'hidden lg:block border border-noctis-border/50 rounded overflow-x-auto'
     },
       React.createElement('table', { className: 'w-full text-sm' },
         React.createElement('thead', null,
@@ -181,6 +181,38 @@ export default function IOCs() {
         React.createElement('div', { className: 'py-12 text-center text-sm text-noctis-dim' },
           'No IOCs found.',
         ),
+    ),
+
+    // Card layout (mobile)
+    React.createElement('div', { className: 'lg:hidden space-y-2' },
+      loading
+        ? Array.from({ length: 6 }).map((_, i) =>
+            React.createElement('div', { key: i, className: 'skeleton h-20 rounded' })
+          )
+        : iocs.length > 0
+          ? iocs.map((ioc, i) =>
+              React.createElement('div', {
+                key: ioc.id,
+                onClick: (e) => { copyValue(ioc.id, ioc.value) },
+                className: 'p-3 rounded-lg border border-noctis-border/30 cursor-pointer active:bg-noctis-surface transition-colors duration-150'
+              },
+                React.createElement('div', { className: 'flex items-center justify-between mb-1.5' },
+                  React.createElement('span', { className: 'text-xs px-2 py-0.5 bg-noctis-cyan/10 border border-noctis-cyan/30 rounded text-cyan-400 font-mono' }, ioc.type),
+                  React.createElement('span', { className: 'text-xs text-noctis-dim font-mono' }, new Date(ioc.firstSeen).toLocaleDateString()),
+                ),
+                React.createElement('p', { className: 'font-mono text-sm text-noctis-text break-all mb-1' }, ioc.value),
+                ioc.context && React.createElement('p', { className: 'text-xs text-noctis-muted line-clamp-1' }, ioc.context),
+                React.createElement('div', { className: 'flex items-center justify-between mt-1.5' },
+                  React.createElement('span', { className: 'text-xs text-noctis-dim' }, `${ioc.sightingCount} sightings`),
+                  copiedId === ioc.id
+                    ? React.createElement('span', { className: 'text-xs text-green-400' }, 'Copied!')
+                    : React.createElement('span', { className: 'text-xs text-noctis-dim' }, 'Tap to copy'),
+                ),
+              )
+            )
+          : !loading && React.createElement('div', { className: 'py-12 text-center text-sm text-noctis-dim' },
+              'No IOCs found.',
+            ),
     ),
 
     // Pagination

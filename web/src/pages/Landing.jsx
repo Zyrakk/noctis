@@ -70,7 +70,7 @@ export default function Landing({ navigate }) {
 
     // Nav — minimal
     React.createElement('nav', {
-      className: 'fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 bg-noctis-bg/90 backdrop-blur-sm border-b border-white/5'
+      className: 'fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 lg:px-8 py-4 bg-noctis-bg/90 backdrop-blur-sm border-b border-white/5'
     },
       React.createElement('div', { className: 'flex items-center gap-2.5' },
         React.createElement(Activity, { className: 'w-4 h-4 text-noctis-purple' }),
@@ -87,7 +87,7 @@ export default function Landing({ navigate }) {
 
     // Hero
     React.createElement('section', {
-      className: 'relative pt-28 pb-20 px-8 overflow-hidden'
+      className: 'relative pt-28 pb-20 px-4 lg:px-8 overflow-hidden'
     },
       // Subtle grid
       React.createElement('div', {
@@ -112,7 +112,7 @@ export default function Landing({ navigate }) {
           },
             'Noctis continuously monitors Telegram channels, dark web forums, paste sites, and RSS feeds \u2014 classifying threats, extracting IOCs, and building entity graphs with AI. Self-hosted. Open source.',
           ),
-          React.createElement('div', { className: 'flex items-center gap-6' },
+          React.createElement('div', { className: 'flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6' },
             React.createElement('button', {
               onClick: () => navigate('/login'),
               className: 'px-5 py-2.5 border border-noctis-muted/40 text-sm text-noctis-text hover:bg-noctis-surface hover:border-noctis-purple/60 rounded cursor-pointer transition-all duration-200'
@@ -215,10 +215,10 @@ export default function Landing({ navigate }) {
 
     // Live stats bar
     stats && React.createElement('div', {
-      className: 'px-8 pb-16'
+      className: 'px-4 lg:px-8 pb-16'
     },
       React.createElement('div', {
-        className: 'max-w-3xl mx-auto flex items-center gap-6 text-xs text-noctis-dim font-mono'
+        className: 'max-w-3xl mx-auto flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-x-6 gap-y-2 text-xs text-noctis-dim font-mono'
       },
         React.createElement('span', null,
           React.createElement('span', { className: 'text-white' }, stats.totalFindings.toLocaleString()),
@@ -250,7 +250,7 @@ export default function Landing({ navigate }) {
 
     // Features
     React.createElement('section', {
-      className: 'py-20 px-8 border-t border-noctis-border/50'
+      className: 'py-20 px-4 lg:px-8 border-t border-noctis-border/50'
     },
       React.createElement('div', { className: 'max-w-5xl mx-auto' },
         React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6' },
@@ -278,7 +278,7 @@ export default function Landing({ navigate }) {
 
     // Recent findings preview
     recent && recent.length > 0 && React.createElement('section', {
-      className: 'py-16 px-8 border-t border-noctis-border/50'
+      className: 'py-16 px-4 lg:px-8 border-t border-noctis-border/50'
     },
       React.createElement('div', { className: 'max-w-5xl mx-auto' },
         React.createElement('h2', {
@@ -326,7 +326,7 @@ export default function Landing({ navigate }) {
 
     // CTA
     React.createElement('section', {
-      className: 'py-20 px-8 border-t border-noctis-border/50'
+      className: 'py-20 px-4 lg:px-8 border-t border-noctis-border/50'
     },
       React.createElement('div', { className: 'max-w-3xl mx-auto' },
         React.createElement('h2', {
@@ -335,7 +335,7 @@ export default function Landing({ navigate }) {
         React.createElement('p', {
           className: 'text-noctis-muted text-base mb-8'
         }, 'Monitor your threat landscape with a single binary. Kubernetes-native, PostgreSQL-backed, MIT licensed.'),
-        React.createElement('div', { className: 'flex items-center gap-6' },
+        React.createElement('div', { className: 'flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6' },
           React.createElement('a', {
             href: 'https://github.com/Zyrakk/noctis',
             target: '_blank',
@@ -358,7 +358,7 @@ export default function Landing({ navigate }) {
 
     // Footer
     React.createElement('footer', {
-      className: 'py-8 px-8 border-t border-noctis-border/30'
+      className: 'py-8 px-4 lg:px-8 border-t border-noctis-border/30'
     },
       React.createElement('div', { className: 'max-w-5xl mx-auto flex items-center justify-between text-xs text-noctis-dim' },
         React.createElement('span', null, 'Noctis'),

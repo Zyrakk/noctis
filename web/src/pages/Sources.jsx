@@ -120,12 +120,12 @@ export default function Sources() {
 
     // Tabs + type filter
     React.createElement('div', { className: 'flex items-center justify-between' },
-      React.createElement('div', { className: 'flex items-center gap-1 border border-noctis-border/50 rounded p-1' },
+      React.createElement('div', { className: 'flex w-full lg:w-auto items-center gap-1 border border-noctis-border/50 rounded p-1' },
         TABS.map(t =>
           React.createElement('button', {
             key: t.value,
             onClick: () => changeTab(t.value),
-            className: `flex items-center gap-2 px-4 py-2 rounded text-sm font-medium cursor-pointer transition-colors duration-200 ${
+            className: `flex-1 lg:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded text-sm font-medium cursor-pointer transition-colors duration-200 ${
               tab === t.value
                 ? 'bg-noctis-surface text-noctis-text'
                 : 'text-noctis-muted hover:text-noctis-text'
@@ -247,7 +247,7 @@ export default function Sources() {
                           tab === 'discovered'
                             ? React.createElement('button', {
                                 onClick: () => handleApprove(s.id),
-                                className: 'flex items-center gap-1.5 px-3 py-1 bg-green-500/10 border border-green-500/30 rounded text-xs text-green-400 hover:bg-green-500/20 cursor-pointer transition-colors duration-200'
+                                className: 'flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-green-500/10 border border-green-500/30 rounded text-xs text-green-400 hover:bg-green-500/20 cursor-pointer transition-colors duration-200'
                               },
                                 React.createElement(Check, { className: 'w-3 h-3' }),
                                 'Approve',
@@ -321,7 +321,7 @@ export default function Sources() {
             React.createElement('select', {
               value: newType,
               onChange: e => setNewType(e.target.value),
-              className: 'w-full px-3 py-2.5 bg-noctis-bg border border-noctis-border/50 rounded text-sm text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-muted/50'
+              className: 'w-full px-3 py-3 bg-noctis-bg border border-noctis-border/50 rounded text-sm text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-muted/50'
             },
               SOURCE_TYPES.map(t =>
                 React.createElement('option', { key: t.value, value: t.value }, t.label)
@@ -335,7 +335,7 @@ export default function Sources() {
               value: newIdentifier,
               onChange: e => setNewIdentifier(e.target.value),
               placeholder: 'e.g., t.me/channel_name or https://...',
-              className: 'w-full px-3 py-2.5 bg-noctis-bg border border-noctis-border/50 rounded text-sm text-noctis-text placeholder-noctis-dim focus:outline-none focus:border-noctis-muted/50 font-mono transition-colors duration-200'
+              className: 'w-full px-3 py-3 bg-noctis-bg border border-noctis-border/50 rounded text-sm text-noctis-text placeholder-noctis-dim focus:outline-none focus:border-noctis-muted/50 font-mono transition-colors duration-200'
             }),
           ),
         ),
