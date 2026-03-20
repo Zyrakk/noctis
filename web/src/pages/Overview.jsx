@@ -12,10 +12,16 @@ import {
 
 const CHART_COLORS = ['#7c3aed', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6']
 const SEV_COLORS = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#3b82f6', info: '#6b7280', unclassified: '#374151' }
+const TOOLTIP_STYLE = {
+  contentStyle: { backgroundColor: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' },
+  itemStyle: { color: '#e2e8f0' },
+  labelStyle: { color: '#94a3b8' },
+  cursor: { fill: 'rgba(124, 58, 237, 0.05)' },
+}
 
-function StatCard({ icon: Icon, label, value }) {
+function StatCard({ icon: Icon, label, value, color = 'border-noctis-border' }) {
   return React.createElement('div', {
-    className: 'border-l-2 border-noctis-border hover:border-noctis-purple/40 pl-4 py-3 transition-colors duration-200'
+    className: `border-l-2 ${color} pl-4 py-3 transition-all duration-200 hover:-translate-y-0.5`
   },
     React.createElement('div', { className: 'flex items-center gap-2 mb-1' },
       React.createElement(Icon, { className: 'w-3.5 h-3.5 text-noctis-dim' }),
@@ -37,9 +43,11 @@ export default function Overview({ navigate }) {
   const { data: timeline } = useApi('/api/timeline?since=7d&interval=1 hour')
   const { data: recentFindings } = useApi('/api/findings?severity=critical&limit=10')
 
+  const catTotal = (categories || []).reduce((sum, c) => sum + c.count, 0)
   const catData = (categories || []).map((c, i) => ({
     name: c.category?.replace(/_/g, ' ') || 'unknown',
     value: c.count,
+    pct: catTotal > 0 ? Math.round((c.count / catTotal) * 100) : 0,
     fill: CHART_COLORS[i % CHART_COLORS.length],
   }))
 
@@ -66,11 +74,11 @@ export default function Overview({ navigate }) {
 
     // Stat cards
     React.createElement('div', { className: 'grid grid-cols-2 lg:grid-cols-5 gap-4' },
-      React.createElement(StatCard, { icon: FileText, label: 'Total Content', value: stats?.totalContent }),
-      React.createElement(StatCard, { icon: CheckCircle, label: 'Classified', value: stats?.classified }),
-      React.createElement(StatCard, { icon: Shield, label: 'IOCs Extracted', value: stats?.totalIocs }),
-      React.createElement(StatCard, { icon: Globe, label: 'Active Sources', value: stats?.activeSources }),
-      React.createElement(StatCard, { icon: Radar, label: 'Discovered', value: stats?.discoveredSources }),
+      React.createElement(StatCard, { icon: FileText, label: 'Total Content', value: stats?.totalContent, color: 'border-blue-500/60' }),
+      React.createElement(StatCard, { icon: CheckCircle, label: 'Classified', value: stats?.classified, color: 'border-purple-500/60' }),
+      React.createElement(StatCard, { icon: Shield, label: 'IOCs Extracted', value: stats?.totalIocs, color: 'border-amber-500/60' }),
+      React.createElement(StatCard, { icon: Globe, label: 'Active Sources', value: stats?.activeSources, color: 'border-cyan-500/60' }),
+      React.createElement(StatCard, { icon: Radar, label: 'Discovered', value: stats?.discoveredSources, color: 'border-green-500/60' }),
     ),
 
     // Charts row
@@ -85,7 +93,7 @@ export default function Overview({ navigate }) {
               React.createElement(PieChart, null,
                 React.createElement(Pie, {
                   data: catData, cx: '50%', cy: '50%',
-                  innerRadius: 60, outerRadius: 100,
+                  innerRadius: 70, outerRadius: 100,
                   paddingAngle: 2, dataKey: 'value',
                   stroke: 'none',
                 },
@@ -94,7 +102,8 @@ export default function Overview({ navigate }) {
                   ),
                 ),
                 React.createElement(Tooltip, {
-                  contentStyle: { background: '#12121a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#e2e8f0', fontSize: '12px' }
+                  ...TOOLTIP_STYLE,
+                  formatter: (value, name) => [`${value} (${catTotal > 0 ? Math.round((value / catTotal) * 100) : 0}%)`, name],
                 }),
               ),
             )
@@ -102,18 +111,18 @@ export default function Overview({ navigate }) {
 
         // Legend
         catData.length > 0 && React.createElement('div', {
-          className: 'flex flex-wrap gap-3 mt-3'
+          className: 'flex flex-wrap gap-x-4 gap-y-1.5 mt-2 justify-center'
         },
-          catData.slice(0, 6).map((c, i) =>
+          catData.slice(0, 8).map((c, i) =>
             React.createElement('div', {
               key: i,
               className: 'flex items-center gap-1.5 text-xs text-noctis-muted'
             },
               React.createElement('div', {
-                className: 'w-2.5 h-2.5 rounded-full',
+                className: 'w-2.5 h-2.5 rounded-full flex-shrink-0',
                 style: { backgroundColor: c.fill },
               }),
-              c.name,
+              `${c.name} ${c.pct}%`,
             )
           ),
         ),
@@ -130,9 +139,7 @@ export default function Overview({ navigate }) {
                 React.createElement(CartesianGrid, { strokeDasharray: '3 3', stroke: '#2a2a3e' }),
                 React.createElement(XAxis, { dataKey: 'name', tick: { fill: '#94a3b8', fontSize: 12 }, axisLine: { stroke: '#2a2a3e' } }),
                 React.createElement(YAxis, { tick: { fill: '#94a3b8', fontSize: 12 }, axisLine: { stroke: '#2a2a3e' } }),
-                React.createElement(Tooltip, {
-                  contentStyle: { background: '#12121a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#e2e8f0', fontSize: '12px' }
-                }),
+                React.createElement(Tooltip, TOOLTIP_STYLE),
                 React.createElement(Bar, { dataKey: 'value', radius: [4, 4, 0, 0] },
                   sevData.map((entry, i) =>
                     React.createElement(Cell, { key: i, fill: entry.fill })
@@ -158,9 +165,7 @@ export default function Overview({ navigate }) {
               React.createElement(CartesianGrid, { strokeDasharray: '3 3', stroke: '#2a2a3e' }),
               React.createElement(XAxis, { dataKey: 'time', tick: { fill: '#94a3b8', fontSize: 11 }, axisLine: { stroke: '#2a2a3e' }, interval: 'preserveStartEnd' }),
               React.createElement(YAxis, { tick: { fill: '#94a3b8', fontSize: 11 }, axisLine: { stroke: '#2a2a3e' } }),
-              React.createElement(Tooltip, {
-                contentStyle: { background: '#12121a', border: '1px solid #2a2a3e', borderRadius: '4px', color: '#e2e8f0', fontSize: '12px' }
-              }),
+              React.createElement(Tooltip, TOOLTIP_STYLE),
               React.createElement(Area, {
                 type: 'monotone', dataKey: 'count',
                 stroke: '#7c3aed', fill: 'url(#purpleGrad)', strokeWidth: 2,
