@@ -7,7 +7,7 @@ DELETE FROM sources WHERE status = 'discovered' AND (
     identifier LIKE '%google.com%' OR
     identifier LIKE '%linkedin.com%' OR
     identifier LIKE '%twitter.com%' OR
-    identifier LIKE '%x.com/%' OR
+    identifier LIKE '%://x.com/%' OR
     identifier LIKE '%discord.gg%' OR
     identifier LIKE '%mega.nz%' OR
     identifier LIKE '%boosty.to%' OR

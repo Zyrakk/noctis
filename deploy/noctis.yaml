@@ -42,6 +42,8 @@ spec:
               name: metrics
             - containerPort: 8080
               name: health
+            - containerPort: 3000
+              name: dashboard
           env:
             - name: NOCTIS_PROMPTS_DIR
               value: "/prompts"
@@ -101,5 +103,9 @@ spec:
       targetPort: health
       protocol: TCP
       name: health
+    - port: 3000
+      targetPort: dashboard
+      protocol: TCP
+      name: dashboard
   selector:
     app.kubernetes.io/name: noctis

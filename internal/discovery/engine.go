@@ -206,23 +206,19 @@ func shouldSkipURL(rawURL string) bool {
 	host := parsed.Hostname()
 
 	// Skip private/reserved IPs
-	if net.ParseIP(host) != nil {
-		ip := net.ParseIP(host)
-		if ip != nil {
-			// Check private ranges
-			privateRanges := []string{"10.", "127.", "192.168.", "169.254.", "::1", "fe80:"}
-			for _, prefix := range privateRanges {
-				if strings.HasPrefix(host, prefix) {
-					return true
-				}
+	if ip := net.ParseIP(host); ip != nil {
+		privateRanges := []string{"10.", "127.", "192.168.", "169.254.", "::1", "fe80:"}
+		for _, prefix := range privateRanges {
+			if strings.HasPrefix(host, prefix) {
+				return true
 			}
-			// 172.16.0.0/12
-			if strings.HasPrefix(host, "172.") {
-				parts := strings.SplitN(host, ".", 3)
-				if len(parts) >= 2 {
-					if octet, err := strconv.Atoi(parts[1]); err == nil && octet >= 16 && octet <= 31 {
-						return true
-					}
+		}
+		// 172.16.0.0/12
+		if strings.HasPrefix(host, "172.") {
+			parts := strings.SplitN(host, ".", 3)
+			if len(parts) >= 2 {
+				if octet, err := strconv.Atoi(parts[1]); err == nil && octet >= 16 && octet <= 31 {
+					return true
 				}
 			}
 		}
