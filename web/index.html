@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Noctis - AI-Powered Threat Intelligence</title>
   <meta name="description" content="Noctis: AI-Powered Threat Intelligence Platform. Multi-source collection, AI classification, IOC extraction, entity graph analysis." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='4' y='26' font-family='system-ui' font-size='28' font-weight='300' fill='%237c3aed'>N</text></svg>" />
@@ -152,6 +152,12 @@
     }
     .animate-slide-in {
       animation: slide-in-right 0.2s ease-out;
+    }
+    /* Safe area for bottom nav on notched phones */
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom);
+      }
     }
   </style>
 </head>
