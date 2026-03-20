@@ -199,7 +199,7 @@ export default function Sources() {
       // Table for discovered/paused
       : React.createElement('div', null,
           React.createElement('div', {
-            className: 'border border-noctis-border/50 rounded overflow-hidden'
+            className: 'border border-noctis-border/50 rounded overflow-x-auto'
           },
             React.createElement('table', { className: 'w-full text-sm' },
               React.createElement('thead', null,

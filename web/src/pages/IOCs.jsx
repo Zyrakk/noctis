@@ -111,7 +111,7 @@ export default function IOCs() {
 
     // Table
     React.createElement('div', {
-      className: 'border border-noctis-border/50 rounded overflow-hidden'
+      className: 'border border-noctis-border/50 rounded overflow-x-auto'
     },
       React.createElement('table', { className: 'w-full text-sm' },
         React.createElement('thead', null,
