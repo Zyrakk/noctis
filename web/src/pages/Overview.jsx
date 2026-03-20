@@ -27,7 +27,7 @@ function StatCard({ icon: Icon, label, value, color = 'border-noctis-border' }) 
       React.createElement(Icon, { className: 'w-3.5 h-3.5 text-noctis-dim' }),
       React.createElement('span', { className: 'text-xs text-noctis-dim' }, label),
     ),
-    React.createElement('div', { className: 'text-xl font-mono font-normal text-noctis-text' },
+    React.createElement('div', { className: 'text-lg lg:text-xl font-mono font-normal text-noctis-text' },
       value != null ? value.toLocaleString() : React.createElement('span', { className: 'skeleton inline-block w-14 h-6' }),
     ),
   )
@@ -89,7 +89,7 @@ export default function Overview({ navigate }) {
       },
         React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted mb-4' }, 'Category Distribution'),
         catData.length > 0
-          ? React.createElement(ResponsiveContainer, { width: '100%', height: 260 },
+          ? React.createElement(ResponsiveContainer, { width: '100%', height: 220 },
               React.createElement(PieChart, null,
                 React.createElement(Pie, {
                   data: catData, cx: '50%', cy: '50%',
@@ -107,7 +107,7 @@ export default function Overview({ navigate }) {
                 }),
               ),
             )
-          : React.createElement(Skeleton, { className: 'h-[260px] w-full' }),
+          : React.createElement(Skeleton, { className: 'h-[220px] w-full' }),
 
         // Legend
         catData.length > 0 && React.createElement('div', {
@@ -134,7 +134,7 @@ export default function Overview({ navigate }) {
       },
         React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted mb-4' }, 'Severity Distribution'),
         sevData.length > 0
-          ? React.createElement(ResponsiveContainer, { width: '100%', height: 300 },
+          ? React.createElement(ResponsiveContainer, { width: '100%', height: 250 },
               React.createElement(BarChart, { data: sevData },
                 React.createElement(CartesianGrid, { strokeDasharray: '3 3', stroke: '#2a2a3e' }),
                 React.createElement(XAxis, { dataKey: 'name', tick: { fill: '#94a3b8', fontSize: 12 }, axisLine: { stroke: '#2a2a3e' } }),
@@ -147,7 +147,7 @@ export default function Overview({ navigate }) {
                 ),
               ),
             )
-          : React.createElement(Skeleton, { className: 'h-[300px] w-full' }),
+          : React.createElement(Skeleton, { className: 'h-[250px] w-full' }),
       ),
     ),
 
@@ -192,14 +192,14 @@ export default function Overview({ navigate }) {
               React.createElement('div', {
                 key: f.id,
                 onClick: () => navigate(`/dashboard/findings?id=${f.id}`),
-                className: 'flex items-center gap-4 p-3 rounded-lg hover:bg-noctis-surface2 cursor-pointer transition-colors duration-150'
+                className: 'flex flex-wrap items-center gap-2 lg:gap-4 p-3 rounded-lg hover:bg-noctis-surface2 cursor-pointer transition-colors duration-150'
               },
                 React.createElement(SeverityBadge, { severity: f.severity }),
                 React.createElement('span', { className: 'text-xs text-noctis-dim font-mono min-w-[5rem]' },
                   new Date(f.collectedAt).toLocaleDateString(),
                 ),
                 React.createElement('span', { className: 'text-xs text-noctis-muted px-2 py-0.5 bg-noctis-bg rounded' }, f.sourceType),
-                React.createElement('span', { className: 'text-sm text-noctis-text truncate flex-1' }, f.summary || 'No summary'),
+                React.createElement('span', { className: 'text-sm text-noctis-text truncate flex-1 min-w-0' }, f.summary || 'No summary'),
               )
             )
           )

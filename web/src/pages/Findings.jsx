@@ -15,6 +15,7 @@ export default function Findings() {
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [copiedIOC, setCopiedIOC] = useState(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const params = new URLSearchParams()
   if (filters.category) params.set('category', filters.category)
@@ -49,9 +50,9 @@ export default function Findings() {
   }
 
   return React.createElement('div', { className: 'flex gap-6 min-h-[calc(100vh-3rem)]' },
-    // Filters sidebar
+    // Filters sidebar (desktop only)
     React.createElement('div', {
-      className: 'w-56 flex-shrink-0 space-y-5'
+      className: 'hidden lg:block w-56 flex-shrink-0 space-y-5'
     },
       React.createElement('div', { className: 'flex items-center gap-2 text-sm font-medium text-noctis-muted' },
         React.createElement(Filter, { className: 'w-4 h-4' }),
@@ -135,7 +136,19 @@ export default function Findings() {
         ),
       ),
 
-      // Table
+      // Mobile filter button
+      React.createElement('button', {
+        onClick: () => setFiltersOpen(true),
+        className: 'lg:hidden flex items-center gap-2 px-3 py-2 border border-noctis-border/50 rounded text-sm text-noctis-muted mb-4 cursor-pointer'
+      },
+        React.createElement(Filter, { className: 'w-4 h-4' }),
+        'Filters',
+        (filters.category || filters.severity || filters.source || filters.q) &&
+          React.createElement('span', { className: 'w-2 h-2 rounded-full bg-noctis-purple' }),
+      ),
+
+      // Table (desktop only)
+      React.createElement('div', { className: 'hidden lg:block' },
       React.createElement('div', {
         className: 'border border-noctis-border/50 rounded overflow-x-auto'
       },
@@ -193,6 +206,39 @@ export default function Findings() {
             'No findings match your filters.',
           ),
       ),
+      ), // end hidden lg:block wrapper
+
+      // Mobile card list
+      React.createElement('div', { className: 'lg:hidden space-y-2' },
+        loading
+          ? Array.from({ length: 6 }).map((_, i) =>
+              React.createElement('div', { key: i, className: 'skeleton h-20 w-full rounded-lg' })
+            )
+          : findings.map((f) =>
+              React.createElement('div', {
+                key: f.id,
+                onClick: () => loadDetail(f.id),
+                className: `p-3 rounded-lg border border-noctis-border/30 cursor-pointer transition-colors duration-150 active:bg-noctis-surface ${selectedId === f.id ? 'bg-noctis-purple/5 border-noctis-purple/30' : ''}`
+              },
+                // Top row: severity badge + category
+                React.createElement('div', { className: 'flex items-center justify-between mb-1.5' },
+                  f.severity ? React.createElement(SeverityBadge, { severity: f.severity }) : null,
+                  React.createElement('span', { className: 'text-xs text-noctis-dim' }, f.category?.replace(/_/g, ' ') || ''),
+                ),
+                // Summary
+                React.createElement('p', { className: 'text-sm text-noctis-text line-clamp-2 mb-1.5' }, f.summary || 'No summary'),
+                // Bottom row: source + time
+                React.createElement('div', { className: 'flex items-center justify-between text-xs text-noctis-dim' },
+                  React.createElement('span', { className: 'px-1.5 py-0.5 bg-noctis-bg rounded' }, f.sourceType),
+                  React.createElement('span', { className: 'font-mono' }, new Date(f.collectedAt).toLocaleDateString()),
+                ),
+              )
+            ),
+        !loading && findings.length === 0 &&
+          React.createElement('div', { className: 'py-12 text-center text-sm text-noctis-dim' },
+            'No findings match your filters.',
+          ),
+      ),
 
       // Pagination
       totalPages > 1 && React.createElement('div', {
@@ -222,7 +268,7 @@ export default function Findings() {
 
     // Detail panel
     selectedId && React.createElement('div', {
-      className: 'w-96 flex-shrink-0 border border-noctis-border/50 rounded p-5 overflow-y-auto max-h-[calc(100vh-3rem)] sticky top-0 animate-slide-in'
+      className: 'fixed inset-0 z-40 bg-noctis-bg overflow-y-auto lg:relative lg:inset-auto lg:z-auto lg:w-96 lg:flex-shrink-0 lg:border lg:border-noctis-border/50 lg:rounded lg:max-h-[calc(100vh-3rem)] lg:sticky lg:top-0 p-5 pt-12 lg:pt-5 animate-slide-in'
     },
       React.createElement('div', { className: 'flex items-center justify-between mb-4' },
         React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted' }, 'Finding Detail'),
@@ -317,6 +363,91 @@ export default function Findings() {
               'Original URL',
             ),
           ),
+    ),
+
+    // Mobile filter bottom sheet
+    filtersOpen && React.createElement('div', {
+      className: 'lg:hidden fixed inset-0 z-50',
+      onClick: (e) => { if (e.target === e.currentTarget) setFiltersOpen(false) }
+    },
+      React.createElement('div', { className: 'fixed inset-0 bg-black/50' }),
+      React.createElement('div', {
+        className: 'fixed bottom-0 left-0 right-0 bg-noctis-bg border-t border-noctis-border/50 rounded-t-xl p-5 z-10 max-h-[70vh] overflow-y-auto'
+      },
+        React.createElement('div', { className: 'flex items-center justify-between mb-4' },
+          React.createElement('span', { className: 'text-sm font-medium text-noctis-muted' }, 'Filters'),
+          React.createElement('button', {
+            onClick: () => setFiltersOpen(false),
+            className: 'p-1 cursor-pointer'
+          }, React.createElement(X, { className: 'w-4 h-4 text-noctis-dim' })),
+        ),
+
+        // Search
+        React.createElement('div', { className: 'relative mb-4' },
+          React.createElement(Search, { className: 'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-noctis-dim' }),
+          React.createElement('input', {
+            type: 'text',
+            value: filters.q,
+            onChange: e => updateFilter('q', e.target.value),
+            placeholder: 'Search content...',
+            className: 'w-full pl-9 pr-3 py-2 bg-noctis-surface border border-noctis-border rounded-lg text-sm text-noctis-text placeholder-noctis-dim focus:outline-none focus:border-noctis-purple transition-colors duration-200'
+          }),
+        ),
+
+        // Category
+        React.createElement('div', { className: 'mb-4' },
+          React.createElement('label', { className: 'block text-xs text-noctis-dim mb-1.5' }, 'Category'),
+          React.createElement('select', {
+            value: filters.category,
+            onChange: e => updateFilter('category', e.target.value),
+            className: 'w-full px-3 py-2 bg-noctis-surface border border-noctis-border rounded-lg text-sm text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-purple'
+          },
+            React.createElement('option', { value: '' }, 'All Categories'),
+            (categories || []).map(c =>
+              React.createElement('option', { key: c.category, value: c.category },
+                c.category?.replace(/_/g, ' '),
+              )
+            ),
+          ),
+        ),
+
+        // Severity
+        React.createElement('div', { className: 'mb-4' },
+          React.createElement('label', { className: 'block text-xs text-noctis-dim mb-1.5' }, 'Severity'),
+          React.createElement('select', {
+            value: filters.severity,
+            onChange: e => updateFilter('severity', e.target.value),
+            className: 'w-full px-3 py-2 bg-noctis-surface border border-noctis-border rounded-lg text-sm text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-purple'
+          },
+            React.createElement('option', { value: '' }, 'All Severities'),
+            SEVERITIES.map(s =>
+              React.createElement('option', { key: s, value: s }, s.charAt(0).toUpperCase() + s.slice(1))
+            ),
+          ),
+        ),
+
+        // Source type
+        React.createElement('div', { className: 'mb-4' },
+          React.createElement('label', { className: 'block text-xs text-noctis-dim mb-1.5' }, 'Source'),
+          React.createElement('select', {
+            value: filters.source,
+            onChange: e => updateFilter('source', e.target.value),
+            className: 'w-full px-3 py-2 bg-noctis-surface border border-noctis-border rounded-lg text-sm text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-purple'
+          },
+            React.createElement('option', { value: '' }, 'All Sources'),
+            ['telegram', 'paste', 'forum', 'web', 'rss'].map(s =>
+              React.createElement('option', { key: s, value: s }, s.charAt(0).toUpperCase() + s.slice(1))
+            ),
+          ),
+        ),
+
+        // Clear
+        (filters.category || filters.severity || filters.source || filters.q) &&
+          React.createElement('button', {
+            onClick: () => { setFilters({ category: '', severity: '', source: '', q: '' }); setPage(0) },
+            className: 'text-xs text-noctis-purple-light hover:text-noctis-purple cursor-pointer'
+          }, 'Clear all filters'),
+      ),
     ),
   )
 }
