@@ -34,9 +34,9 @@ export default function Layout({ children, currentPath, navigate }) {
         React.createElement('button', {
           key: item.path,
           onClick: () => navigate(item.path),
-          className: `w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium cursor-pointer transition-colors duration-200 ${
+          className: `w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium cursor-pointer transition-all duration-150 ${
             currentPath === item.path || (item.path !== '/dashboard' && currentPath?.startsWith(item.path))
-              ? 'bg-noctis-surface text-noctis-text border-l-2 border-noctis-purple ml-[-1px]'
+              ? 'bg-noctis-surface text-noctis-text border-l-2 border-noctis-purple pl-[11px]'
               : 'text-noctis-muted hover:text-noctis-text hover:bg-noctis-surface/50'
           }`
         },
