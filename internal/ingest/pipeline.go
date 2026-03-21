@@ -28,6 +28,8 @@ type IngestPipeline struct {
 	metrics   *dispatcher.PrometheusMetrics
 	alertFn   func(models.EnrichedFinding)
 	workerCfg config.CollectionConfig
+	corrCfg   config.CorrelationConfig
+	corrStore correlationStore
 
 	// Rate limiters are shared across workers of the same type.
 	initLimitersOnce sync.Once
