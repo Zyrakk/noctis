@@ -118,6 +118,12 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		enriched.Category = models.Category(classResult.Category)
 		enriched.Confidence = classResult.Confidence
 		provenance = classResult.Provenance
+		switch provenance {
+		case "first_party", "third_party_reporting", "unknown":
+			// valid
+		default:
+			provenance = "unknown"
+		}
 	}
 
 	// 4b. Extract IOCs.
@@ -149,6 +155,9 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 
 	// 6. Mark content as classified in archive.
 	tags := tagsFromCategory(string(enriched.Category))
+	if enriched.Confidence < 0.80 {
+		tags = append(tags, "needs_review")
+	}
 	if err := p.archive.MarkClassified(ctx, rc.ID, string(enriched.Category), tags, enriched.Severity.String(), summary, provenance, currentClassificationVersion); err != nil {
 		log.Printf("ingest: mark classified error for %s: %v", rc.ID, err)
 	}

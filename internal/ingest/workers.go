@@ -125,6 +125,12 @@ func (p *IngestPipeline) classificationWorker(ctx context.Context, workerID int)
 
 			category := classResult.Category
 			provenance := classResult.Provenance
+			switch provenance {
+			case "first_party", "third_party_reporting", "unknown":
+				// valid
+			default:
+				provenance = "unknown"
+			}
 			tags := tagsFromCategory(category)
 
 			// Flag low-confidence classifications for review.
