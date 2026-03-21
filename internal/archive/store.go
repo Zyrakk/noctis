@@ -37,7 +37,9 @@ type RawContent struct {
 	Tags              []string
 	Severity          string
 	Summary           string
-	EntitiesExtracted bool
+	EntitiesExtracted     bool
+	Provenance            string
+	ClassificationVersion int
 }
 
 // SearchQuery defines the filter parameters for searching the raw content
@@ -117,13 +119,14 @@ LIMIT 1`
 
 // MarkClassified updates a raw_content record with classification results
 // produced by the AI pipeline.
-func (s *Store) MarkClassified(ctx context.Context, id string, category string, tags []string, severity string, summary string) error {
+func (s *Store) MarkClassified(ctx context.Context, id string, category string, tags []string, severity string, summary string, provenance string, classificationVersion int) error {
 	const query = `
 UPDATE raw_content
-SET classified = true, category = $2, tags = $3, severity = $4, summary = $5
+SET classified = true, category = $2, tags = $3, severity = $4, summary = $5,
+    provenance = $6, classification_version = $7
 WHERE id = $1`
 
-	ct, err := s.pool.Exec(ctx, query, id, category, tags, severity, summary)
+	ct, err := s.pool.Exec(ctx, query, id, category, tags, severity, summary, provenance, classificationVersion)
 	if err != nil {
 		return fmt.Errorf("archive: mark classified %s: %w", id, err)
 	}
@@ -154,7 +157,7 @@ func (s *Store) FetchUnclassified(ctx context.Context, limit int) ([]RawContent,
 SELECT id, source_type, source_id, source_name, content, content_hash,
        author, author_id, url, language, collected_at, posted_at,
        metadata, classified, category, tags, severity, summary,
-       entities_extracted
+       entities_extracted, provenance, classification_version
 FROM raw_content
 WHERE classified = false
 ORDER BY collected_at ASC
@@ -188,7 +191,7 @@ func (s *Store) FetchClassifiedUnextracted(ctx context.Context, limit int) ([]Ra
 SELECT id, source_type, source_id, source_name, content, content_hash,
        author, author_id, url, language, collected_at, posted_at,
        metadata, classified, category, tags, severity, summary,
-       entities_extracted
+       entities_extracted, provenance, classification_version
 FROM raw_content
 WHERE classified = true AND entities_extracted = false
 ORDER BY collected_at ASC
@@ -213,6 +216,22 @@ LIMIT $1`
 	}
 
 	return results, nil
+}
+
+// ResetOldClassifications resets classification state for entries with a
+// classification_version below targetVersion, so background workers will
+// reprocess them with the current pipeline version.
+func (s *Store) ResetOldClassifications(ctx context.Context, targetVersion int) (int64, error) {
+	const query = `
+UPDATE raw_content
+SET classified = FALSE, entities_extracted = FALSE
+WHERE classification_version IS NULL OR classification_version < $1`
+
+	ct, err := s.pool.Exec(ctx, query, targetVersion)
+	if err != nil {
+		return 0, fmt.Errorf("archive: reset old classifications: %w", err)
+	}
+	return ct.RowsAffected(), nil
 }
 
 // UpsertIOC inserts an IOC record or increments its sighting count if an IOC
@@ -383,7 +402,7 @@ func (s *Store) Search(ctx context.Context, query SearchQuery) ([]RawContent, er
 SELECT id, source_type, source_id, source_name, content, content_hash,
        author, author_id, url, language, collected_at, posted_at,
        metadata, classified, category, tags, severity, summary,
-       entities_extracted
+       entities_extracted, provenance, classification_version
 FROM raw_content`
 
 	if len(conditions) > 0 {
@@ -539,6 +558,7 @@ func scanRawContent(row scanner) (RawContent, error) {
 		&rc.Classified, &rc.Category, &rc.Tags,
 		&rc.Severity, &rc.Summary,
 		&rc.EntitiesExtracted,
+		&rc.Provenance, &rc.ClassificationVersion,
 	)
 	if err != nil {
 		return RawContent{}, fmt.Errorf("archive: scan raw_content: %w", err)
