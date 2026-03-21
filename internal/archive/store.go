@@ -523,6 +523,139 @@ HAVING COUNT(DISTINCT shared.id) >= $2`
 	return results, nil
 }
 
+// UpsertCorrelation inserts a correlation or updates it if the same cluster_id exists.
+func (s *Store) UpsertCorrelation(ctx context.Context, c *Correlation) error {
+	evidenceJSON, err := json.Marshal(c.Evidence)
+	if err != nil {
+		return fmt.Errorf("archive: marshal correlation evidence: %w", err)
+	}
+
+	findingIDs := c.FindingIDs
+	if findingIDs == nil {
+		findingIDs = []string{}
+	}
+
+	const query = `
+INSERT INTO correlations (cluster_id, entity_ids, finding_ids, correlation_type, confidence, method, evidence)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (cluster_id) DO UPDATE
+SET entity_ids = $2, finding_ids = $3, confidence = $5, evidence = $7, updated_at = NOW()`
+
+	_, err = s.pool.Exec(ctx, query, c.ClusterID, c.EntityIDs, findingIDs, c.CorrelationType, c.Confidence, c.Method, evidenceJSON)
+	if err != nil {
+		return fmt.Errorf("archive: upsert correlation: %w", err)
+	}
+	return nil
+}
+
+// UpsertCandidate inserts a correlation candidate or increments seen_count if
+// the same cluster_id exists.
+func (s *Store) UpsertCandidate(ctx context.Context, c *CorrelationCandidate) error {
+	signalsJSON, err := json.Marshal(c.Signals)
+	if err != nil {
+		return fmt.Errorf("archive: marshal candidate signals: %w", err)
+	}
+
+	findingIDs := c.FindingIDs
+	if findingIDs == nil {
+		findingIDs = []string{}
+	}
+
+	const query = `
+INSERT INTO correlation_candidates (cluster_id, entity_ids, finding_ids, candidate_type, signal_count, signals)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (cluster_id) DO UPDATE
+SET signal_count = $5, signals = $6, seen_count = correlation_candidates.seen_count + 1, updated_at = NOW()`
+
+	_, err = s.pool.Exec(ctx, query, c.ClusterID, c.EntityIDs, findingIDs, c.CandidateType, c.SignalCount, signalsJSON)
+	if err != nil {
+		return fmt.Errorf("archive: upsert candidate: %w", err)
+	}
+	return nil
+}
+
+// FetchCorrelations queries correlations with optional filtering.
+func (s *Store) FetchCorrelations(ctx context.Context, filter CorrelationFilter) ([]Correlation, error) {
+	limit := normalizeLimit(filter.Limit)
+
+	var (
+		conditions []string
+		args       []interface{}
+		argIdx     int
+	)
+
+	nextArg := func() string {
+		argIdx++
+		return fmt.Sprintf("$%d", argIdx)
+	}
+
+	if filter.Type != "" {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("correlation_type = %s", p))
+		args = append(args, filter.Type)
+	}
+	if filter.MinConfidence > 0 {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("confidence >= %s", p))
+		args = append(args, filter.MinConfidence)
+	}
+	if filter.Since != nil {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("created_at >= %s", p))
+		args = append(args, *filter.Since)
+	}
+
+	sql := `
+SELECT id, cluster_id, entity_ids, finding_ids, correlation_type,
+       confidence, method, evidence, created_at, updated_at
+FROM correlations`
+
+	if len(conditions) > 0 {
+		sql += "\nWHERE " + strings.Join(conditions, " AND ")
+	}
+
+	limitP := nextArg()
+	offsetP := nextArg()
+	sql += fmt.Sprintf("\nORDER BY created_at DESC\nLIMIT %s OFFSET %s", limitP, offsetP)
+
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	args = append(args, limit, offset)
+
+	rows, err := s.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch correlations: %w", err)
+	}
+	defer rows.Close()
+
+	var results []Correlation
+	for rows.Next() {
+		var c Correlation
+		var evidenceJSON []byte
+		err := rows.Scan(
+			&c.ID, &c.ClusterID, &c.EntityIDs, &c.FindingIDs,
+			&c.CorrelationType, &c.Confidence, &c.Method,
+			&evidenceJSON, &c.CreatedAt, &c.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("archive: scan correlation: %w", err)
+		}
+		if len(evidenceJSON) > 0 {
+			if err := json.Unmarshal(evidenceJSON, &c.Evidence); err != nil {
+				return nil, fmt.Errorf("archive: unmarshal correlation evidence: %w", err)
+			}
+		}
+		results = append(results, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch correlations rows: %w", err)
+	}
+
+	return results, nil
+}
+
 // UpsertEntity inserts an entity or updates its properties if it already exists.
 func (s *Store) UpsertEntity(ctx context.Context, id, entityType string, properties map[string]interface{}) error {
 	propsJSON, err := json.Marshal(properties)
