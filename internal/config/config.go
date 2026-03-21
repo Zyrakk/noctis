@@ -34,6 +34,7 @@ type Config struct {
 	Discovery   DiscoveryConfig  `yaml:"discovery"`
 	Storage     StorageConfig    `yaml:"storage"`
 	Dashboard   DashboardConfig  `yaml:"dashboard"`
+	Correlation CorrelationConfig `yaml:"correlation"`
 }
 
 // CollectionConfig controls archive-everything behavior and background workers.
@@ -63,6 +64,14 @@ type DashboardConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Port    int    `yaml:"port"`
 	APIKey  string `yaml:"apiKey"`
+}
+
+// CorrelationConfig controls the rule-based correlation engine.
+type CorrelationConfig struct {
+	Enabled              bool `yaml:"enabled"`
+	IntervalMinutes      int  `yaml:"intervalMinutes"`
+	MinEvidenceThreshold int  `yaml:"minEvidenceThreshold"`
+	TemporalWindowHours  int  `yaml:"temporalWindowHours"`
 }
 
 // SourcesConfig groups all ingest source configurations.
