@@ -315,7 +315,8 @@ WHERE classification_version IS NULL OR classification_version < $1`
 }
 
 // UpsertIOC inserts an IOC record or increments its sighting count if an IOC
-// with the same type and value already exists.
+// with the same type and value already exists. Also records the sighting in
+// ioc_sightings for cross-source correlation.
 func (s *Store) UpsertIOC(ctx context.Context, iocType, value, iocContext, sourceContentID string) error {
 	const query = `
 INSERT INTO iocs (type, value, context, source_content_id)
@@ -328,7 +329,36 @@ SET sighting_count = iocs.sighting_count + 1,
 	if err != nil {
 		return fmt.Errorf("archive: upsert ioc (%s, %s): %w", iocType, value, err)
 	}
+
+	// Record sighting for cross-source correlation (best-effort).
+	const sightingQuery = `
+INSERT INTO ioc_sightings (ioc_type, ioc_value, raw_content_id, source_id, source_name)
+SELECT $1, $2, $3::uuid, rc.source_id, rc.source_name
+FROM raw_content rc WHERE rc.id = $3::uuid
+ON CONFLICT (ioc_type, ioc_value, raw_content_id) DO NOTHING`
+
+	_, _ = s.pool.Exec(ctx, sightingQuery, iocType, value, sourceContentID)
+
 	return nil
+}
+
+// BackfillIOCSightings populates ioc_sightings from existing IOCs. Each IOC
+// has one stored source_content_id, so this creates one sighting per IOC.
+// Going forward, UpsertIOC records sightings automatically.
+func (s *Store) BackfillIOCSightings(ctx context.Context) (int, error) {
+	const query = `
+INSERT INTO ioc_sightings (ioc_type, ioc_value, raw_content_id, source_id, source_name)
+SELECT i.type, i.value, i.source_content_id, rc.source_id, rc.source_name
+FROM iocs i
+JOIN raw_content rc ON rc.id = i.source_content_id
+WHERE i.source_content_id IS NOT NULL
+ON CONFLICT (ioc_type, ioc_value, raw_content_id) DO NOTHING`
+
+	ct, err := s.pool.Exec(ctx, query)
+	if err != nil {
+		return 0, fmt.Errorf("archive: backfill ioc sightings: %w", err)
+	}
+	return int(ct.RowsAffected()), nil
 }
 
 // UpsertEntity inserts an entity or updates its properties if it already exists.
