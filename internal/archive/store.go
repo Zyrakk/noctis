@@ -361,6 +361,168 @@ ON CONFLICT (ioc_type, ioc_value, raw_content_id) DO NOTHING`
 	return int(ct.RowsAffected()), nil
 }
 
+// FindSharedIOCs finds IOC values that appear in findings from multiple distinct sources.
+func (s *Store) FindSharedIOCs(ctx context.Context, minSources int) ([]SharedIOCResult, error) {
+	const query = `
+SELECT s.ioc_type, s.ioc_value,
+       array_agg(DISTINCT s.source_name) AS sources,
+       array_agg(DISTINCT s.raw_content_id::text) AS finding_ids,
+       COUNT(DISTINCT s.source_id) AS source_count
+FROM ioc_sightings s
+JOIN raw_content rc ON rc.id = s.raw_content_id
+WHERE rc.classified = true
+  AND rc.category != 'irrelevant'
+  AND rc.provenance = 'first_party'
+GROUP BY s.ioc_type, s.ioc_value
+HAVING COUNT(DISTINCT s.source_id) >= $1`
+
+	rows, err := s.pool.Query(ctx, query, minSources)
+	if err != nil {
+		return nil, fmt.Errorf("archive: find shared iocs: %w", err)
+	}
+	defer rows.Close()
+
+	var results []SharedIOCResult
+	for rows.Next() {
+		var r SharedIOCResult
+		if err := rows.Scan(&r.IOCType, &r.IOCValue, &r.Sources, &r.FindingIDs, &r.SourceCount); err != nil {
+			return nil, fmt.Errorf("archive: scan shared ioc: %w", err)
+		}
+		results = append(results, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: find shared iocs rows: %w", err)
+	}
+
+	return results, nil
+}
+
+// FindHandleReuse finds author handles that appear across multiple distinct sources.
+func (s *Store) FindHandleReuse(ctx context.Context, minSources int) ([]HandleReuseResult, error) {
+	const query = `
+SELECT author, COALESCE(author_id, ''),
+       array_agg(DISTINCT source_name) AS sources,
+       array_agg(DISTINCT source_id) AS source_ids,
+       array_agg(DISTINCT id::text) AS finding_ids,
+       COUNT(DISTINCT source_id) AS source_count
+FROM raw_content
+WHERE classified = true
+  AND category != 'irrelevant'
+  AND provenance = 'first_party'
+  AND author != '' AND author IS NOT NULL
+GROUP BY author, author_id
+HAVING COUNT(DISTINCT source_id) >= $1`
+
+	rows, err := s.pool.Query(ctx, query, minSources)
+	if err != nil {
+		return nil, fmt.Errorf("archive: find handle reuse: %w", err)
+	}
+	defer rows.Close()
+
+	var results []HandleReuseResult
+	for rows.Next() {
+		var r HandleReuseResult
+		if err := rows.Scan(&r.Author, &r.AuthorID, &r.Sources, &r.SourceIDs, &r.FindingIDs, &r.SourceCount); err != nil {
+			return nil, fmt.Errorf("archive: scan handle reuse: %w", err)
+		}
+		results = append(results, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: find handle reuse rows: %w", err)
+	}
+
+	return results, nil
+}
+
+// FindTemporalIOCOverlap finds pairs of findings from different sources that were
+// collected within a time window and share multiple IOCs.
+func (s *Store) FindTemporalIOCOverlap(ctx context.Context, windowHours int, minSharedIOCs int) ([]TemporalOverlapResult, error) {
+	const query = `
+WITH finding_iocs AS (
+    SELECT s.raw_content_id AS finding_id, rc.source_id, rc.source_name, rc.collected_at,
+           s.ioc_type, s.ioc_value
+    FROM ioc_sightings s
+    JOIN raw_content rc ON rc.id = s.raw_content_id
+    WHERE rc.classified = true
+      AND rc.category != 'irrelevant'
+      AND rc.provenance = 'first_party'
+      AND rc.collected_at > NOW() - make_interval(hours => $1)
+)
+SELECT a.finding_id::text AS finding_a, b.finding_id::text AS finding_b,
+       a.source_name AS source_a, b.source_name AS source_b,
+       array_agg(DISTINCT a.ioc_type || ':' || a.ioc_value) AS shared_iocs,
+       COUNT(DISTINCT a.ioc_type || ':' || a.ioc_value) AS shared_count
+FROM finding_iocs a
+JOIN finding_iocs b ON a.ioc_value = b.ioc_value
+                    AND a.ioc_type = b.ioc_type
+                    AND a.source_id != b.source_id
+                    AND a.finding_id < b.finding_id
+                    AND ABS(EXTRACT(EPOCH FROM a.collected_at - b.collected_at)) <= $1 * 3600
+GROUP BY a.finding_id, b.finding_id, a.source_name, b.source_name
+HAVING COUNT(DISTINCT a.ioc_type || ':' || a.ioc_value) >= $2`
+
+	rows, err := s.pool.Query(ctx, query, windowHours, minSharedIOCs)
+	if err != nil {
+		return nil, fmt.Errorf("archive: find temporal ioc overlap: %w", err)
+	}
+	defer rows.Close()
+
+	var results []TemporalOverlapResult
+	for rows.Next() {
+		var r TemporalOverlapResult
+		if err := rows.Scan(&r.FindingA, &r.FindingB, &r.SourceA, &r.SourceB, &r.SharedIOCs, &r.SharedCount); err != nil {
+			return nil, fmt.Errorf("archive: scan temporal overlap: %w", err)
+		}
+		results = append(results, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: find temporal overlap rows: %w", err)
+	}
+
+	return results, nil
+}
+
+// FindEntityClusters finds entities of a given type that share connections to
+// the same downstream entities (e.g., actors using the same malware, malware
+// connecting to the same C2).
+func (s *Store) FindEntityClusters(ctx context.Context, entityType string, minConnections int) ([]EntityClusterResult, error) {
+	const query = `
+SELECT e1.id AS entity_a, COALESCE(e1.properties->>'name', e1.id) AS name_a,
+       e2.id AS entity_b, COALESCE(e2.properties->>'name', e2.id) AS name_b,
+       array_agg(DISTINCT shared.id) AS shared_entity_ids,
+       array_agg(DISTINCT COALESCE(shared.properties->>'name', shared.id)) AS shared_names,
+       COUNT(DISTINCT shared.id) AS shared_count
+FROM entities e1
+JOIN edges edge1 ON edge1.source_id = e1.id
+JOIN edges edge2 ON edge2.target_id = edge1.target_id AND edge2.source_id != e1.id
+JOIN entities e2 ON e2.id = edge2.source_id AND e2.type = e1.type
+JOIN entities shared ON shared.id = edge1.target_id
+WHERE e1.type = $1
+  AND e1.id < e2.id
+GROUP BY e1.id, e1.properties->>'name', e2.id, e2.properties->>'name'
+HAVING COUNT(DISTINCT shared.id) >= $2`
+
+	rows, err := s.pool.Query(ctx, query, entityType, minConnections)
+	if err != nil {
+		return nil, fmt.Errorf("archive: find entity clusters: %w", err)
+	}
+	defer rows.Close()
+
+	var results []EntityClusterResult
+	for rows.Next() {
+		var r EntityClusterResult
+		if err := rows.Scan(&r.EntityA, &r.NameA, &r.EntityB, &r.NameB, &r.SharedIDs, &r.SharedNames, &r.SharedCount); err != nil {
+			return nil, fmt.Errorf("archive: scan entity cluster: %w", err)
+		}
+		results = append(results, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: find entity clusters rows: %w", err)
+	}
+
+	return results, nil
+}
+
 // UpsertEntity inserts an entity or updates its properties if it already exists.
 func (s *Store) UpsertEntity(ctx context.Context, id, entityType string, properties map[string]interface{}) error {
 	propsJSON, err := json.Marshal(properties)
