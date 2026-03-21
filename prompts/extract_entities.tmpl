@@ -7,6 +7,7 @@ Content:
 
 Category: {{.Category}}
 Source: {{.SourceName}} ({{.SourceType}})
+Provenance: {{.Provenance}}
 
 Extract these entity types:
 - threat_actor: Named threat actors, APT groups, hacker groups, individual hackers (e.g., "Lazarus Group", "APT29", "IntelBroker")
@@ -19,11 +20,18 @@ For each entity, extract:
 - type: one of the types above
 - name: the entity name as it appears in the text
 - aliases: any alternative names mentioned (array, can be empty)
+- observed: true if provenance is "first_party" (entity directly observed in threat activity), false otherwise
+- confidence: "high" (named, unambiguous entity clearly identified), "medium" (likely an entity but somewhat generic), or "low" (ambiguous reference, could be false positive)
+
+Provenance rules for relationships:
+- When provenance is "first_party": Full relationship vocabulary is available: "uses", "targets", "deploys", "attributed_to", "variant_of", "exploits", "associated_with"
+- When provenance is "third_party_reporting": Only use "referenced_in" and "associated_with" relationships. Do NOT use "uses", "deploys", "targets", or "exploits" — these imply direct observation.
+- When provenance is "unknown": Only use "associated_with" and "referenced_in" relationships.
 
 For relationships between entities, extract:
 - source: the entity name (must match a name from the entities list)
 - target: the related entity name (must match a name from the entities list)
-- relationship: one of: "uses", "targets", "deploys", "attributed_to", "variant_of", "exploits", "associated_with"
+- relationship: one of the allowed relationship types based on provenance rules above
 
 DO NOT extract:
 - Generic terms ("the attacker", "the malware", "unknown actor")
@@ -33,7 +41,7 @@ DO NOT extract:
 
 Respond with ONLY a JSON object:
 {
-  "entities": [{"type": "<type>", "name": "<name>", "aliases": ["<alias1>"]}],
+  "entities": [{"type": "<type>", "name": "<name>", "aliases": ["<alias1>"], "observed": true, "confidence": "high"}],
   "relationships": [{"source": "<name>", "target": "<name>", "relationship": "<rel>"}]
 }
 If nothing found, respond with: {"entities": [], "relationships": []}

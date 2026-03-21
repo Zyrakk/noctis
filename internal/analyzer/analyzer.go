@@ -19,6 +19,7 @@ import (
 type classifyResponse struct {
 	Category   string  `json:"category"`
 	Confidence float64 `json:"confidence"`
+	Provenance string  `json:"provenance"`
 }
 
 // severityResponse holds the JSON result from the severity prompt.
@@ -187,9 +188,11 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 
 // EntityEntry is one element of the entities array returned by extract_entities.
 type EntityEntry struct {
-	Type    string   `json:"type"`
-	Name    string   `json:"name"`
-	Aliases []string `json:"aliases"`
+	Type       string   `json:"type"`
+	Name       string   `json:"name"`
+	Aliases    []string `json:"aliases"`
+	Observed   bool     `json:"observed"`
+	Confidence string   `json:"confidence"`
 }
 
 // RelationshipEntry is one element of the relationships array returned by extract_entities.
@@ -207,17 +210,19 @@ type EntityExtractionResult struct {
 
 // ExtractEntities asks the LLM to extract named entities (actors, malware,
 // campaigns, TTPs) and their relationships from the finding content.
-func (a *Analyzer) ExtractEntities(ctx context.Context, finding *models.Finding, category, sourceName, sourceType string) (*EntityExtractionResult, error) {
+func (a *Analyzer) ExtractEntities(ctx context.Context, finding *models.Finding, category, sourceName, sourceType, provenance string) (*EntityExtractionResult, error) {
 	prompt, err := a.renderTemplate("extract_entities", struct {
 		Content    string
 		Category   string
 		SourceName string
 		SourceType string
+		Provenance string
 	}{
 		Content:    finding.Content,
 		Category:   category,
 		SourceName: sourceName,
 		SourceType: sourceType,
+		Provenance: provenance,
 	})
 	if err != nil {
 		return nil, err

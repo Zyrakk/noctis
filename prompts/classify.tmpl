@@ -24,5 +24,17 @@ Classification guidance:
 - Security vendor reports describing active campaigns with IOCs are "malware_sample" or the relevant category, NOT "irrelevant"
 - Only classify as "irrelevant" if the content has NO threat intelligence value: general news without IOCs, marketing content, off-topic discussions, or non-security content that matched a rule by keyword coincidence
 
+Determine the provenance of this content:
+- "first_party": The content IS the threat activity itself. The author is the threat actor, or the content contains actual leaked data, malware samples, C2 configs, access listings, or direct actor communications. The source is producing the threat, not reporting on it.
+- "third_party_reporting": The content is ABOUT threat activity. Written by security researchers, journalists, vendor blogs, CERT advisories, or analysts. It references threats but the author is not the threat actor.
+- "unknown": Ambiguous. Cannot determine provenance with confidence.
+
+Provenance examples:
+- A Telegram message saying "selling RDP access to $COMPANY, $500" -> "first_party"
+- A Krebs on Security post about APT28 targeting energy sector -> "third_party_reporting"
+- A paste with raw credentials and no commentary -> "first_party"
+- A GitHub advisory for CVE-2024-XXXX -> "third_party_reporting"
+- A forum post by an unknown user discussing malware techniques generically -> "unknown"
+
 Respond with ONLY a JSON object:
-{"category": "<category>", "confidence": <0.0-1.0>}
+{"category": "<category>", "confidence": <0.0-1.0>, "provenance": "<first_party|third_party_reporting|unknown>"}
