@@ -193,7 +193,7 @@ export default function Findings() {
                       f.severity ? React.createElement(SeverityBadge, { severity: f.severity }) : '-',
                     ),
                     React.createElement('td', { className: 'px-4 py-3 text-sm text-noctis-text truncate max-w-md' },
-                      f.summary || 'No summary',
+                      f.summary || 'Pending classification\u2026',
                     ),
                   )
                 ),
@@ -226,7 +226,7 @@ export default function Findings() {
                   React.createElement('span', { className: 'text-xs text-noctis-dim' }, f.category?.replace(/_/g, ' ') || ''),
                 ),
                 // Summary
-                React.createElement('p', { className: 'text-sm text-noctis-text line-clamp-2 mb-1.5' }, f.summary || 'No summary'),
+                React.createElement('p', { className: 'text-sm text-noctis-text line-clamp-2 mb-1.5' }, f.summary || 'Pending classification\u2026'),
                 // Bottom row: source + time
                 React.createElement('div', { className: 'flex items-center justify-between text-xs text-noctis-dim' },
                   React.createElement('span', { className: 'px-1.5 py-0.5 bg-noctis-bg rounded' }, f.sourceType),

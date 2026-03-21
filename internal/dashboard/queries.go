@@ -282,7 +282,9 @@ func queryFindings(ctx context.Context, pool *pgxpool.Pool, f findingsFilter) (*
 	limitP := nextArg()
 	offsetP := nextArg()
 	sql := fmt.Sprintf(`
-		SELECT id, source_type, source_name, category, severity, summary, author, collected_at, posted_at
+		SELECT id, source_type, source_name, category, severity,
+		       COALESCE(summary, LEFT(content, 120)) AS summary,
+		       author, collected_at, posted_at
 		FROM raw_content %s
 		ORDER BY collected_at DESC
 		LIMIT %s OFFSET %s`, where, limitP, offsetP)
