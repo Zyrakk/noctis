@@ -110,12 +110,14 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 	}
 
 	// 4a. Classify.
+	var provenance string
 	classResult, err := p.analyzer.Classify(ctx, &f, result.MatchedRules)
 	if err != nil {
 		log.Printf("ingest: classify error for %s: %v", f.ID, err)
 	} else {
 		enriched.Category = models.Category(classResult.Category)
 		enriched.Confidence = classResult.Confidence
+		provenance = classResult.Provenance
 	}
 
 	// 4b. Extract IOCs.
@@ -147,7 +149,7 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 
 	// 6. Mark content as classified in archive.
 	tags := tagsFromCategory(string(enriched.Category))
-	if err := p.archive.MarkClassified(ctx, rc.ID, string(enriched.Category), tags, enriched.Severity.String(), summary); err != nil {
+	if err := p.archive.MarkClassified(ctx, rc.ID, string(enriched.Category), tags, enriched.Severity.String(), summary, provenance, currentClassificationVersion); err != nil {
 		log.Printf("ingest: mark classified error for %s: %v", rc.ID, err)
 	}
 
@@ -158,6 +160,13 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 
 // Run starts all background workers and blocks until ctx is cancelled.
 func (p *IngestPipeline) Run(ctx context.Context) {
+	// Reset old classifications for reprocessing with the current pipeline version.
+	if count, err := p.archive.ResetOldClassifications(ctx, currentClassificationVersion); err != nil {
+		log.Printf("ingest: reclassification reset error: %v", err)
+	} else if count > 0 {
+		log.Printf("ingest: reset %d entries for reclassification (version < %d)", count, currentClassificationVersion)
+	}
+
 	// Backfill entities from existing IOCs on startup.
 	if count, err := p.archive.BackfillEntitiesFromIOCs(ctx); err != nil {
 		log.Printf("ingest: entity backfill error: %v", err)

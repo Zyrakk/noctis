@@ -25,6 +25,12 @@ const (
 	workerLogInterval = 10
 )
 
+// currentClassificationVersion is incremented when the classification
+// pipeline changes materially. Workers stamp this version on each
+// processed entry; on startup, entries with an older version are reset
+// for reprocessing.
+const currentClassificationVersion = 2
+
 // rateLimiter enforces a minimum delay between LLM API calls. It is safe for
 // concurrent use and should be shared across all workers of the same type.
 type rateLimiter struct {
@@ -118,7 +124,13 @@ func (p *IngestPipeline) classificationWorker(ctx context.Context, workerID int)
 			}
 
 			category := classResult.Category
+			provenance := classResult.Provenance
 			tags := tagsFromCategory(category)
+
+			// Flag low-confidence classifications for review.
+			if classResult.Confidence < 0.80 {
+				tags = append(tags, "needs_review")
+			}
 
 			// Assess severity.
 			severity := models.SeverityInfo
@@ -142,7 +154,7 @@ func (p *IngestPipeline) classificationWorker(ctx context.Context, workerID int)
 			}
 
 			// Persist classification results.
-			if err := p.archive.MarkClassified(ctx, entry.ID, category, tags, severity.String(), summary); err != nil {
+			if err := p.archive.MarkClassified(ctx, entry.ID, category, tags, severity.String(), summary, provenance, currentClassificationVersion); err != nil {
 				log.Printf("ingest: classification worker %d: mark classified error for %s: %v", workerID, entry.ID, err)
 				continue
 			}
@@ -223,7 +235,7 @@ func (p *IngestPipeline) entityExtractionWorker(ctx context.Context, workerID in
 				}
 
 				finding2 := findingFromRawContent(entry)
-				result, err := p.analyzer.ExtractEntities(ctx, &finding2, entry.Category, entry.SourceName, entry.SourceType)
+				result, err := p.analyzer.ExtractEntities(ctx, &finding2, entry.Category, entry.SourceName, entry.SourceType, entry.Provenance)
 				if err != nil {
 					log.Printf("ingest: entity extraction worker %d: extract entities error for %s: %v", workerID, entry.ID, err)
 				} else {
@@ -307,19 +319,28 @@ func (p *IngestPipeline) bridgeEntitiesToGraph(ctx context.Context, entry archiv
 }
 
 // bridgeLLMEntitiesToGraph creates entities and edges from LLM-extracted named
-// entities (actors, malware, campaigns) and their relationships.
+// entities (actors, malware, campaigns) and their relationships. It respects
+// the observed flag and confidence level to prevent false graph pollution.
 func (p *IngestPipeline) bridgeLLMEntitiesToGraph(ctx context.Context, entry archive.RawContent, result *analyzer.EntityExtractionResult, workerID int) {
 	if result == nil {
 		return
 	}
 
-	// Build a name→ID map for relationship resolution.
+	// Build a name->ID map and name->observed map for relationship resolution.
 	nameToID := make(map[string]string)
+	nameObserved := make(map[string]bool)
 
 	for _, ent := range result.Entities {
 		if ent.Name == "" {
 			continue
 		}
+
+		// Skip low-confidence entities entirely.
+		if ent.Confidence == "low" {
+			log.Printf("ingest: entity bridge worker %d: skipping low-confidence entity %q", workerID, ent.Name)
+			continue
+		}
+
 		entityID := fmt.Sprintf("entity:%s:%s", ent.Type, strings.ToLower(strings.ReplaceAll(ent.Name, " ", "_")))
 		props := map[string]interface{}{
 			"name": ent.Name,
@@ -327,12 +348,20 @@ func (p *IngestPipeline) bridgeLLMEntitiesToGraph(ctx context.Context, entry arc
 		if len(ent.Aliases) > 0 {
 			props["aliases"] = ent.Aliases
 		}
+		if ent.Observed {
+			props["observed"] = true
+		}
+		// Mark medium-confidence entities for review.
+		if ent.Confidence == "medium" {
+			props["needs_review"] = true
+		}
 
 		if err := p.archive.UpsertEntity(ctx, entityID, ent.Type, props); err != nil {
 			log.Printf("ingest: entity bridge worker %d: upsert llm entity: %v", workerID, err)
 			continue
 		}
 		nameToID[ent.Name] = entityID
+		nameObserved[ent.Name] = ent.Observed
 
 		// Also link this entity to the source channel.
 		sourceName := entry.SourceName
@@ -351,8 +380,18 @@ func (p *IngestPipeline) bridgeLLMEntitiesToGraph(ctx context.Context, entry arc
 		if !srcOK || !tgtOK || rel.Relationship == "" {
 			continue
 		}
-		edgeID := fmt.Sprintf("edge:%s:%s:%s", srcID, tgtID, rel.Relationship)
-		if err := p.archive.UpsertEdge(ctx, edgeID, srcID, tgtID, rel.Relationship); err != nil {
+
+		// Safety net: non-observed entities can only have weak relationships,
+		// regardless of what the LLM returned.
+		relType := rel.Relationship
+		if !nameObserved[rel.Source] {
+			if relType != "referenced_in" && relType != "associated_with" {
+				relType = "associated_with"
+			}
+		}
+
+		edgeID := fmt.Sprintf("edge:%s:%s:%s", srcID, tgtID, relType)
+		if err := p.archive.UpsertEdge(ctx, edgeID, srcID, tgtID, relType); err != nil {
 			log.Printf("ingest: entity bridge worker %d: upsert llm edge: %v", workerID, err)
 		}
 	}
