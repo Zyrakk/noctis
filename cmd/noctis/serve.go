@@ -168,6 +168,7 @@ func newServeCmd() *cobra.Command {
 				metrics,
 				alertFn,
 				cfg.Collection,
+				cfg.Correlation,
 			)
 			if err != nil {
 				return fmt.Errorf("creating ingest pipeline: %w", err)

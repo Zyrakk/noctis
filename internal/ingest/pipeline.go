@@ -52,6 +52,7 @@ func NewIngestPipeline(
 	metrics *dispatcher.PrometheusMetrics,
 	alertFn func(models.EnrichedFinding),
 	workerCfg config.CollectionConfig,
+	corrCfg config.CorrelationConfig,
 ) (*IngestPipeline, error) {
 	m, err := matcher.New(matcherRules)
 	if err != nil {
@@ -76,6 +77,8 @@ func NewIngestPipeline(
 		metrics:   metrics,
 		alertFn:   alertFn,
 		workerCfg: workerCfg,
+		corrCfg:   corrCfg,
+		corrStore: archiveStore,
 	}, nil
 }
 
@@ -185,6 +188,13 @@ func (p *IngestPipeline) Run(ctx context.Context) {
 		log.Printf("ingest: backfilled %d entities from existing IOCs", count)
 	}
 
+	// Backfill IOC sightings on startup.
+	if count, err := p.archive.BackfillIOCSightings(ctx); err != nil {
+		log.Printf("ingest: ioc sightings backfill error: %v", err)
+	} else if count > 0 {
+		log.Printf("ingest: backfilled %d ioc sightings", count)
+	}
+
 	var wg sync.WaitGroup
 
 	// Start classification workers.
@@ -203,6 +213,15 @@ func (p *IngestPipeline) Run(ctx context.Context) {
 			defer wg.Done()
 			p.entityExtractionWorker(ctx, id)
 		}(i)
+	}
+
+	// Start correlation worker (single instance).
+	if p.corrCfg.Enabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p.correlationWorker(ctx)
+		}()
 	}
 
 	wg.Wait()
