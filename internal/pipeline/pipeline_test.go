@@ -94,7 +94,7 @@ func TestPipeline_EndToEnd(t *testing.T) {
 	llmClient := &fakeLLMClient{
 		responses: map[string]string{
 			// classify.tmpl contains "Classify"
-			"Classify": `{"category":"credential_leak","confidence":0.95}`,
+			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party"}`,
 			// extract_iocs.tmpl contains "Extract"
 			"Extract": `[{"type":"domain","value":"example.com","context":"leaked creds","malicious":true}]`,
 			// severity.tmpl contains "Assess"

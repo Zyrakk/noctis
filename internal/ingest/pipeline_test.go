@@ -111,7 +111,7 @@ func makeTestRules() []config.RuleConfig {
 func makeFakeLLM() *fakeLLMClient {
 	return &fakeLLMClient{
 		responses: map[string]string{
-			"Classify": `{"category":"credential_leak","confidence":0.95}`,
+			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party"}`,
 			"Extract":  `[{"type":"domain","value":"example.com","context":"leaked creds","malicious":true}]`,
 			"Assess":   `{"severity":"critical","reasoning":"Active credentials exposed"}`,
 			"Write":    "Credentials for example.com were leaked on Telegram.",

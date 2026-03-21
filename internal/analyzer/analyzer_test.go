@@ -81,7 +81,7 @@ func TestStripCodeFences(t *testing.T) {
 func TestAnalyzer_Classify_WithCodeFences(t *testing.T) {
 	client := &mockLLMClient{
 		responses: map[string]string{
-			"Classify": "```json\n{\"category\":\"malware_sample\",\"confidence\":0.88}\n```",
+			"Classify": "```json\n{\"category\":\"malware_sample\",\"confidence\":0.88,\"provenance\":\"third_party_reporting\"}\n```",
 		},
 	}
 
@@ -101,7 +101,7 @@ func TestAnalyzer_Classify(t *testing.T) {
 	client := &mockLLMClient{
 		responses: map[string]string{
 			// classify.tmpl contains the word "Classify"
-			"Classify": `{"category":"credential_leak","confidence":0.95}`,
+			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party"}`,
 		},
 	}
 
@@ -115,6 +115,9 @@ func TestAnalyzer_Classify(t *testing.T) {
 	}
 	if result.Confidence != 0.95 {
 		t.Errorf("Confidence = %v; want 0.95", result.Confidence)
+	}
+	if result.Provenance != "first_party" {
+		t.Errorf("Provenance = %q; want %q", result.Provenance, "first_party")
 	}
 }
 
@@ -212,5 +215,42 @@ func TestAnalyzer_Summarize(t *testing.T) {
 	}
 	if summary == "" {
 		t.Error("Summarize() returned empty string; want non-empty")
+	}
+}
+
+// TestAnalyzer_ExtractEntities verifies entity extraction with provenance-aware
+// observed flags and confidence levels.
+func TestAnalyzer_ExtractEntities(t *testing.T) {
+	client := &mockLLMClient{
+		responses: map[string]string{
+			"Extract named entities": `{
+				"entities": [
+					{"type": "threat_actor", "name": "APT29", "aliases": ["Cozy Bear"], "observed": true, "confidence": "high"},
+					{"type": "malware", "name": "Cobalt Strike", "aliases": [], "observed": true, "confidence": "high"}
+				],
+				"relationships": [
+					{"source": "APT29", "target": "Cobalt Strike", "relationship": "uses"}
+				]
+			}`,
+		},
+	}
+
+	a := newTestAnalyzer(t, client)
+	f := testFinding()
+	result, err := a.ExtractEntities(context.Background(), f, "malware_sample", "test-channel", "telegram", "first_party")
+	if err != nil {
+		t.Fatalf("ExtractEntities() unexpected error: %v", err)
+	}
+	if len(result.Entities) != 2 {
+		t.Fatalf("len(Entities) = %d; want 2", len(result.Entities))
+	}
+	if !result.Entities[0].Observed {
+		t.Error("Entities[0].Observed = false; want true")
+	}
+	if result.Entities[0].Confidence != "high" {
+		t.Errorf("Entities[0].Confidence = %q; want %q", result.Entities[0].Confidence, "high")
+	}
+	if len(result.Relationships) != 1 {
+		t.Fatalf("len(Relationships) = %d; want 1", len(result.Relationships))
 	}
 }

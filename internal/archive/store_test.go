@@ -76,6 +76,12 @@ func TestFromFinding(t *testing.T) {
 	if rc.EntitiesExtracted {
 		t.Error("EntitiesExtracted should default to false")
 	}
+	if rc.Provenance != "" {
+		t.Errorf("Provenance should be empty, got %q", rc.Provenance)
+	}
+	if rc.ClassificationVersion != 0 {
+		t.Errorf("ClassificationVersion should be 0, got %d", rc.ClassificationVersion)
+	}
 }
 
 // TestFromFinding_ZeroTimestamp verifies that a zero-value Timestamp on the
@@ -176,7 +182,9 @@ func TestRawContent_Construction(t *testing.T) {
 		Tags:              []string{"malware", "apt"},
 		Severity:          "high",
 		Summary:           "Malware sample in the wild",
-		EntitiesExtracted: true,
+		EntitiesExtracted:     true,
+		Provenance:            "first_party",
+		ClassificationVersion: 2,
 	}
 
 	if rc.ID != "rc-001" {
@@ -221,6 +229,12 @@ func TestRawContent_Construction(t *testing.T) {
 	if !rc.EntitiesExtracted {
 		t.Error("EntitiesExtracted should be true")
 	}
+	if rc.Provenance != "first_party" {
+		t.Errorf("Provenance = %q, want %q", rc.Provenance, "first_party")
+	}
+	if rc.ClassificationVersion != 2 {
+		t.Errorf("ClassificationVersion = %d, want %d", rc.ClassificationVersion, 2)
+	}
 }
 
 // TestStore_Interface is a compile-time check that Store has the expected
@@ -242,6 +256,7 @@ func TestStore_Interface(t *testing.T) {
 		_ = s.FetchUnclassified
 		_ = s.Search
 		_ = s.Stats
+		_ = s.ResetOldClassifications
 	)
 
 	// Also verify FromFinding is a package-level function.
