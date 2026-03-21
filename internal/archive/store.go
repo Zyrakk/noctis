@@ -61,6 +61,86 @@ type ArchiveStats struct {
 	ByCategory      map[string]int64
 }
 
+// --- Correlation types ---
+
+// SharedIOCResult represents an IOC value found across multiple sources.
+type SharedIOCResult struct {
+	IOCType     string
+	IOCValue    string
+	Sources     []string
+	FindingIDs  []string
+	SourceCount int
+}
+
+// HandleReuseResult represents an author handle found across multiple sources.
+type HandleReuseResult struct {
+	Author      string
+	AuthorID    string
+	Sources     []string
+	SourceIDs   []string
+	FindingIDs  []string
+	SourceCount int
+}
+
+// TemporalOverlapResult represents a pair of findings sharing IOCs within a time window.
+type TemporalOverlapResult struct {
+	FindingA    string
+	FindingB    string
+	SourceA     string
+	SourceB     string
+	SharedIOCs  []string // format: "type:value"
+	SharedCount int
+}
+
+// EntityClusterResult represents a pair of entities sharing downstream connections.
+type EntityClusterResult struct {
+	EntityA     string
+	NameA       string
+	EntityB     string
+	NameB       string
+	SharedIDs   []string
+	SharedNames []string
+	SharedCount int
+}
+
+// Correlation represents a confirmed correlation stored in the correlations table.
+type Correlation struct {
+	ID              string
+	ClusterID       string
+	EntityIDs       []string
+	FindingIDs      []string
+	CorrelationType string
+	Confidence      float64
+	Method          string
+	Evidence        map[string]interface{}
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// CorrelationCandidate represents a weak correlation candidate.
+type CorrelationCandidate struct {
+	ID            string
+	ClusterID     string
+	EntityIDs     []string
+	FindingIDs    []string
+	CandidateType string
+	SignalCount   int
+	Signals       map[string]interface{}
+	SeenCount     int
+	Status        string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+// CorrelationFilter controls filtering for FetchCorrelations.
+type CorrelationFilter struct {
+	Type          string
+	MinConfidence float64
+	Since         *time.Time
+	Limit         int
+	Offset        int
+}
+
 // Store provides CRUD and query operations on the raw_content table.
 type Store struct {
 	pool *pgxpool.Pool
