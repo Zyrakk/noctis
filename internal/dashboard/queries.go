@@ -877,3 +877,128 @@ func queryPublicRecent(ctx context.Context, pool *pgxpool.Pool) ([]PublicFinding
 	}
 	return findings, nil
 }
+
+// --- Correlations ---
+
+// correlationFilter holds parsed query parameters for correlation search.
+type correlationFilter struct {
+	Type          string
+	MinConfidence float64
+	Since         *time.Time
+	Limit         int
+	Offset        int
+}
+
+// CorrelationItem represents a correlation in API responses.
+type CorrelationItem struct {
+	ID              string         `json:"id"`
+	ClusterID       string         `json:"clusterId"`
+	EntityIDs       []string       `json:"entityIds"`
+	FindingIDs      []string       `json:"findingIds"`
+	CorrelationType string         `json:"correlationType"`
+	Confidence      float64        `json:"confidence"`
+	Method          string         `json:"method"`
+	Evidence        map[string]any `json:"evidence"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
+}
+
+// CorrelationsResponse wraps paginated correlations.
+type CorrelationsResponse struct {
+	Correlations []CorrelationItem `json:"correlations"`
+	Total        int64             `json:"total"`
+}
+
+func queryCorrelations(ctx context.Context, pool *pgxpool.Pool, f correlationFilter) (*CorrelationsResponse, error) {
+	var conditions []string
+	var args []interface{}
+	argIdx := 0
+
+	nextArg := func() string {
+		argIdx++
+		return fmt.Sprintf("$%d", argIdx)
+	}
+
+	if f.Type != "" {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("correlation_type = %s", p))
+		args = append(args, f.Type)
+	}
+	if f.MinConfidence > 0 {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("confidence >= %s", p))
+		args = append(args, f.MinConfidence)
+	}
+	if f.Since != nil {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("created_at >= %s", p))
+		args = append(args, *f.Since)
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int64
+	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM correlations "+where, args...).Scan(&total)
+	if err != nil {
+		return nil, fmt.Errorf("correlations count: %w", err)
+	}
+
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	limitP := nextArg()
+	offsetP := nextArg()
+	sql := fmt.Sprintf(`
+		SELECT id, cluster_id, entity_ids, finding_ids, correlation_type,
+		       confidence, method, evidence, created_at, updated_at
+		FROM correlations %s
+		ORDER BY created_at DESC
+		LIMIT %s OFFSET %s`, where, limitP, offsetP)
+	args = append(args, limit, f.Offset)
+
+	rows, err := pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("correlations query: %w", err)
+	}
+	defer rows.Close()
+
+	var correlations []CorrelationItem
+	for rows.Next() {
+		var c CorrelationItem
+		var evidenceJSON []byte
+		if err := rows.Scan(&c.ID, &c.ClusterID, &c.EntityIDs, &c.FindingIDs,
+			&c.CorrelationType, &c.Confidence, &c.Method, &evidenceJSON,
+			&c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("correlations scan: %w", err)
+		}
+		if len(evidenceJSON) > 0 {
+			json.Unmarshal(evidenceJSON, &c.Evidence)
+		}
+		if c.Evidence == nil {
+			c.Evidence = map[string]any{}
+		}
+		if c.EntityIDs == nil {
+			c.EntityIDs = []string{}
+		}
+		if c.FindingIDs == nil {
+			c.FindingIDs = []string{}
+		}
+		correlations = append(correlations, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("correlations rows: %w", err)
+	}
+	if correlations == nil {
+		correlations = []CorrelationItem{}
+	}
+
+	return &CorrelationsResponse{Correlations: correlations, Total: total}, nil
+}

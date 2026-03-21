@@ -212,6 +212,31 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, graph)
 }
 
+func (s *Server) handleCorrelations(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := correlationFilter{
+		Type:          q.Get("type"),
+		MinConfidence: parseFloatParam(q.Get("min_confidence"), 0.0),
+		Limit:         parseIntParam(q.Get("limit"), 50),
+		Offset:        parseIntParam(q.Get("offset"), 0),
+	}
+
+	if since := q.Get("since"); since != "" {
+		t, err := parseSince(since)
+		if err == nil {
+			f.Since = &t
+		}
+	}
+
+	resp, err := queryCorrelations(r.Context(), s.pool, f)
+	if err != nil {
+		slog.Error("dashboard: correlations", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch correlations"})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // --- public endpoints (no auth) ---
 
 func (s *Server) handlePublicStats(w http.ResponseWriter, r *http.Request) {
@@ -241,6 +266,17 @@ func parseIntParam(s string, defaultVal int) int {
 		return defaultVal
 	}
 	v, err := strconv.Atoi(s)
+	if err != nil || v < 0 {
+		return defaultVal
+	}
+	return v
+}
+
+func parseFloatParam(s string, defaultVal float64) float64 {
+	if s == "" {
+		return defaultVal
+	}
+	v, err := strconv.ParseFloat(s, 64)
 	if err != nil || v < 0 {
 		return defaultVal
 	}

@@ -65,6 +65,7 @@ func (s *Server) registerRoutes() {
 	s.mux.Handle("GET /api/timeline", s.authMiddleware(http.HandlerFunc(s.handleTimeline)))
 	s.mux.Handle("GET /api/entities", s.authMiddleware(http.HandlerFunc(s.handleEntities)))
 	s.mux.Handle("GET /api/graph", s.authMiddleware(http.HandlerFunc(s.handleGraph)))
+	s.mux.Handle("GET /api/correlations", s.authMiddleware(http.HandlerFunc(s.handleCorrelations)))
 
 	// Auth validation endpoint
 	s.mux.Handle("POST /api/auth/check", s.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
