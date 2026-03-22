@@ -113,9 +113,61 @@ data:
           - cwe.mitre.org
           - first.org
           - github.com
-          - wikipedia.org
           - siemens.com
           - honeywell.com
+          - wikipedia.org
+          - reddit.com
+          - stackoverflow.com
+          - medium.com
+          - twitter.com
+          - x.com
+          - linkedin.com
+          - facebook.com
+          - instagram.com
+          - youtube.com
+          - t.me
+          - olx.kz
+          - m.olx.kz
+          - 2gis.kz
+          - satu.kz
+          - ping-admin.com
+          - chatgpt.com
+          - chat.openai.com
+          - claude.ai
+          - merriam-webster.com
+          - arduino.cc
+          - kickstarter.com
+          - translate.kagi.com
+          - codebeautify.org
+          - jsonformatter.org
+          - go.dev
+          - obsidian.md
+          - arena.ai
+          - threads.com
+          - threadreaderapp.com
+          - react.dev
+          - android-developers.googleblog.com
+          - unsloth.ai
+          - sarvam.ai
+          - huggingface.co
+          - inova.kz
+          - currenttime.tv
+          - ctftime.org
+          - raw.githubusercontent.com
+          - app.prospeo.io
+          - profitday.kz
+          - sts.kz
+          - dev.1c-bitrix.ru
+          - cellebrite.com
+          - fortra.com
+          - cdn.13cubed.com
+          - static1.squarespace.com
+          - bbs.kafan.cn
+          - tengrinews.kz
+          - offsec.com
+          - kali.org
+          - voidstarsec.com
+          - cipherlist.kz
 
       database:
         driver: postgres
@@ -123,6 +175,12 @@ data:
 
       graph:
         enabled: true
+
+      correlation:
+        enabled: true
+        intervalMinutes: 15
+        minEvidenceThreshold: 3
+        temporalWindowHours: 48
 
       dashboard:
         enabled: true
