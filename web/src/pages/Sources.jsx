@@ -10,6 +10,7 @@ const TABS = [
   { value: 'active', label: 'Active', dotColor: 'bg-green-400' },
   { value: 'discovered', label: 'Discovered', dotColor: 'bg-yellow-400' },
   { value: 'paused', label: 'Paused', dotColor: 'bg-gray-400' },
+  { value: 'rejected', label: 'Rejected', dotColor: 'bg-red-400' },
 ]
 
 const TYPE_ICONS = {
@@ -82,6 +83,23 @@ export default function Sources() {
     }
   }, [apiKey, refetch])
 
+  const handleReject = useCallback(async (id) => {
+    try {
+      await apiFetch(apiKey, `/api/sources/${id}/reject`, { method: 'POST' })
+      setFadingIds(prev => new Set(prev).add(id))
+      setToast('Source rejected')
+      setTimeout(() => {
+        setFadingIds(prev => { const next = new Set(prev); next.delete(id); return next })
+        refetch()
+      }, 500)
+      setTimeout(() => setToast(null), 3000)
+    } catch (err) {
+      console.error('Failed to reject:', err)
+      setToast('Failed to reject source')
+      setTimeout(() => setToast(null), 3000)
+    }
+  }, [apiKey, refetch])
+
   const handleAdd = useCallback(async (e) => {
     e.preventDefault()
     if (!newIdentifier.trim()) return
@@ -137,7 +155,7 @@ export default function Sources() {
         ),
       ),
       // Type filter (visible on discovered/paused tabs)
-      (tab === 'discovered' || tab === 'paused') && React.createElement('select', {
+      (tab === 'discovered' || tab === 'paused' || tab === 'rejected') && React.createElement('select', {
         value: typeFilter,
         onChange: e => { setTypeFilter(e.target.value); setPage(0) },
         className: 'px-3 py-1.5 bg-noctis-bg border border-noctis-border/50 rounded text-xs text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-muted/50'
@@ -245,12 +263,21 @@ export default function Sources() {
                         ),
                         React.createElement('td', { className: 'px-4 py-3' },
                           tab === 'discovered'
-                            ? React.createElement('button', {
-                                onClick: () => handleApprove(s.id),
-                                className: 'flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-green-500/10 border border-green-500/30 rounded text-xs text-green-400 hover:bg-green-500/20 cursor-pointer transition-colors duration-200'
-                              },
-                                React.createElement(Check, { className: 'w-3 h-3' }),
-                                'Approve',
+                            ? React.createElement('div', { className: 'flex items-center gap-2' },
+                                React.createElement('button', {
+                                  onClick: () => handleApprove(s.id),
+                                  className: 'flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-green-500/10 border border-green-500/30 rounded text-xs text-green-400 hover:bg-green-500/20 cursor-pointer transition-colors duration-200'
+                                },
+                                  React.createElement(Check, { className: 'w-3 h-3' }),
+                                  'Approve',
+                                ),
+                                React.createElement('button', {
+                                  onClick: () => handleReject(s.id),
+                                  className: 'flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400 hover:bg-red-500/20 cursor-pointer transition-colors duration-200'
+                                },
+                                  React.createElement(X, { className: 'w-3 h-3' }),
+                                  'Reject',
+                                ),
                               )
                             : React.createElement('span', {
                                 className: 'text-xs text-noctis-dim'

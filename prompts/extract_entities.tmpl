@@ -25,8 +25,8 @@ For each entity, extract:
 
 Provenance rules for relationships:
 - When provenance is "first_party": Full relationship vocabulary is available: "uses", "targets", "deploys", "attributed_to", "variant_of", "exploits", "associated_with"
-- When provenance is "third_party_reporting": Only use "referenced_in" and "associated_with" relationships. Do NOT use "uses", "deploys", "targets", or "exploits" — these imply direct observation.
-- When provenance is "unknown": Only use "associated_with" and "referenced_in" relationships.
+- When provenance is "third_party_reporting": ONLY use "referenced_in". Do NOT use "associated_with", "uses", "deploys", "targets", or "exploits" — third-party reporting describes, it does not observe.
+- When provenance is "unknown": ONLY use "referenced_in". Do NOT use "associated_with" or any action-oriented relationship.
 
 For relationships between entities, extract:
 - source: the entity name (must match a name from the entities list)

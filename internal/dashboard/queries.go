@@ -542,6 +542,17 @@ func approveSource(ctx context.Context, pool *pgxpool.Pool, id string) error {
 	return nil
 }
 
+func rejectSource(ctx context.Context, pool *pgxpool.Pool, id string) error {
+	ct, err := pool.Exec(ctx, `UPDATE sources SET status = 'rejected', updated_at = NOW() WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("reject source: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return fmt.Errorf("source not found: %s", id)
+	}
+	return nil
+}
+
 func addSource(ctx context.Context, pool *pgxpool.Pool, sourceType, identifier string) (string, error) {
 	var id string
 	err := pool.QueryRow(ctx, `

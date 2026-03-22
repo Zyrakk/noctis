@@ -188,6 +188,13 @@ func (p *IngestPipeline) Run(ctx context.Context) {
 		log.Printf("ingest: backfilled %d entities from existing IOCs", count)
 	}
 
+	// Cleanup stale associated_with edges from non-observed entities.
+	if count, err := p.archive.CleanupAssociatedWithEdges(ctx); err != nil {
+		log.Printf("ingest: edge cleanup error: %v", err)
+	} else if count > 0 {
+		log.Printf("ingest: cleaned up %d associated_with edges → referenced_in", count)
+	}
+
 	// Backfill IOC sightings on startup.
 	if count, err := p.archive.BackfillIOCSightings(ctx); err != nil {
 		log.Printf("ingest: ioc sightings backfill error: %v", err)

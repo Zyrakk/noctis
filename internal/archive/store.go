@@ -361,6 +361,23 @@ ON CONFLICT (ioc_type, ioc_value, raw_content_id) DO NOTHING`
 	return int(ct.RowsAffected()), nil
 }
 
+// CleanupAssociatedWithEdges remaps associated_with edges to referenced_in
+// when both source and target entities are non-observed. This corrects edges
+// created before the stricter relationship rules were enforced.
+func (s *Store) CleanupAssociatedWithEdges(ctx context.Context) (int64, error) {
+	const query = `
+UPDATE edges SET relationship = 'referenced_in'
+WHERE relationship = 'associated_with'
+AND source_id IN (SELECT id FROM entities WHERE properties->>'observed' IS NULL OR properties->>'observed' = 'false')
+AND target_id IN (SELECT id FROM entities WHERE properties->>'observed' IS NULL OR properties->>'observed' = 'false')`
+
+	ct, err := s.pool.Exec(ctx, query)
+	if err != nil {
+		return 0, fmt.Errorf("archive: cleanup associated_with edges: %w", err)
+	}
+	return ct.RowsAffected(), nil
+}
+
 // FindSharedIOCs finds IOC values that appear in findings from multiple distinct sources.
 func (s *Store) FindSharedIOCs(ctx context.Context, minSources int) ([]SharedIOCResult, error) {
 	const query = `

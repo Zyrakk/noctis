@@ -60,6 +60,7 @@ func (s *Server) registerRoutes() {
 	s.mux.Handle("GET /api/iocs", s.authMiddleware(http.HandlerFunc(s.handleIOCs)))
 	s.mux.Handle("GET /api/sources", s.authMiddleware(http.HandlerFunc(s.handleSources)))
 	s.mux.Handle("POST /api/sources/{id}/approve", s.authMiddleware(http.HandlerFunc(s.handleApproveSource)))
+	s.mux.Handle("POST /api/sources/{id}/reject", s.authMiddleware(http.HandlerFunc(s.handleRejectSource)))
 	s.mux.Handle("POST /api/sources", s.authMiddleware(http.HandlerFunc(s.handleAddSource)))
 	s.mux.Handle("GET /api/categories", s.authMiddleware(http.HandlerFunc(s.handleCategories)))
 	s.mux.Handle("GET /api/timeline", s.authMiddleware(http.HandlerFunc(s.handleTimeline)))

@@ -387,12 +387,11 @@ func (p *IngestPipeline) bridgeLLMEntitiesToGraph(ctx context.Context, entry arc
 			continue
 		}
 
-		// Safety net: non-observed entities can only have weak relationships,
-		// regardless of what the LLM returned.
+		// Safety net: if neither entity is observed, force weak relationship.
 		relType := rel.Relationship
-		if !nameObserved[rel.Source] {
-			if relType != "referenced_in" && relType != "associated_with" {
-				relType = "associated_with"
+		if !nameObserved[rel.Source] && !nameObserved[rel.Target] {
+			if relType != "referenced_in" && relType != "mentioned_in" {
+				relType = "referenced_in"
 			}
 		}
 

@@ -11,6 +11,25 @@ import (
 	"github.com/Zyrakk/noctis/internal/archive"
 )
 
+// toolWhitelist contains entity names that are legitimate security/forensics
+// tools and should not serve as the sole basis for campaign clustering.
+// If ALL shared entities in a cluster are whitelisted, the correlation is skipped.
+var toolWhitelist = map[string]bool{
+	// Forensics & IR tools
+	"volatility": true, "dumpit": true, "autopsy": true, "ftk": true,
+	"process monitor": true, "procmon": true, "wireshark": true, "tcpdump": true,
+	"velociraptor": true,
+	// Offensive security / red team tools (commonly discussed in reporting)
+	"mimikatz": true, "bloodhound": true, "sharphound": true, "rubeus": true,
+	"impacket": true, "crackmapexec": true, "netexec": true, "responder": true,
+	"hashcat": true, "john the ripper": true, "nmap": true, "burp suite": true,
+	"metasploit": true, "nuclei": true,
+	// Generic technique names that aren't campaigns
+	"credential_theft": true, "credential_dumping": true, "memory_dump": true,
+	"lateral_movement": true, "privilege_escalation": true, "dll_sideloading": true,
+	"phishing": true,
+}
+
 // correlationStore defines the archive operations used by the correlation engine.
 // The real archive.Store satisfies this interface.
 type correlationStore interface {
@@ -340,6 +359,18 @@ func (p *IngestPipeline) correlateEntityClusters(ctx context.Context) (correlati
 	allResults = append(allResults, malwareResults...)
 
 	for _, r := range allResults {
+		// Skip clusters where ALL shared entities are whitelisted tools.
+		allWhitelisted := true
+		for _, name := range r.SharedNames {
+			if !toolWhitelist[strings.ToLower(strings.TrimSpace(name))] {
+				allWhitelisted = false
+				break
+			}
+		}
+		if allWhitelisted && len(r.SharedNames) > 0 {
+			continue
+		}
+
 		signalCount := r.SharedCount
 
 		a, b := r.EntityA, r.EntityB

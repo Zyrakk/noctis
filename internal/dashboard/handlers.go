@@ -115,6 +115,25 @@ func (s *Server) handleApproveSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "approved"})
 }
 
+func (s *Server) handleRejectSource(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing id"})
+		return
+	}
+
+	if err := rejectSource(r.Context(), s.pool, id); err != nil {
+		slog.Error("dashboard: reject source", "err", err, "id", id)
+		if strings.Contains(err.Error(), "not found") {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "source not found"})
+		} else {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to reject source"})
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
+}
+
 func (s *Server) handleAddSource(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 	var req struct {
