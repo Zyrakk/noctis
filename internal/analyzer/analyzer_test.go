@@ -187,8 +187,8 @@ func TestAnalyzer_ExtractIOCs_FiltersMalicious(t *testing.T) {
 func TestAnalyzer_AssessSeverity(t *testing.T) {
 	client := &mockLLMClient{
 		responses: map[string]string{
-			// severity.tmpl contains the word "Assess"
-			"Assess": `{"severity":"critical","reasoning":"Active credentials"}`,
+			// severity.tmpl contains "Assess the severity"
+			"Assess the severity": `{"severity":"critical","reasoning":"Active credentials"}`,
 		},
 	}
 

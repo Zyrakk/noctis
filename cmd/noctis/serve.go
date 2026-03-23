@@ -117,18 +117,43 @@ func newServeCmd() *cobra.Command {
 			// Build archive store
 			archiveStore := archive.New(pool)
 
-			// Build LLM client
-			llmClient := llm.NewOpenAICompatClient(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.LLM.Model)
+			// Build LLM clients
+			// GLM-5 — smart model for summarization and entity extraction
+			fullClient := llm.NewOpenAICompatClient(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.LLM.Model)
 
 			// Build Prometheus metrics
 			metrics := dispatcher.NewPrometheusMetrics(prometheus.DefaultRegisterer)
 
-			// Build analyzer
+			// Build analyzers
 			promptsDir := "/prompts"
 			if dir := os.Getenv("NOCTIS_PROMPTS_DIR"); dir != "" {
 				promptsDir = dir
 			}
-			llmAnalyzer := analyzer.New(llmClient, promptsDir)
+			fullAnalyzer := analyzer.New(fullClient, promptsDir)
+
+			// GLM-4-Plus — fast model for classification (falls back to full if unconfigured)
+			var classifyAnalyzer *analyzer.Analyzer
+			if cfg.LLMFast.Model != "" {
+				fastClient := llm.NewOpenAICompatClient(cfg.LLMFast.BaseURL, cfg.LLMFast.APIKey, cfg.LLMFast.Model)
+				classifyAnalyzer = analyzer.New(fastClient, promptsDir)
+				slog.Info("dual LLM mode", "fast", cfg.LLMFast.Model, "full", cfg.LLM.Model)
+			} else {
+				classifyAnalyzer = fullAnalyzer
+				slog.Info("single LLM mode", "model", cfg.LLM.Model)
+			}
+
+			// Resolve concurrency limits.
+			classifyConcurrency := cfg.LLMFast.MaxConcurrency
+			if classifyConcurrency <= 0 {
+				classifyConcurrency = cfg.LLM.MaxConcurrent
+			}
+			if classifyConcurrency <= 0 {
+				classifyConcurrency = 2
+			}
+			extractConcurrency := cfg.LLM.MaxConcurrent
+			if extractConcurrency <= 0 {
+				extractConcurrency = 2
+			}
 
 			// Build discovery engine
 			discoveryEngine := discovery.NewEngine(pool, cfg.Discovery)
@@ -164,11 +189,14 @@ func newServeCmd() *cobra.Command {
 			ingestPipeline, err := ingest.NewIngestPipeline(
 				archiveStore,
 				cfg.Matching.Rules,
-				llmAnalyzer,
+				classifyAnalyzer,
+				fullAnalyzer,
 				metrics,
 				alertFn,
 				cfg.Collection,
 				cfg.Correlation,
+				classifyConcurrency,
+				extractConcurrency,
 			)
 			if err != nil {
 				return fmt.Errorf("creating ingest pipeline: %w", err)

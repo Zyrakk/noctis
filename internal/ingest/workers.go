@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Zyrakk/noctis/internal/analyzer"
@@ -14,10 +13,6 @@ import (
 )
 
 const (
-	// defaultRateLimitDelay is the minimum time between LLM API calls per
-	// rate limiter instance, used to avoid burning through the GLM quota.
-	defaultRateLimitDelay = 3 * time.Second
-
 	// workerIdleInterval is how long workers sleep when there is no work.
 	workerIdleInterval = 30 * time.Second
 
@@ -31,52 +26,40 @@ const (
 // for reprocessing.
 const currentClassificationVersion = 3
 
-// rateLimiter enforces a minimum delay between LLM API calls. It is safe for
-// concurrent use and should be shared across all workers of the same type.
-type rateLimiter struct {
-	minDelay time.Duration
-	mu       sync.Mutex
-	lastCall time.Time
+// concurrencyLimiter limits the number of concurrent in-flight requests.
+// It uses a buffered channel as a counting semaphore.
+type concurrencyLimiter struct {
+	sem chan struct{}
 }
 
-func newRateLimiter(minDelay time.Duration) *rateLimiter {
-	return &rateLimiter{minDelay: minDelay}
-}
-
-// Wait blocks until minDelay has elapsed since the last call. Returns
-// ctx.Err() if the context is cancelled while waiting.
-// The time slot is claimed optimistically under the lock to prevent
-// concurrent workers from bypassing the delay (TOCTOU fix).
-func (r *rateLimiter) Wait(ctx context.Context) error {
-	r.mu.Lock()
-
-	now := time.Now()
-	elapsed := now.Sub(r.lastCall)
-	remaining := r.minDelay - elapsed
-
-	if remaining <= 0 {
-		r.lastCall = now
-		r.mu.Unlock()
-		return nil
+func newConcurrencyLimiter(maxConcurrent int) *concurrencyLimiter {
+	if maxConcurrent <= 0 {
+		maxConcurrent = 2
 	}
+	return &concurrencyLimiter{
+		sem: make(chan struct{}, maxConcurrent),
+	}
+}
 
-	// Claim the slot now so the next caller sees the updated lastCall.
-	r.lastCall = now.Add(remaining)
-	r.mu.Unlock()
-
+// Acquire blocks until a slot is available or ctx is cancelled.
+func (c *concurrencyLimiter) Acquire(ctx context.Context) error {
 	select {
-	case <-time.After(remaining):
+	case c.sem <- struct{}{}:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
+// Release frees a slot. Must be called after Acquire.
+func (c *concurrencyLimiter) Release() {
+	<-c.sem
+}
+
 // classificationWorker polls the archive for unclassified content and runs
-// LLM classification on each entry. It shares a rate limiter with all other
-// classification workers to throttle GLM API usage.
+// LLM classification on each entry. Classification uses the fast analyzer
+// (GLM-4-Plus) and summarization uses the full analyzer (GLM-5).
 func (p *IngestPipeline) classificationWorker(ctx context.Context, workerID int) {
-	limiter := p.classifyLimiter()
 	batchSize := p.workerCfg.ClassificationBatchSize
 	var totalClassified int
 
@@ -109,15 +92,15 @@ func (p *IngestPipeline) classificationWorker(ctx context.Context, workerID int)
 				return
 			}
 
-			if err := limiter.Wait(ctx); err != nil {
-				return
-			}
-
 			// Build a minimal Finding for the analyzer.
 			finding := findingFromRawContent(entry)
 
-			// Classify.
-			classResult, err := p.analyzer.Classify(ctx, &finding, nil)
+			// Classify (GLM-4-Plus via classifySem).
+			if err := p.classifySem.Acquire(ctx); err != nil {
+				return
+			}
+			classResult, err := p.classifyAnalyzer.Classify(ctx, &finding, nil)
+			p.classifySem.Release()
 			if err != nil {
 				log.Printf("ingest: classification worker %d: classify error for %s: %v", workerID, entry.ID, err)
 				continue
@@ -149,13 +132,12 @@ func (p *IngestPipeline) classificationWorker(ctx context.Context, workerID int)
 				}
 			}
 
-			// Wait before the next LLM call (summarize).
-			if err := limiter.Wait(ctx); err != nil {
+			// Summarize (GLM-5 via extractSem).
+			if err := p.extractSem.Acquire(ctx); err != nil {
 				return
 			}
-
-			// Summarize.
-			summary, err := p.analyzer.Summarize(ctx, &finding, category, severity)
+			summary, err := p.fullAnalyzer.Summarize(ctx, &finding, category, severity)
+			p.extractSem.Release()
 			if err != nil {
 				log.Printf("ingest: classification worker %d: summarize error for %s: %v", workerID, entry.ID, err)
 				summary = ""
@@ -176,10 +158,9 @@ func (p *IngestPipeline) classificationWorker(ctx context.Context, workerID int)
 }
 
 // entityExtractionWorker polls the archive for classified-but-not-extracted
-// content and runs LLM entity extraction on each entry. It shares a rate
-// limiter with all other entity extraction workers.
+// content and runs LLM entity extraction on each entry using the full
+// analyzer (GLM-5) gated by the extract semaphore.
 func (p *IngestPipeline) entityExtractionWorker(ctx context.Context, workerID int) {
-	limiter := p.extractLimiter()
 	batchSize := p.workerCfg.ClassificationBatchSize // reuse same batch size
 	var totalExtracted int
 
@@ -212,13 +193,13 @@ func (p *IngestPipeline) entityExtractionWorker(ctx context.Context, workerID in
 				return
 			}
 
-			if err := limiter.Wait(ctx); err != nil {
-				return
-			}
-
 			finding := findingFromRawContent(entry)
 
-			iocs, err := p.analyzer.ExtractIOCs(ctx, &finding)
+			if err := p.extractSem.Acquire(ctx); err != nil {
+				return
+			}
+			iocs, err := p.fullAnalyzer.ExtractIOCs(ctx, &finding)
+			p.extractSem.Release()
 			if err != nil {
 				log.Printf("ingest: entity extraction worker %d: extract error for %s: %v", workerID, entry.ID, err)
 				continue
@@ -238,12 +219,12 @@ func (p *IngestPipeline) entityExtractionWorker(ctx context.Context, workerID in
 
 			// LLM entity extraction for non-irrelevant findings.
 			if entry.Category != "" && entry.Category != "irrelevant" {
-				if err := limiter.Wait(ctx); err != nil {
+				if err := p.extractSem.Acquire(ctx); err != nil {
 					return
 				}
-
 				finding2 := findingFromRawContent(entry)
-				result, err := p.analyzer.ExtractEntities(ctx, &finding2, entry.Category, entry.SourceName, entry.SourceType, entry.Provenance)
+				result, err := p.fullAnalyzer.ExtractEntities(ctx, &finding2, entry.Category, entry.SourceName, entry.SourceType, entry.Provenance)
+				p.extractSem.Release()
 				if err != nil {
 					log.Printf("ingest: entity extraction worker %d: extract entities error for %s: %v", workerID, entry.ID, err)
 				} else {
@@ -402,19 +383,6 @@ func (p *IngestPipeline) bridgeLLMEntitiesToGraph(ctx context.Context, entry arc
 			log.Printf("ingest: entity bridge worker %d: upsert llm edge: %v", workerID, err)
 		}
 	}
-}
-
-// classifyLimiter returns the shared rate limiter for classification workers.
-// It is lazily initialised on first access.
-func (p *IngestPipeline) classifyLimiter() *rateLimiter {
-	p.initLimitersOnce.Do(p.initLimiters)
-	return p.classifyRL
-}
-
-// extractLimiter returns the shared rate limiter for entity extraction workers.
-func (p *IngestPipeline) extractLimiter() *rateLimiter {
-	p.initLimitersOnce.Do(p.initLimiters)
-	return p.extractRL
 }
 
 // findingFromRawContent creates a minimal models.Finding from an archive entry

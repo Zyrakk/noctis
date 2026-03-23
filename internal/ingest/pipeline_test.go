@@ -113,7 +113,7 @@ func makeFakeLLM() *fakeLLMClient {
 		responses: map[string]string{
 			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party","severity":"critical","reasoning":"Active credentials exposed"}`,
 			"Extract":  `[{"type":"domain","value":"example.com","context":"leaked creds","malicious":true}]`,
-			"Assess":   `{"severity":"critical","reasoning":"Active credentials exposed"}`,
+			"Assess the severity":   `{"severity":"critical","reasoning":"Active credentials exposed"}`,
 			"Write":    "Credentials for example.com were leaked on Telegram.",
 		},
 	}
@@ -315,40 +315,44 @@ func TestIngestPipeline_Dedup(t *testing.T) {
 	}
 }
 
-// TestRateLimiter_EnforcesDelay verifies that the rate limiter blocks for at
-// least minDelay between consecutive calls.
-func TestRateLimiter_EnforcesDelay(t *testing.T) {
-	delay := 100 * time.Millisecond
-	rl := newRateLimiter(delay)
+// TestConcurrencyLimiter_LimitsSlots verifies that the concurrency limiter
+// blocks when all slots are taken and unblocks when a slot is released.
+func TestConcurrencyLimiter_LimitsSlots(t *testing.T) {
+	cl := newConcurrencyLimiter(2)
 	ctx := context.Background()
 
-	start := time.Now()
-
-	if err := rl.Wait(ctx); err != nil {
-		t.Fatalf("first Wait error: %v", err)
+	// Acquire both slots.
+	if err := cl.Acquire(ctx); err != nil {
+		t.Fatalf("first Acquire error: %v", err)
+	}
+	if err := cl.Acquire(ctx); err != nil {
+		t.Fatalf("second Acquire error: %v", err)
 	}
 
-	if err := rl.Wait(ctx); err != nil {
-		t.Fatalf("second Wait error: %v", err)
+	// Third acquire should block. Use a short timeout to verify.
+	blockCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	err := cl.Acquire(blockCtx)
+	if err == nil {
+		t.Fatal("third Acquire succeeded; want block/timeout")
 	}
 
-	elapsed := time.Since(start)
-	if elapsed < delay {
-		t.Errorf("elapsed = %v; want >= %v", elapsed, delay)
+	// Release one slot, then acquire should succeed.
+	cl.Release()
+	if err := cl.Acquire(ctx); err != nil {
+		t.Fatalf("Acquire after Release error: %v", err)
 	}
 }
 
-// TestRateLimiter_RespectsContext verifies that Wait() returns the context
-// error immediately when the context is already cancelled, without waiting
-// the full delay.
-func TestRateLimiter_RespectsContext(t *testing.T) {
-	delay := 5 * time.Second
-	rl := newRateLimiter(delay)
-
-	// First call sets lastCall.
+// TestConcurrencyLimiter_RespectsContext verifies that Acquire returns the
+// context error immediately when the context is already cancelled.
+func TestConcurrencyLimiter_RespectsContext(t *testing.T) {
+	cl := newConcurrencyLimiter(1)
 	ctx := context.Background()
-	if err := rl.Wait(ctx); err != nil {
-		t.Fatalf("first Wait error: %v", err)
+
+	// Take the only slot.
+	if err := cl.Acquire(ctx); err != nil {
+		t.Fatalf("first Acquire error: %v", err)
 	}
 
 	// Cancel immediately.
@@ -356,17 +360,17 @@ func TestRateLimiter_RespectsContext(t *testing.T) {
 	cancel()
 
 	start := time.Now()
-	err := rl.Wait(cancelCtx)
+	err := cl.Acquire(cancelCtx)
 	elapsed := time.Since(start)
 
 	if err == nil {
-		t.Fatal("Wait returned nil; want context error")
+		t.Fatal("Acquire returned nil; want context error")
 	}
 	if err != context.Canceled {
-		t.Errorf("Wait error = %v; want context.Canceled", err)
+		t.Errorf("Acquire error = %v; want context.Canceled", err)
 	}
-	if elapsed > 500*time.Millisecond {
-		t.Errorf("Wait took %v; should have returned near-immediately on cancelled context", elapsed)
+	if elapsed > 100*time.Millisecond {
+		t.Errorf("Acquire took %v; should have returned near-immediately on cancelled context", elapsed)
 	}
 }
 

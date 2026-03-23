@@ -25,6 +25,7 @@ type Config struct {
 	Sources     SourcesConfig   `yaml:"sources"`
 	Matching    MatchingConfig  `yaml:"matching"`
 	LLM         LLMConfig       `yaml:"llm"`
+	LLMFast     LLMFastConfig   `yaml:"llmFast"`
 	Profiling   ProfilingConfig `yaml:"profiling"`
 	Canary      CanaryConfig    `yaml:"canary"`
 	Dispatch    DispatchConfig  `yaml:"dispatch"`
@@ -192,6 +193,16 @@ type RuleConfig struct {
 	Type     string   `yaml:"type"`
 	Patterns []string `yaml:"patterns"`
 	Severity string   `yaml:"severity"`
+}
+
+// LLMFastConfig configures a secondary (fast) LLM model used for high-volume
+// structured tasks like classification. Falls back to the primary LLM if unset.
+type LLMFastConfig struct {
+	Provider       string `yaml:"provider"`
+	BaseURL        string `yaml:"baseURL"`
+	Model          string `yaml:"model"`
+	APIKey         string `yaml:"apiKey"`
+	MaxConcurrency int    `yaml:"maxConcurrency"`
 }
 
 // LLMConfig configures the language model client.

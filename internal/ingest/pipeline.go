@@ -22,25 +22,19 @@ import (
 // IngestPipeline is the core processing engine. Collectors call Process() for
 // each finding; Run() starts the background workers.
 type IngestPipeline struct {
-	archive   *archive.Store
-	matcher   *matcher.Matcher
-	analyzer  *analyzer.Analyzer
-	metrics   *dispatcher.PrometheusMetrics
-	alertFn   func(models.EnrichedFinding)
-	workerCfg config.CollectionConfig
-	corrCfg   config.CorrelationConfig
-	corrStore correlationStore
+	archive          *archive.Store
+	matcher          *matcher.Matcher
+	classifyAnalyzer *analyzer.Analyzer // GLM-4-Plus (fast, high-volume classification)
+	fullAnalyzer     *analyzer.Analyzer // GLM-5 (smart, summarization + extraction)
+	metrics          *dispatcher.PrometheusMetrics
+	alertFn          func(models.EnrichedFinding)
+	workerCfg        config.CollectionConfig
+	corrCfg          config.CorrelationConfig
+	corrStore        correlationStore
 
-	// Rate limiters are shared across workers of the same type.
-	initLimitersOnce sync.Once
-	classifyRL       *rateLimiter
-	extractRL        *rateLimiter
-}
-
-// initLimiters lazily creates the shared rate limiters.
-func (p *IngestPipeline) initLimiters() {
-	p.classifyRL = newRateLimiter(defaultRateLimitDelay)
-	p.extractRL = newRateLimiter(defaultRateLimitDelay)
+	// Concurrency limiters replace the old time-delay rate limiters.
+	classifySem *concurrencyLimiter // limits concurrent classification calls (GLM-4-Plus)
+	extractSem  *concurrencyLimiter // limits concurrent extraction/summarize calls (GLM-5)
 }
 
 // NewIngestPipeline creates a pipeline that archives every finding and runs
@@ -48,11 +42,14 @@ func (p *IngestPipeline) initLimiters() {
 func NewIngestPipeline(
 	archiveStore *archive.Store,
 	matcherRules []config.RuleConfig,
-	az *analyzer.Analyzer,
+	classifyAnalyzer *analyzer.Analyzer,
+	fullAnalyzer *analyzer.Analyzer,
 	metrics *dispatcher.PrometheusMetrics,
 	alertFn func(models.EnrichedFinding),
 	workerCfg config.CollectionConfig,
 	corrCfg config.CorrelationConfig,
+	classifyConcurrency int,
+	extractConcurrency int,
 ) (*IngestPipeline, error) {
 	m, err := matcher.New(matcherRules)
 	if err != nil {
@@ -61,24 +58,27 @@ func NewIngestPipeline(
 
 	// Apply defaults for zero-value config fields.
 	if workerCfg.ClassificationWorkers <= 0 {
-		workerCfg.ClassificationWorkers = 4
+		workerCfg.ClassificationWorkers = 8
 	}
 	if workerCfg.EntityExtractionWorkers <= 0 {
-		workerCfg.EntityExtractionWorkers = 1
+		workerCfg.EntityExtractionWorkers = 2
 	}
 	if workerCfg.ClassificationBatchSize <= 0 {
 		workerCfg.ClassificationBatchSize = 10
 	}
 
 	return &IngestPipeline{
-		archive:   archiveStore,
-		matcher:   m,
-		analyzer:  az,
-		metrics:   metrics,
-		alertFn:   alertFn,
-		workerCfg: workerCfg,
-		corrCfg:   corrCfg,
-		corrStore: archiveStore,
+		archive:          archiveStore,
+		matcher:          m,
+		classifyAnalyzer: classifyAnalyzer,
+		fullAnalyzer:     fullAnalyzer,
+		metrics:          metrics,
+		alertFn:          alertFn,
+		workerCfg:        workerCfg,
+		corrCfg:          corrCfg,
+		corrStore:        archiveStore,
+		classifySem:      newConcurrencyLimiter(classifyConcurrency),
+		extractSem:       newConcurrencyLimiter(extractConcurrency),
 	}, nil
 }
 
@@ -114,9 +114,11 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		Severity:     result.Severity,
 	}
 
-	// 4a. Classify.
+	// 4a. Classify (GLM-4-Plus).
 	var provenance string
-	classResult, err := p.analyzer.Classify(ctx, &f, result.MatchedRules)
+	p.classifySem.Acquire(ctx)
+	classResult, err := p.classifyAnalyzer.Classify(ctx, &f, result.MatchedRules)
+	p.classifySem.Release()
 	if err != nil {
 		log.Printf("ingest: classify error for %s: %v", f.ID, err)
 	} else {
@@ -131,8 +133,10 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		}
 	}
 
-	// 4b. Extract IOCs.
-	iocs, err := p.analyzer.ExtractIOCs(ctx, &f)
+	// 4b. Extract IOCs (GLM-5).
+	p.extractSem.Acquire(ctx)
+	iocs, err := p.fullAnalyzer.ExtractIOCs(ctx, &f)
+	p.extractSem.Release()
 	if err != nil {
 		log.Printf("ingest: extract IOCs error for %s: %v", f.ID, err)
 	} else {
@@ -149,8 +153,10 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		}
 	}
 
-	// 4d. Summarize.
-	summary, err := p.analyzer.Summarize(ctx, &f, string(enriched.Category), enriched.Severity)
+	// 4d. Summarize (GLM-5).
+	p.extractSem.Acquire(ctx)
+	summary, err := p.fullAnalyzer.Summarize(ctx, &f, string(enriched.Category), enriched.Severity)
+	p.extractSem.Release()
 	if err != nil {
 		log.Printf("ingest: summarize error for %s: %v", f.ID, err)
 	} else {
