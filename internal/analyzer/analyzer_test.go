@@ -81,7 +81,7 @@ func TestStripCodeFences(t *testing.T) {
 func TestAnalyzer_Classify_WithCodeFences(t *testing.T) {
 	client := &mockLLMClient{
 		responses: map[string]string{
-			"Classify": "```json\n{\"category\":\"malware_sample\",\"confidence\":0.88,\"provenance\":\"third_party_reporting\"}\n```",
+			"Classify": "```json\n{\"category\":\"malware_sample\",\"confidence\":0.88,\"provenance\":\"third_party_reporting\",\"severity\":\"high\",\"reasoning\":\"New malware variant with IOCs\"}\n```",
 		},
 	}
 
@@ -101,7 +101,7 @@ func TestAnalyzer_Classify(t *testing.T) {
 	client := &mockLLMClient{
 		responses: map[string]string{
 			// classify.tmpl contains the word "Classify"
-			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party"}`,
+			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party","severity":"critical","reasoning":"Active credentials exposed"}`,
 		},
 	}
 
@@ -118,6 +118,12 @@ func TestAnalyzer_Classify(t *testing.T) {
 	}
 	if result.Provenance != "first_party" {
 		t.Errorf("Provenance = %q; want %q", result.Provenance, "first_party")
+	}
+	if result.Severity != "critical" {
+		t.Errorf("Severity = %q; want %q", result.Severity, "critical")
+	}
+	if result.Reasoning != "Active credentials exposed" {
+		t.Errorf("Reasoning = %q; want %q", result.Reasoning, "Active credentials exposed")
 	}
 }
 

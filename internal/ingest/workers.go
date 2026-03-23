@@ -16,7 +16,7 @@ import (
 const (
 	// defaultRateLimitDelay is the minimum time between LLM API calls per
 	// rate limiter instance, used to avoid burning through the GLM quota.
-	defaultRateLimitDelay = 2 * time.Second
+	defaultRateLimitDelay = 500 * time.Millisecond
 
 	// workerIdleInterval is how long workers sleep when there is no work.
 	workerIdleInterval = 30 * time.Second
@@ -29,7 +29,7 @@ const (
 // pipeline changes materially. Workers stamp this version on each
 // processed entry; on startup, entries with an older version are reset
 // for reprocessing.
-const currentClassificationVersion = 2
+const currentClassificationVersion = 3
 
 // rateLimiter enforces a minimum delay between LLM API calls. It is safe for
 // concurrent use and should be shared across all workers of the same type.
@@ -138,13 +138,15 @@ func (p *IngestPipeline) classificationWorker(ctx context.Context, workerID int)
 				tags = append(tags, "needs_review")
 			}
 
-			// Assess severity.
+			// Extract severity from the merged classify response.
 			severity := models.SeverityInfo
-			sev, err := p.analyzer.AssessSeverity(ctx, &finding, category, nil)
-			if err != nil {
-				log.Printf("ingest: classification worker %d: severity error for %s: %v", workerID, entry.ID, err)
-			} else {
-				severity = sev
+			if classResult.Severity != "" {
+				sev, err := models.ParseSeverity(classResult.Severity)
+				if err != nil {
+					log.Printf("ingest: classification worker %d: severity parse error for %s: %v", workerID, entry.ID, err)
+				} else {
+					severity = sev
+				}
 			}
 
 			// Wait before the next LLM call (summarize).

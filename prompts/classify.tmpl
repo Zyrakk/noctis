@@ -1,11 +1,14 @@
-You are a cyber threat intelligence analyst. Classify the following content found on {{.Source}} (channel/site: {{.SourceName}}).
+You are a cyber threat intelligence analyst. Classify the following content and assess its severity.
 
-The content matched these detection rules: {{range .MatchedRules}}{{.}}, {{end}}
+Source: {{.Source}} (channel/site: {{.SourceName}})
+Matched detection rules: {{range .MatchedRules}}{{.}}, {{end}}
 
 Content:
 ---
 {{.Content}}
 ---
+
+## Task 1: Classification
 
 Classify into exactly ONE of these categories:
 - credential_leak: Leaked usernames, passwords, session tokens, API keys
@@ -36,5 +39,36 @@ Provenance examples:
 - A GitHub advisory for CVE-2024-XXXX -> "third_party_reporting"
 - A forum post by an unknown user discussing malware techniques generically -> "unknown"
 
-Respond with ONLY a JSON object:
-{"category": "<category>", "confidence": <0.0-1.0>, "provenance": "<first_party|third_party_reporting|unknown>"}
+## Task 2: Severity Assessment
+
+Based on the content and your classification above, assess the severity.
+
+Consider:
+1. How actionable is this intelligence?
+2. Is there immediate risk to the monitored entities?
+3. How specific and credible is the threat?
+4. Are there verifiable IOCs?
+
+Severity levels:
+- critical: Immediate action required. Assign critical when ANY of these apply:
+  * Active breach indicators (live credentials, canary triggered, confirmed compromise)
+  * Working remote code execution (RCE) exploit with PoC for a widely deployed target
+  * Credential leaks containing active, valid credentials (not old/rotated dumps)
+  * Zero-day vulnerabilities being actively exploited in the wild
+  * Ransomware deployment targeting specific organizations
+- high: Significant threat requiring prompt investigation. Examples:
+  * Exploit PoC for a critical CVE (pre-auth, high CVSS) without confirmed wild exploitation yet
+  * Access broker selling access to relevant infrastructure
+  * New malware variant with IOCs but no confirmed targeting of monitored entities
+  * Credential leaks of unknown freshness
+- medium: Notable activity worth tracking. Examples:
+  * Vulnerability disclosures without working exploits
+  * Threat actor discussions that reference relevant targets
+  * Stale or partial credential dumps
+- low: Background noise with some intelligence value
+- info: Contextual information, no direct threat
+
+## Output
+
+Respond with ONLY a JSON object containing both classification and severity:
+{"category": "<category>", "confidence": <0.0-1.0>, "provenance": "<first_party|third_party_reporting|unknown>", "severity": "<critical|high|medium|low|info>", "reasoning": "<one sentence explaining severity>"}

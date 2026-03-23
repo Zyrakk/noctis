@@ -61,7 +61,7 @@ func NewIngestPipeline(
 
 	// Apply defaults for zero-value config fields.
 	if workerCfg.ClassificationWorkers <= 0 {
-		workerCfg.ClassificationWorkers = 2
+		workerCfg.ClassificationWorkers = 4
 	}
 	if workerCfg.EntityExtractionWorkers <= 0 {
 		workerCfg.EntityExtractionWorkers = 1
@@ -139,12 +139,14 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		enriched.IOCs = iocs
 	}
 
-	// 4c. Assess severity — upgrade if LLM says higher.
-	llmSev, err := p.analyzer.AssessSeverity(ctx, &f, string(enriched.Category), result.MatchedRules)
-	if err != nil {
-		log.Printf("ingest: severity assessment error for %s: %v", f.ID, err)
-	} else if llmSev > enriched.Severity {
-		enriched.Severity = llmSev
+	// 4c. Extract severity from the merged classify response.
+	if classResult != nil && classResult.Severity != "" {
+		llmSev, err := models.ParseSeverity(classResult.Severity)
+		if err != nil {
+			log.Printf("ingest: severity parse error for %s: %v", f.ID, err)
+		} else if llmSev > enriched.Severity {
+			enriched.Severity = llmSev
+		}
 	}
 
 	// 4d. Summarize.

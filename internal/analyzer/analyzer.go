@@ -16,10 +16,13 @@ import (
 )
 
 // classifyResponse holds the JSON result from the classify prompt.
+// Since v3 the classify prompt also returns severity and reasoning.
 type classifyResponse struct {
 	Category   string  `json:"category"`
 	Confidence float64 `json:"confidence"`
 	Provenance string  `json:"provenance"`
+	Severity   string  `json:"severity"`
+	Reasoning  string  `json:"reasoning"`
 }
 
 // severityResponse holds the JSON result from the severity prompt.

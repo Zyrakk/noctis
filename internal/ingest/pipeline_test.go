@@ -85,7 +85,7 @@ func (f *fakeLLMClient) ChatCompletion(_ context.Context, messages []llm.Message
 			return &llm.Response{Content: resp}, nil
 		}
 	}
-	return &llm.Response{Content: `{"category":"irrelevant","confidence":0.5}`}, nil
+	return &llm.Response{Content: `{"category":"irrelevant","confidence":0.5,"provenance":"unknown","severity":"info","reasoning":"No actionable intelligence"}`}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +111,7 @@ func makeTestRules() []config.RuleConfig {
 func makeFakeLLM() *fakeLLMClient {
 	return &fakeLLMClient{
 		responses: map[string]string{
-			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party"}`,
+			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party","severity":"critical","reasoning":"Active credentials exposed"}`,
 			"Extract":  `[{"type":"domain","value":"example.com","context":"leaked creds","malicious":true}]`,
 			"Assess":   `{"severity":"critical","reasoning":"Active credentials exposed"}`,
 			"Write":    "Credentials for example.com were leaked on Telegram.",

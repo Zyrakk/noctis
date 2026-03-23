@@ -100,7 +100,7 @@ data:
 
       collection:
         archiveAll: true
-        classificationWorkers: 2
+        classificationWorkers: 4
         entityExtractionWorkers: 1
         classificationBatchSize: 10
         maxContentLength: 50000
