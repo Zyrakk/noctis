@@ -27,7 +27,7 @@ function StatCard({ icon: Icon, label, value, color = 'border-noctis-border' }) 
       React.createElement(Icon, { className: 'w-3.5 h-3.5 text-noctis-dim' }),
       React.createElement('span', { className: 'text-xs text-noctis-dim' }, label),
     ),
-    React.createElement('div', { className: 'text-lg lg:text-xl font-mono font-normal text-noctis-text' },
+    React.createElement('div', { className: 'text-xl font-mono font-normal text-noctis-text' },
       value != null ? value.toLocaleString() : React.createElement('span', { className: 'skeleton inline-block w-14 h-6' }),
     ),
   )
@@ -65,7 +65,7 @@ export default function Overview({ navigate }) {
 
   return React.createElement('div', { className: 'space-y-6' },
     // Header
-    React.createElement('div', { className: 'flex items-center justify-between' },
+    React.createElement('div', { className: 'flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1' },
       React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'Overview'),
       React.createElement('div', { className: 'text-sm text-noctis-muted' },
         'Last 7 days',
@@ -73,7 +73,7 @@ export default function Overview({ navigate }) {
     ),
 
     // Stat cards
-    React.createElement('div', { className: 'grid grid-cols-2 lg:grid-cols-5 gap-4' },
+    React.createElement('div', { className: 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4' },
       React.createElement(StatCard, { icon: FileText, label: 'Total Content', value: stats?.totalContent, color: 'border-blue-500/60' }),
       React.createElement(StatCard, { icon: CheckCircle, label: 'Classified', value: stats?.classified, color: 'border-purple-500/60' }),
       React.createElement(StatCard, { icon: Shield, label: 'IOCs Extracted', value: stats?.totalIocs, color: 'border-amber-500/60' }),
@@ -111,7 +111,7 @@ export default function Overview({ navigate }) {
 
         // Legend
         catData.length > 0 && React.createElement('div', {
-          className: 'flex flex-wrap gap-x-4 gap-y-1.5 mt-2 justify-center'
+          className: 'flex flex-wrap gap-x-2 gap-y-1.5 mt-2 justify-center'
         },
           catData.slice(0, 8).map((c, i) =>
             React.createElement('div', {
