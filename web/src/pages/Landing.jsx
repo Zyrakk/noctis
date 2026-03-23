@@ -284,42 +284,72 @@ export default function Landing({ navigate }) {
         React.createElement('h2', {
           className: 'font-heading font-normal text-sm uppercase tracking-widest text-noctis-dim mb-6'
         }, 'Recent Classified Findings'),
-        React.createElement('div', {
-          className: 'border border-noctis-border/50 rounded overflow-hidden'
-        },
-          React.createElement('table', { className: 'w-full text-xs' },
-            React.createElement('thead', null,
-              React.createElement('tr', { className: 'bg-noctis-surface/50 border-b border-noctis-border/50' },
-                ['Category', 'Severity', 'Source', 'Summary'].map(h =>
-                  React.createElement('th', {
-                    key: h,
-                    className: 'px-4 py-2.5 text-left font-medium text-noctis-dim uppercase tracking-wider'
-                  }, h)
+        // Desktop table
+        React.createElement('div', { className: 'hidden lg:block' },
+          React.createElement('div', {
+            className: 'border border-noctis-border/50 rounded overflow-hidden'
+          },
+            React.createElement('table', { className: 'w-full text-xs' },
+              React.createElement('thead', null,
+                React.createElement('tr', { className: 'bg-noctis-surface/50 border-b border-noctis-border/50' },
+                  ['Category', 'Severity', 'Source', 'Summary'].map(h =>
+                    React.createElement('th', {
+                      key: h,
+                      className: 'px-4 py-2.5 text-left font-medium text-noctis-dim uppercase tracking-wider'
+                    }, h)
+                  ),
                 ),
               ),
-            ),
-            React.createElement('tbody', null,
-              recent.map((f, i) => {
-                const sev = f.severity?.toLowerCase() || 'info'
-                const sevClass = sevColors[sev] || sevColors.info
-                return React.createElement('tr', {
-                  key: i,
-                  className: 'border-b border-noctis-border/30 last:border-0'
-                },
-                  React.createElement('td', { className: 'px-4 py-2.5 text-noctis-muted font-mono' },
-                    f.category?.replace(/_/g, ' ') || '-',
-                  ),
-                  React.createElement('td', { className: 'px-4 py-2.5' },
-                    React.createElement('span', {
-                      className: `inline-block px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border ${sevClass}`
-                    }, sev),
-                  ),
-                  React.createElement('td', { className: 'px-4 py-2.5 text-noctis-dim' }, f.sourceType),
-                  React.createElement('td', { className: 'px-4 py-2.5 text-noctis-muted max-w-md truncate' }, f.summary),
-                )
-              }),
+              React.createElement('tbody', null,
+                recent.map((f, i) => {
+                  const sev = f.severity?.toLowerCase() || 'info'
+                  const sevClass = sevColors[sev] || sevColors.info
+                  return React.createElement('tr', {
+                    key: i,
+                    className: 'border-b border-noctis-border/30 last:border-0'
+                  },
+                    React.createElement('td', { className: 'px-4 py-2.5 text-noctis-muted font-mono' },
+                      f.category?.replace(/_/g, ' ') || '-',
+                    ),
+                    React.createElement('td', { className: 'px-4 py-2.5' },
+                      React.createElement('span', {
+                        className: `inline-block px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border ${sevClass}`
+                      }, sev),
+                    ),
+                    React.createElement('td', { className: 'px-4 py-2.5 text-noctis-dim' }, f.sourceType),
+                    React.createElement('td', { className: 'px-4 py-2.5 text-noctis-muted max-w-md truncate' }, f.summary),
+                  )
+                }),
+              ),
             ),
           ),
+        ),
+        // Mobile cards
+        React.createElement('div', { className: 'lg:hidden space-y-3' },
+          recent.map((f, i) => {
+            const sev = f.severity?.toLowerCase() || 'info'
+            const sevClass = sevColors[sev] || sevColors.info
+            return React.createElement('div', {
+              key: i,
+              className: 'p-4 rounded-lg border border-noctis-border/30'
+            },
+              // Top row: severity + category
+              React.createElement('div', { className: 'flex items-center justify-between mb-2' },
+                React.createElement('span', {
+                  className: `inline-block px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border ${sevClass}`
+                }, sev),
+                React.createElement('span', { className: 'text-xs text-noctis-muted font-mono' },
+                  f.category?.replace(/_/g, ' ') || '-',
+                ),
+              ),
+              // Summary
+              React.createElement('p', { className: 'text-sm text-noctis-text line-clamp-2 mb-2' },
+                f.summary,
+              ),
+              // Source type
+              React.createElement('span', { className: 'text-xs text-noctis-dim' }, f.sourceType),
+            )
+          }),
         ),
       ),
     ),
