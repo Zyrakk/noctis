@@ -16,7 +16,7 @@ import (
 const (
 	// defaultRateLimitDelay is the minimum time between LLM API calls per
 	// rate limiter instance, used to avoid burning through the GLM quota.
-	defaultRateLimitDelay = 500 * time.Millisecond
+	defaultRateLimitDelay = 3 * time.Second
 
 	// workerIdleInterval is how long workers sleep when there is no work.
 	workerIdleInterval = 30 * time.Second
