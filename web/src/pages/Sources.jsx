@@ -191,7 +191,16 @@ export default function Sources() {
                           React.createElement('div', { className: 'text-xs text-noctis-dim' }, s.type.replace(/_/g, ' ')),
                         ),
                       ),
-                      React.createElement(Wifi, { className: 'w-3.5 h-3.5 text-green-400' }),
+                      React.createElement('div', { className: 'flex items-center gap-2' },
+                        React.createElement(Wifi, { className: 'w-3.5 h-3.5 text-green-400' }),
+                        React.createElement('button', {
+                          onClick: () => handleReject(s.id),
+                          title: 'Reject source',
+                          className: 'p-1 rounded text-noctis-dim hover:text-red-400 hover:bg-red-500/10 cursor-pointer transition-colors duration-200'
+                        },
+                          React.createElement(X, { className: 'w-3.5 h-3.5' }),
+                        ),
+                      ),
                     ),
                     React.createElement('div', { className: 'flex items-center gap-4 text-xs text-noctis-muted' },
                       React.createElement('div', { className: 'flex items-center gap-1' },
