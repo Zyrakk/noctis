@@ -7,10 +7,10 @@ import {
 } from 'lucide-react'
 
 const TABS = [
-  { value: 'active', label: 'Active', dotColor: 'bg-green-400' },
-  { value: 'discovered', label: 'Discovered', dotColor: 'bg-yellow-400' },
-  { value: 'paused', label: 'Paused', dotColor: 'bg-gray-400' },
-  { value: 'rejected', label: 'Rejected', dotColor: 'bg-red-400' },
+  { value: 'active', label: 'Active', shortLabel: 'Active', dotColor: 'bg-green-400' },
+  { value: 'discovered', label: 'Discovered', shortLabel: 'New', dotColor: 'bg-yellow-400' },
+  { value: 'paused', label: 'Paused', shortLabel: 'Paused', dotColor: 'bg-gray-400' },
+  { value: 'rejected', label: 'Rejected', shortLabel: 'Rejected', dotColor: 'bg-red-400' },
 ]
 
 const TYPE_ICONS = {
@@ -137,28 +137,29 @@ export default function Sources() {
     ),
 
     // Tabs + type filter
-    React.createElement('div', { className: 'flex items-center justify-between' },
-      React.createElement('div', { className: 'flex w-full lg:w-auto items-center gap-1 border border-noctis-border/50 rounded p-1' },
+    React.createElement('div', { className: 'flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3' },
+      React.createElement('div', { className: 'flex w-full lg:w-auto items-center gap-1 border border-noctis-border/50 rounded p-1 overflow-x-auto flex-nowrap' },
         TABS.map(t =>
           React.createElement('button', {
             key: t.value,
             onClick: () => changeTab(t.value),
-            className: `flex-1 lg:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded text-sm font-medium cursor-pointer transition-colors duration-200 ${
+            className: `flex-1 lg:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded text-sm font-medium cursor-pointer transition-colors duration-200 whitespace-nowrap ${
               tab === t.value
                 ? 'bg-noctis-surface text-noctis-text'
                 : 'text-noctis-muted hover:text-noctis-text'
             }`
           },
             React.createElement('div', { className: `w-2 h-2 rounded-full ${t.dotColor}` }),
-            t.label,
+            React.createElement('span', { className: 'lg:hidden' }, t.shortLabel),
+            React.createElement('span', { className: 'hidden lg:inline' }, t.label),
           )
         ),
       ),
-      // Type filter (visible on discovered/paused tabs)
+      // Type filter — stacked below tabs on mobile
       (tab === 'discovered' || tab === 'paused' || tab === 'rejected') && React.createElement('select', {
         value: typeFilter,
         onChange: e => { setTypeFilter(e.target.value); setPage(0) },
-        className: 'px-3 py-1.5 bg-noctis-bg border border-noctis-border/50 rounded text-xs text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-muted/50'
+        className: 'w-full lg:w-auto px-3 py-2 bg-noctis-bg border border-noctis-border/50 rounded text-xs text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-muted/50'
       },
         TYPE_FILTER_OPTIONS.map(t =>
           React.createElement('option', { key: t.value, value: t.value }, t.label)
@@ -225,83 +226,147 @@ export default function Sources() {
         )
       // Table for discovered/paused
       : React.createElement('div', null,
-          React.createElement('div', {
-            className: 'border border-noctis-border/50 rounded overflow-x-auto'
-          },
-            React.createElement('table', { className: 'w-full text-sm' },
-              React.createElement('thead', null,
-                React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
-                  ['Type', 'Identifier', 'Discovered', tab === 'discovered' ? 'Actions' : 'Status'].map(h =>
-                    React.createElement('th', {
-                      key: h,
-                      className: 'px-4 py-3 text-left text-xs font-medium text-noctis-dim uppercase tracking-wider'
-                    }, h)
+          // Desktop table
+          React.createElement('div', { className: 'hidden lg:block' },
+            React.createElement('div', {
+              className: 'border border-noctis-border/50 rounded overflow-x-auto'
+            },
+              React.createElement('table', { className: 'w-full text-sm' },
+                React.createElement('thead', null,
+                  React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
+                    ['Type', 'Identifier', 'Discovered', tab === 'discovered' ? 'Actions' : 'Status'].map(h =>
+                      React.createElement('th', {
+                        key: h,
+                        className: 'px-4 py-3 text-left text-xs font-medium text-noctis-dim uppercase tracking-wider'
+                      }, h)
+                    ),
                   ),
                 ),
-              ),
-              React.createElement('tbody', null,
-                loading
-                  ? Array.from({ length: 5 }).map((_, i) =>
-                      React.createElement('tr', { key: i, className: 'border-b border-noctis-border/50' },
-                        Array.from({ length: 4 }).map((_, j) =>
-                          React.createElement('td', { key: j, className: 'px-4 py-3' },
-                            React.createElement('div', { className: 'skeleton h-4 w-full' }),
-                          )
-                        ),
+                React.createElement('tbody', null,
+                  loading
+                    ? Array.from({ length: 5 }).map((_, i) =>
+                        React.createElement('tr', { key: i, className: 'border-b border-noctis-border/50' },
+                          Array.from({ length: 4 }).map((_, j) =>
+                            React.createElement('td', { key: j, className: 'px-4 py-3' },
+                              React.createElement('div', { className: 'skeleton h-4 w-full' }),
+                            )
+                          ),
+                        )
                       )
-                    )
-                  : list.map((s, i) => {
-                      const Icon = TYPE_ICONS[s.type] || Globe
-                      return React.createElement('tr', {
-                        key: s.id,
-                        className: `border-b border-noctis-border/50 hover:bg-white/[0.04] transition-all duration-500 ${
-                          fadingIds.has(s.id) ? 'opacity-0' : 'opacity-100'
-                        } ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`
-                      },
-                        React.createElement('td', { className: 'px-4 py-3' },
+                    : list.map((s, i) => {
+                        const Icon = TYPE_ICONS[s.type] || Globe
+                        return React.createElement('tr', {
+                          key: s.id,
+                          className: `border-b border-noctis-border/50 hover:bg-white/[0.04] transition-all duration-500 ${
+                            fadingIds.has(s.id) ? 'opacity-0' : 'opacity-100'
+                          } ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`
+                        },
+                          React.createElement('td', { className: 'px-4 py-3' },
+                            React.createElement('div', { className: 'flex items-center gap-2' },
+                              React.createElement(Icon, { className: 'w-4 h-4 text-noctis-muted' }),
+                              React.createElement('span', { className: 'text-xs text-noctis-muted' }, s.type.replace(/_/g, ' ')),
+                            ),
+                          ),
+                          React.createElement('td', { className: 'px-4 py-3 font-mono text-xs text-noctis-text truncate max-w-sm' },
+                            s.identifier,
+                          ),
+                          React.createElement('td', { className: 'px-4 py-3 text-xs text-noctis-dim font-mono' },
+                            new Date(s.createdAt).toLocaleDateString(),
+                          ),
+                          React.createElement('td', { className: 'px-4 py-3' },
+                            tab === 'discovered'
+                              ? React.createElement('div', { className: 'flex items-center gap-2' },
+                                  React.createElement('button', {
+                                    onClick: () => handleApprove(s.id),
+                                    className: 'flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-green-500/10 border border-green-500/30 rounded text-xs text-green-400 hover:bg-green-500/20 cursor-pointer transition-colors duration-200'
+                                  },
+                                    React.createElement(Check, { className: 'w-3 h-3' }),
+                                    'Approve',
+                                  ),
+                                  React.createElement('button', {
+                                    onClick: () => handleReject(s.id),
+                                    className: 'flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400 hover:bg-red-500/20 cursor-pointer transition-colors duration-200'
+                                  },
+                                    React.createElement(X, { className: 'w-3 h-3' }),
+                                    'Reject',
+                                  ),
+                                )
+                              : React.createElement('span', {
+                                  className: 'text-xs text-noctis-dim'
+                                }, s.status),
+                          ),
+                        )
+                      }),
+                ),
+              ),
+
+              !loading && list.length === 0 &&
+                React.createElement('div', { className: 'py-16 flex flex-col items-center text-noctis-dim' },
+                  React.createElement(Inbox, { className: 'w-8 h-8 mb-2 opacity-40' }),
+                  React.createElement('span', { className: 'text-sm' }, `No ${tab} sources.`),
+                ),
+            ),
+          ),
+
+          // Mobile card list for discovered/paused/rejected
+          React.createElement('div', { className: 'lg:hidden space-y-3' },
+            loading
+              ? Array.from({ length: 5 }).map((_, i) =>
+                  React.createElement('div', { key: i, className: 'skeleton h-24 rounded-lg' })
+                )
+              : list.length > 0
+                ? list.map((s) => {
+                    const Icon = TYPE_ICONS[s.type] || Globe
+                    return React.createElement('div', {
+                      key: s.id,
+                      className: `rounded-lg border border-noctis-border/30 transition-all duration-200 active:scale-[0.98] ${
+                        fadingIds.has(s.id) ? 'opacity-0' : 'opacity-100'
+                      }`,
+                    },
+                      // Swipe-ready content wrapper
+                      React.createElement('div', { className: 'p-4' },
+                        // Top row: type + date
+                        React.createElement('div', { className: 'flex items-center justify-between mb-2' },
                           React.createElement('div', { className: 'flex items-center gap-2' },
                             React.createElement(Icon, { className: 'w-4 h-4 text-noctis-muted' }),
                             React.createElement('span', { className: 'text-xs text-noctis-muted' }, s.type.replace(/_/g, ' ')),
                           ),
+                          React.createElement('span', { className: 'text-xs text-noctis-dim font-mono' },
+                            new Date(s.createdAt).toLocaleDateString(),
+                          ),
                         ),
-                        React.createElement('td', { className: 'px-4 py-3 font-mono text-xs text-noctis-text truncate max-w-sm' },
-                          s.identifier,
-                        ),
-                        React.createElement('td', { className: 'px-4 py-3 text-xs text-noctis-dim font-mono' },
-                          new Date(s.createdAt).toLocaleDateString(),
-                        ),
-                        React.createElement('td', { className: 'px-4 py-3' },
-                          tab === 'discovered'
-                            ? React.createElement('div', { className: 'flex items-center gap-2' },
-                                React.createElement('button', {
-                                  onClick: () => handleApprove(s.id),
-                                  className: 'flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-green-500/10 border border-green-500/30 rounded text-xs text-green-400 hover:bg-green-500/20 cursor-pointer transition-colors duration-200'
-                                },
-                                  React.createElement(Check, { className: 'w-3 h-3' }),
-                                  'Approve',
-                                ),
-                                React.createElement('button', {
-                                  onClick: () => handleReject(s.id),
-                                  className: 'flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400 hover:bg-red-500/20 cursor-pointer transition-colors duration-200'
-                                },
-                                  React.createElement(X, { className: 'w-3 h-3' }),
-                                  'Reject',
-                                ),
-                              )
-                            : React.createElement('span', {
-                                className: 'text-xs text-noctis-dim'
-                              }, s.status),
-                        ),
-                      )
-                    }),
-              ),
-            ),
-
-            !loading && list.length === 0 &&
-              React.createElement('div', { className: 'py-16 flex flex-col items-center text-noctis-dim' },
-                React.createElement(Inbox, { className: 'w-8 h-8 mb-2 opacity-40' }),
-                React.createElement('span', { className: 'text-sm' }, `No ${tab} sources.`),
-              ),
+                        // Identifier
+                        React.createElement('p', {
+                          className: 'font-mono text-sm text-noctis-text break-all mb-3'
+                        }, s.identifier),
+                        // Actions (Discovered) or Status (Paused/Rejected)
+                        tab === 'discovered'
+                          ? React.createElement('div', { className: 'flex gap-2' },
+                              React.createElement('button', {
+                                onClick: () => handleApprove(s.id),
+                                className: 'flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-green-500/10 border border-green-500/30 rounded text-xs text-green-400 hover:bg-green-500/20 cursor-pointer transition-colors duration-200'
+                              },
+                                React.createElement(Check, { className: 'w-3 h-3' }),
+                                'Approve',
+                              ),
+                              React.createElement('button', {
+                                onClick: () => handleReject(s.id),
+                                className: 'flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400 hover:bg-red-500/20 cursor-pointer transition-colors duration-200'
+                              },
+                                React.createElement(X, { className: 'w-3 h-3' }),
+                                'Reject',
+                              ),
+                            )
+                          : React.createElement('span', {
+                              className: 'text-xs text-noctis-dim'
+                            }, s.status),
+                      ),
+                    )
+                  })
+                : React.createElement('div', { className: 'py-16 flex flex-col items-center text-noctis-dim' },
+                    React.createElement(Inbox, { className: 'w-8 h-8 mb-2 opacity-40' }),
+                    React.createElement('span', { className: 'text-sm' }, `No ${tab} sources.`),
+                  ),
           ),
 
           // Pagination
@@ -392,7 +457,7 @@ export default function Sources() {
     ),
 
     toast && React.createElement('div', {
-      className: 'fixed bottom-6 right-6 z-50 px-4 py-3 bg-noctis-surface border border-noctis-border/50 rounded-lg text-sm text-noctis-text shadow-lg'
+      className: 'fixed bottom-24 left-4 right-4 lg:bottom-6 lg:right-6 lg:left-auto z-50 px-4 py-3 bg-noctis-surface border border-noctis-border/50 rounded-lg text-sm text-noctis-text shadow-lg'
     },
       toast,
     ),
