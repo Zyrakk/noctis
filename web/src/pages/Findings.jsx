@@ -17,6 +17,16 @@ export default function Findings() {
   const [copiedIOC, setCopiedIOC] = useState(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
+  // Swipe-to-dismiss state for detail panel
+  const [panelDragY, setPanelDragY] = React.useState(0)
+  const [panelDragging, setPanelDragging] = React.useState(false)
+  const panelTouchStart = React.useRef(null)
+
+  // Swipe-to-dismiss state for filter sheet
+  const [sheetDragY, setSheetDragY] = React.useState(0)
+  const [sheetDragging, setSheetDragging] = React.useState(false)
+  const sheetTouchStart = React.useRef(null)
+
   const params = new URLSearchParams()
   if (filters.category) params.set('category', filters.category)
   if (filters.severity) params.set('severity', filters.severity)
@@ -47,6 +57,53 @@ export default function Findings() {
   const updateFilter = (key, value) => {
     setFilters(f => ({ ...f, [key]: value }))
     setPage(0)
+  }
+
+  // Panel swipe-to-dismiss handlers
+  const handlePanelTouchStart = (e) => {
+    panelTouchStart.current = e.touches[0].clientY
+    setPanelDragging(true)
+  }
+
+  const handlePanelTouchMove = (e) => {
+    if (panelTouchStart.current === null) return
+    const deltaY = e.touches[0].clientY - panelTouchStart.current
+    if (deltaY > 0) {
+      setPanelDragY(deltaY)
+    }
+  }
+
+  const handlePanelTouchEnd = () => {
+    if (panelDragY > 100) {
+      setSelectedId(null)
+      setDetail(null)
+    }
+    setPanelDragY(0)
+    setPanelDragging(false)
+    panelTouchStart.current = null
+  }
+
+  // Filter sheet swipe-to-dismiss handlers
+  const handleSheetTouchStart = (e) => {
+    sheetTouchStart.current = e.touches[0].clientY
+    setSheetDragging(true)
+  }
+
+  const handleSheetTouchMove = (e) => {
+    if (sheetTouchStart.current === null) return
+    const deltaY = e.touches[0].clientY - sheetTouchStart.current
+    if (deltaY > 0) {
+      setSheetDragY(deltaY)
+    }
+  }
+
+  const handleSheetTouchEnd = () => {
+    if (sheetDragY > 100) {
+      setFiltersOpen(false)
+    }
+    setSheetDragY(0)
+    setSheetDragging(false)
+    sheetTouchStart.current = null
   }
 
   return React.createElement('div', { className: 'flex gap-6 min-h-[calc(100vh-3rem)]' },
@@ -129,7 +186,7 @@ export default function Findings() {
     // Main content
     React.createElement('div', { className: 'flex-1 min-w-0' },
       // Header
-      React.createElement('div', { className: 'flex items-center justify-between mb-4' },
+      React.createElement('div', { className: 'flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 mb-4' },
         React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'Findings'),
         React.createElement('span', { className: 'text-sm text-noctis-muted' },
           `${total.toLocaleString()} results`,
@@ -218,7 +275,7 @@ export default function Findings() {
               React.createElement('div', {
                 key: f.id,
                 onClick: () => loadDetail(f.id),
-                className: `p-3 rounded-lg border border-noctis-border/30 cursor-pointer transition-colors duration-150 active:bg-noctis-surface ${selectedId === f.id ? 'bg-noctis-purple/5 border-noctis-purple/30' : ''}`
+                className: `p-4 rounded-lg border border-noctis-border/30 cursor-pointer transition-all duration-150 active:scale-[0.98] active:bg-noctis-surface ${selectedId === f.id ? 'bg-noctis-purple/5 border-noctis-purple/30' : ''}`
               },
                 // Top row: severity badge + category
                 React.createElement('div', { className: 'flex items-center justify-between mb-1.5' },
@@ -268,8 +325,20 @@ export default function Findings() {
 
     // Detail panel
     selectedId && React.createElement('div', {
-      className: 'fixed inset-0 z-40 bg-noctis-bg overflow-y-auto lg:relative lg:inset-auto lg:z-auto lg:w-96 lg:flex-shrink-0 lg:border lg:border-noctis-border/50 lg:rounded lg:max-h-[calc(100vh-3rem)] lg:sticky lg:top-0 p-5 pt-12 lg:pt-5 animate-slide-in'
+      className: 'fixed inset-0 z-40 bg-noctis-bg overflow-y-auto lg:relative lg:inset-auto lg:z-auto lg:w-96 lg:flex-shrink-0 lg:border lg:border-noctis-border/50 lg:rounded lg:max-h-[calc(100vh-3rem)] lg:sticky lg:top-0 p-5 pt-12 lg:pt-5 animate-slide-up lg:animate-slide-in',
+      onTouchStart: handlePanelTouchStart,
+      onTouchMove: handlePanelTouchMove,
+      onTouchEnd: handlePanelTouchEnd,
+      style: panelDragY > 0 ? {
+        transform: `translateY(${panelDragY}px)`,
+        opacity: Math.max(0, 1 - panelDragY / 300),
+        transition: panelDragging ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out',
+      } : undefined,
     },
+      // Drag handle (mobile only)
+      React.createElement('div', { className: 'flex justify-center mb-3 lg:hidden' },
+        React.createElement('div', { className: 'w-8 h-1 rounded-full bg-noctis-border' }),
+      ),
       React.createElement('div', { className: 'flex items-center justify-between mb-4' },
         React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted' }, 'Finding Detail'),
         React.createElement('button', {
@@ -372,8 +441,20 @@ export default function Findings() {
     },
       React.createElement('div', { className: 'fixed inset-0 bg-black/50' }),
       React.createElement('div', {
-        className: 'fixed bottom-0 left-0 right-0 bg-noctis-bg border-t border-noctis-border/50 rounded-t-xl p-5 z-10 max-h-[70vh] overflow-y-auto'
+        className: 'fixed bottom-0 left-0 right-0 bg-noctis-bg border-t border-noctis-border/50 rounded-t-xl p-5 z-10 max-h-[70vh] overflow-y-auto animate-slide-up',
+        onTouchStart: handleSheetTouchStart,
+        onTouchMove: handleSheetTouchMove,
+        onTouchEnd: handleSheetTouchEnd,
+        style: sheetDragY > 0 ? {
+          transform: `translateY(${sheetDragY}px)`,
+          opacity: Math.max(0, 1 - sheetDragY / 300),
+          transition: sheetDragging ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out',
+        } : undefined,
       },
+        // Drag handle
+        React.createElement('div', { className: 'flex justify-center mb-3' },
+          React.createElement('div', { className: 'w-8 h-1 rounded-full bg-noctis-border' }),
+        ),
         React.createElement('div', { className: 'flex items-center justify-between mb-4' },
           React.createElement('span', { className: 'text-sm font-medium text-noctis-muted' }, 'Filters'),
           React.createElement('button', {
