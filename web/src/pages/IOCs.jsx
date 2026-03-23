@@ -194,7 +194,7 @@ export default function IOCs() {
               React.createElement('div', {
                 key: ioc.id,
                 onClick: (e) => { copyValue(ioc.id, ioc.value) },
-                className: 'p-3 rounded-lg border border-noctis-border/30 cursor-pointer active:bg-noctis-surface transition-colors duration-150'
+                className: 'p-4 rounded-lg border border-noctis-border/30 cursor-pointer active:scale-[0.98] active:bg-noctis-surface transition-all duration-150'
               },
                 React.createElement('div', { className: 'flex items-center justify-between mb-1.5' },
                   React.createElement('span', { className: 'text-xs px-2 py-0.5 bg-noctis-cyan/10 border border-noctis-cyan/30 rounded text-cyan-400 font-mono' }, ioc.type),
