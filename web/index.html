@@ -159,6 +159,34 @@
     .animate-slide-in {
       animation: slide-in-right 0.2s ease-out;
     }
+    /* Page enter transition for route changes */
+    @keyframes page-enter {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .animate-page-enter {
+      animation: page-enter 150ms ease-out;
+    }
+    /* Slide up from bottom for mobile sheets/panels */
+    @keyframes slide-up {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    .animate-slide-up {
+      animation: slide-up 200ms ease-out;
+    }
     /* Safe area for bottom nav on notched phones */
     @supports (padding-bottom: env(safe-area-inset-bottom)) {
       .pb-safe {
