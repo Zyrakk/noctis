@@ -184,7 +184,7 @@ export default function IOCs() {
     ),
 
     // Card layout (mobile)
-    React.createElement('div', { className: 'lg:hidden space-y-2' },
+    React.createElement('div', { className: 'lg:hidden space-y-3' },
       loading
         ? Array.from({ length: 6 }).map((_, i) =>
             React.createElement('div', { key: i, className: 'skeleton h-20 rounded' })
