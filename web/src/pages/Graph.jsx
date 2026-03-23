@@ -385,7 +385,7 @@ export default function Graph() {
 
                     // Created date
                     React.createElement('span', {
-                      className: 'text-xs text-noctis-dim whitespace-nowrap min-w-[80px] text-right',
+                      className: 'text-xs text-noctis-dim whitespace-nowrap min-w-[80px] text-right hidden sm:block',
                     }, formatDate(entity.createdAt)),
 
                     // Arrow
@@ -414,8 +414,8 @@ export default function Graph() {
     ),
 
     // Search + controls
-    React.createElement('div', { className: 'flex items-center gap-3' },
-      React.createElement('div', { className: 'relative flex-1 max-w-md' },
+    React.createElement('div', { className: 'flex flex-col sm:flex-row items-stretch sm:items-center gap-3' },
+      React.createElement('div', { className: 'relative flex-1 sm:max-w-md' },
         React.createElement(Search, { className: 'absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-noctis-dim' }),
         React.createElement('input', {
           type: 'text',
@@ -447,7 +447,7 @@ export default function Graph() {
     ),
 
     // Legend
-    React.createElement('div', { className: 'flex items-center gap-4 flex-wrap' },
+    React.createElement('div', { className: 'flex items-center gap-3 flex-wrap' },
       Object.entries(NODE_COLORS).filter(([k]) => k !== 'default').map(([type, color]) =>
         React.createElement('div', { key: type, className: 'flex items-center gap-1.5 text-xs text-noctis-muted' },
           React.createElement('div', {
