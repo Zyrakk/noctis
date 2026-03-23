@@ -120,16 +120,26 @@ export default function Layout({ children, currentPath, navigate }) {
         return React.createElement('button', {
           key: item.path,
           onClick: () => navigate(item.path),
-          className: `flex-1 flex flex-col items-center justify-center py-2 cursor-pointer transition-colors duration-150 ${
+          className: `flex-1 flex flex-col items-center justify-center py-2 cursor-pointer transition-all duration-200 active:scale-[0.92] ${
             active ? 'text-noctis-purple' : 'text-noctis-dim'
           }`,
           style: { minHeight: '44px' },
         },
-          React.createElement(item.icon, {
-            className: `w-5 h-5 ${active ? 'text-noctis-purple' : 'text-noctis-dim'}`,
-          }),
+          // Icon with pill background when active
+          React.createElement('div', {
+            className: `flex items-center justify-center rounded-xl transition-all duration-200 ${
+              active ? 'bg-noctis-purple/15 px-4 py-1' : 'px-4 py-1'
+            }`,
+          },
+            React.createElement(item.icon, {
+              className: `w-5 h-5 ${active ? 'text-noctis-purple' : 'text-noctis-dim'}`,
+            }),
+          ),
+          // Label
           React.createElement('span', {
-            className: `text-[10px] font-medium mt-0.5 ${active ? 'text-noctis-purple' : 'text-noctis-dim'}`,
+            className: `text-[10px] mt-0.5 transition-all duration-200 ${
+              active ? 'font-semibold text-noctis-purple' : 'font-medium text-noctis-dim'
+            }`,
           }, item.shortLabel),
         )
       })
@@ -145,9 +155,9 @@ export default function Layout({ children, currentPath, navigate }) {
     sidebar,
     // Main content
     React.createElement('main', {
-      className: 'ml-0 lg:ml-52 min-h-screen pt-14 lg:pt-0 pb-20 lg:pb-0'
+      className: 'ml-0 lg:ml-52 min-h-screen pt-14 lg:pt-0 pb-24 lg:pb-0'
     },
-      React.createElement('div', { className: 'p-4 lg:p-6' }, children),
+      React.createElement('div', { key: currentPath, className: 'p-4 lg:p-6 animate-page-enter' }, children),
     ),
     // Mobile bottom nav
     bottomNav,
