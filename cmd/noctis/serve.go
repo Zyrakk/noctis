@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 
 	"github.com/Zyrakk/noctis/internal/analyzer"
 	"github.com/Zyrakk/noctis/internal/archive"
+	"github.com/Zyrakk/noctis/internal/brain"
 	"github.com/Zyrakk/noctis/internal/collector"
 	"github.com/Zyrakk/noctis/internal/config"
 	"github.com/Zyrakk/noctis/internal/dashboard"
@@ -26,6 +26,8 @@ import (
 	"github.com/Zyrakk/noctis/internal/ingest"
 	"github.com/Zyrakk/noctis/internal/llm"
 	"github.com/Zyrakk/noctis/internal/models"
+	"github.com/Zyrakk/noctis/internal/modules"
+	"github.com/Zyrakk/noctis/internal/processor"
 )
 
 func newServeCmd() *cobra.Command {
@@ -98,6 +100,9 @@ func newServeCmd() *cobra.Command {
 			}
 			slog.Info("database migrations applied")
 
+			// Build module registry for status tracking.
+			registry := modules.NewRegistry()
+
 			// Start dashboard server if enabled
 			var dashServer *dashboard.Server
 			if cfg.Dashboard.Enabled {
@@ -105,7 +110,7 @@ func newServeCmd() *cobra.Command {
 				if dashPort == 0 {
 					dashPort = 3000
 				}
-				dashServer = dashboard.NewServer(fmt.Sprintf(":%d", dashPort), pool, cfg.Dashboard.APIKey)
+				dashServer = dashboard.NewServer(fmt.Sprintf(":%d", dashPort), pool, cfg.Dashboard.APIKey, registry)
 				go func() {
 					if err := dashServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 						slog.Error("dashboard server error", "err", err)
@@ -131,7 +136,7 @@ func newServeCmd() *cobra.Command {
 			}
 			fullAnalyzer := analyzer.New(fullClient, promptsDir)
 
-			// GLM-4-Plus — fast model for classification (falls back to full if unconfigured)
+			// Fast model for classification (falls back to full if unconfigured)
 			var classifyAnalyzer *analyzer.Analyzer
 			if cfg.LLMFast.Model != "" {
 				fastClient := llm.NewOpenAICompatClient(cfg.LLMFast.BaseURL, cfg.LLMFast.APIKey, cfg.LLMFast.Model)
@@ -185,7 +190,62 @@ func newServeCmd() *cobra.Command {
 				)
 			}
 
-			// Build ingest pipeline
+			// Resolve classify provider/model (falls back to full LLM in single-mode).
+			classifyProvider := cfg.LLMFast.Provider
+			classifyModel := cfg.LLMFast.Model
+			if classifyModel == "" {
+				classifyProvider = cfg.LLM.Provider
+				classifyModel = cfg.LLM.Model
+			}
+
+			// Build processing engine (classification + entity extraction).
+			processingEngine := processor.NewProcessingEngine(
+				archiveStore,
+				classifyAnalyzer,
+				fullAnalyzer,
+				cfg.Collection,
+				registry,
+				classifyProvider, classifyModel,
+				cfg.LLM.Provider, cfg.LLM.Model,
+				classifyConcurrency,
+				extractConcurrency,
+				cfg.IOCLifecycle,
+			)
+
+			// Brain analyzer — Gemini 3.1 Pro for analytical reasoning (falls back to full LLM).
+			var brainAnalyzer *analyzer.Analyzer
+			var brainProvider, brainModel string
+			brainConcurrency := 1
+			if cfg.LLMBrain.BaseURL != "" {
+				brainClient := llm.NewOpenAICompatClient(cfg.LLMBrain.BaseURL, cfg.LLMBrain.APIKey, cfg.LLMBrain.Model)
+				brainAnalyzer = analyzer.New(brainClient, promptsDir)
+				brainProvider = cfg.LLMBrain.Provider
+				brainModel = cfg.LLMBrain.Model
+				if cfg.LLMBrain.MaxConcurrent > 0 {
+					brainConcurrency = cfg.LLMBrain.MaxConcurrent
+				}
+				slog.Info("brain analyzer configured", "provider", brainProvider, "model", brainModel)
+			} else {
+				brainAnalyzer = fullAnalyzer
+				brainProvider = cfg.LLM.Provider
+				brainModel = cfg.LLM.Model
+				slog.Info("brain analyzer: reusing full analyzer")
+			}
+
+			// Build intelligence brain (correlation + analyst engines).
+			intelligenceBrain := brain.NewBrain(
+				archiveStore,
+				cfg.Correlation,
+				cfg.Analyst,
+				brainAnalyzer,
+				archiveStore,
+				registry,
+				brainProvider, brainModel,
+				brainConcurrency,
+				cfg.BriefGenerator,
+			)
+
+			// Build ingest pipeline (real-time matching + alert path only).
 			ingestPipeline, err := ingest.NewIngestPipeline(
 				archiveStore,
 				cfg.Matching.Rules,
@@ -193,10 +253,6 @@ func newServeCmd() *cobra.Command {
 				fullAnalyzer,
 				metrics,
 				alertFn,
-				cfg.Collection,
-				cfg.Correlation,
-				classifyConcurrency,
-				extractConcurrency,
 			)
 			if err != nil {
 				return fmt.Errorf("creating ingest pipeline: %w", err)
@@ -234,45 +290,42 @@ func newServeCmd() *cobra.Command {
 			pipelineCtx, pipelineCancel := context.WithCancel(context.Background())
 			defer pipelineCancel()
 
-			// Start background workers (classification + entity extraction)
-			go ingestPipeline.Run(pipelineCtx)
-			slog.Info("background workers started",
+			// Start processing engine (classification + entity extraction workers).
+			go processingEngine.Run(pipelineCtx)
+			slog.Info("processing engine started",
 				"classification_workers", cfg.Collection.ClassificationWorkers,
 				"entity_extraction_workers", cfg.Collection.EntityExtractionWorkers,
 			)
 
-			// Start collectors — each feeds findings into the ingest pipeline
-			var collectorWg sync.WaitGroup
-			for _, c := range collectors {
-				collectorWg.Add(1)
-				coll := c
-				ch := make(chan models.Finding, 50)
+			// Start intelligence brain (correlation + analyst engines).
+			go intelligenceBrain.Run(pipelineCtx)
 
-				// Collector goroutine
-				go func() {
-					defer collectorWg.Done()
-					if err := coll.Start(pipelineCtx, ch); err != nil && pipelineCtx.Err() == nil {
-						slog.Error("collector error", "collector", coll.Name(), "error", err)
-					}
-				}()
+			// Start source value analyzer.
+			sourceAnalyzer := collector.NewSourceValueAnalyzer(pool)
+			registry.Register(sourceAnalyzer.Status())
+			go sourceAnalyzer.Run(pipelineCtx)
 
-				// Fan-in: read from collector channel, process through ingest pipeline
-				collectorWg.Add(1)
-				go func() {
-					defer collectorWg.Done()
-					for f := range ch {
-						if err := ingestPipeline.Process(pipelineCtx, f); err != nil {
-							slog.Error("ingest error", "error", err)
-						}
-						// Feed content to discovery engine (inline — fast regex + single DB upsert)
-						if cfg.Discovery.Enabled {
-							if err := discoveryEngine.ProcessContent(pipelineCtx, f.Content, f.ID); err != nil {
-								slog.Debug("discovery error", "error", err)
-							}
-						}
+			// Build collector manager with status tracking.
+			collectorMgr := collector.NewCollectorManager(
+				collectors,
+				registry,
+				func(ctx context.Context, f models.Finding) error {
+					return ingestPipeline.Process(ctx, f)
+				},
+				func(ctx context.Context, content string, findingID string) error {
+					if cfg.Discovery.Enabled {
+						return discoveryEngine.ProcessContent(ctx, content, findingID)
 					}
-				}()
-			}
+					return nil
+				},
+			)
+
+			// Start collectors.
+			collectorDone := make(chan struct{})
+			go func() {
+				collectorMgr.Run(pipelineCtx)
+				close(collectorDone)
+			}()
 
 			hs.SetReady(true)
 			slog.Info("noctis is ready",
@@ -294,7 +347,7 @@ func newServeCmd() *cobra.Command {
 				dashServer.Shutdown(shutdownCtx)
 			}
 			pipelineCancel()
-			collectorWg.Wait()
+			<-collectorDone
 			slog.Info("noctis shutdown complete")
 
 			return nil

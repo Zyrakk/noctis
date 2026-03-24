@@ -26,15 +26,17 @@ type StatsResponse struct {
 
 // FindingSummary is a compact representation for list views.
 type FindingSummary struct {
-	ID          string     `json:"id"`
-	SourceType  string     `json:"sourceType"`
-	SourceName  string     `json:"sourceName"`
-	Category    *string    `json:"category"`
-	Severity    *string    `json:"severity"`
-	Summary     *string    `json:"summary"`
-	Author      *string    `json:"author"`
-	CollectedAt time.Time  `json:"collectedAt"`
-	PostedAt    *time.Time `json:"postedAt"`
+	ID          string         `json:"id"`
+	SourceType  string         `json:"sourceType"`
+	SourceName  string         `json:"sourceName"`
+	Category    *string        `json:"category"`
+	SubCategory *string        `json:"subCategory,omitempty"`
+	Severity    *string        `json:"severity"`
+	Summary     *string        `json:"summary"`
+	Author      *string        `json:"author"`
+	CollectedAt time.Time      `json:"collectedAt"`
+	PostedAt    *time.Time     `json:"postedAt"`
+	SubMetadata map[string]any `json:"subMetadata,omitempty"`
 }
 
 // FindingsResponse wraps paginated findings.
@@ -55,13 +57,15 @@ type FindingDetail struct {
 
 // IOCItem represents an indicator of compromise.
 type IOCItem struct {
-	ID             string    `json:"id"`
-	Type           string    `json:"type"`
-	Value          string    `json:"value"`
-	Context        *string   `json:"context"`
-	FirstSeen      time.Time `json:"firstSeen"`
-	LastSeen       time.Time `json:"lastSeen"`
-	SightingCount  int       `json:"sightingCount"`
+	ID            string    `json:"id"`
+	Type          string    `json:"type"`
+	Value         string    `json:"value"`
+	Context       *string   `json:"context"`
+	FirstSeen     time.Time `json:"firstSeen"`
+	LastSeen      time.Time `json:"lastSeen"`
+	SightingCount int       `json:"sightingCount"`
+	ThreatScore   *float64  `json:"threatScore,omitempty"`
+	Active        bool      `json:"active"`
 }
 
 // IOCsResponse wraps paginated IOCs.
@@ -213,13 +217,14 @@ func queryStats(ctx context.Context, pool *pgxpool.Pool) (*StatsResponse, error)
 
 // findingsFilter holds parsed query parameters for findings search.
 type findingsFilter struct {
-	Category string
-	Severity string
-	Source   string
-	Since    *time.Time
-	Query    string
-	Limit    int
-	Offset   int
+	Category    string
+	SubCategory string
+	Severity    string
+	Source      string
+	Since       *time.Time
+	Query       string
+	Limit       int
+	Offset      int
 }
 
 func queryFindings(ctx context.Context, pool *pgxpool.Pool, f findingsFilter) (*FindingsResponse, error) {
@@ -236,6 +241,11 @@ func queryFindings(ctx context.Context, pool *pgxpool.Pool, f findingsFilter) (*
 		p := nextArg()
 		conditions = append(conditions, fmt.Sprintf("category = %s", p))
 		args = append(args, f.Category)
+	}
+	if f.SubCategory != "" {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("sub_category = %s", p))
+		args = append(args, f.SubCategory)
 	}
 	if f.Severity != "" {
 		p := nextArg()
@@ -282,9 +292,9 @@ func queryFindings(ctx context.Context, pool *pgxpool.Pool, f findingsFilter) (*
 	limitP := nextArg()
 	offsetP := nextArg()
 	sql := fmt.Sprintf(`
-		SELECT id, source_type, source_name, category, severity,
+		SELECT id, source_type, source_name, category, sub_category, severity,
 		       COALESCE(summary, LEFT(content, 120)) AS summary,
-		       author, collected_at, posted_at
+		       author, collected_at, posted_at, sub_metadata
 		FROM raw_content %s
 		ORDER BY collected_at DESC
 		LIMIT %s OFFSET %s`, where, limitP, offsetP)
@@ -299,8 +309,12 @@ func queryFindings(ctx context.Context, pool *pgxpool.Pool, f findingsFilter) (*
 	var findings []FindingSummary
 	for rows.Next() {
 		var fs FindingSummary
-		if err := rows.Scan(&fs.ID, &fs.SourceType, &fs.SourceName, &fs.Category, &fs.Severity, &fs.Summary, &fs.Author, &fs.CollectedAt, &fs.PostedAt); err != nil {
+		var subMetaJSON []byte
+		if err := rows.Scan(&fs.ID, &fs.SourceType, &fs.SourceName, &fs.Category, &fs.SubCategory, &fs.Severity, &fs.Summary, &fs.Author, &fs.CollectedAt, &fs.PostedAt, &subMetaJSON); err != nil {
 			return nil, fmt.Errorf("findings: scan: %w", err)
+		}
+		if len(subMetaJSON) > 0 {
+			json.Unmarshal(subMetaJSON, &fs.SubMetadata)
 		}
 		findings = append(findings, fs)
 	}
@@ -337,7 +351,7 @@ func queryFinding(ctx context.Context, pool *pgxpool.Pool, id string) (*FindingD
 
 	// Linked IOCs
 	rows, err := pool.Query(ctx, `
-		SELECT id, type, value, context, first_seen, last_seen, sighting_count
+		SELECT id, type, value, context, first_seen, last_seen, sighting_count, threat_score, active
 		FROM iocs WHERE source_content_id = $1
 		ORDER BY sighting_count DESC`, id)
 	if err != nil {
@@ -347,7 +361,7 @@ func queryFinding(ctx context.Context, pool *pgxpool.Pool, id string) (*FindingD
 
 	for rows.Next() {
 		var ioc IOCItem
-		if err := rows.Scan(&ioc.ID, &ioc.Type, &ioc.Value, &ioc.Context, &ioc.FirstSeen, &ioc.LastSeen, &ioc.SightingCount); err != nil {
+		if err := rows.Scan(&ioc.ID, &ioc.Type, &ioc.Value, &ioc.Context, &ioc.FirstSeen, &ioc.LastSeen, &ioc.SightingCount, &ioc.ThreatScore, &ioc.Active); err != nil {
 			return nil, fmt.Errorf("finding ioc scan: %w", err)
 		}
 		fd.IOCs = append(fd.IOCs, ioc)
@@ -361,10 +375,11 @@ func queryFinding(ctx context.Context, pool *pgxpool.Pool, id string) (*FindingD
 
 // iocsFilter holds parsed query parameters for IOC search.
 type iocsFilter struct {
-	Type   string
-	Query  string
-	Limit  int
-	Offset int
+	Type       string
+	Query      string
+	ActiveOnly bool
+	Limit      int
+	Offset     int
 }
 
 func queryIOCs(ctx context.Context, pool *pgxpool.Pool, f iocsFilter) (*IOCsResponse, error) {
@@ -386,6 +401,9 @@ func queryIOCs(ctx context.Context, pool *pgxpool.Pool, f iocsFilter) (*IOCsResp
 		p := nextArg()
 		conditions = append(conditions, fmt.Sprintf("value ILIKE '%%' || %s || '%%'", p))
 		args = append(args, f.Query)
+	}
+	if f.ActiveOnly {
+		conditions = append(conditions, "active = TRUE")
 	}
 
 	where := ""
@@ -410,9 +428,9 @@ func queryIOCs(ctx context.Context, pool *pgxpool.Pool, f iocsFilter) (*IOCsResp
 	limitP := nextArg()
 	offsetP := nextArg()
 	sql := fmt.Sprintf(`
-		SELECT id, type, value, context, first_seen, last_seen, sighting_count
+		SELECT id, type, value, context, first_seen, last_seen, sighting_count, threat_score, active
 		FROM iocs %s
-		ORDER BY last_seen DESC
+		ORDER BY threat_score DESC NULLS LAST
 		LIMIT %s OFFSET %s`, where, limitP, offsetP)
 	args = append(args, limit, f.Offset)
 
@@ -425,7 +443,7 @@ func queryIOCs(ctx context.Context, pool *pgxpool.Pool, f iocsFilter) (*IOCsResp
 	var iocs []IOCItem
 	for rows.Next() {
 		var ioc IOCItem
-		if err := rows.Scan(&ioc.ID, &ioc.Type, &ioc.Value, &ioc.Context, &ioc.FirstSeen, &ioc.LastSeen, &ioc.SightingCount); err != nil {
+		if err := rows.Scan(&ioc.ID, &ioc.Type, &ioc.Value, &ioc.Context, &ioc.FirstSeen, &ioc.LastSeen, &ioc.SightingCount, &ioc.ThreatScore, &ioc.Active); err != nil {
 			return nil, fmt.Errorf("iocs scan: %w", err)
 		}
 		iocs = append(iocs, ioc)
@@ -1012,4 +1030,838 @@ func queryCorrelations(ctx context.Context, pool *pgxpool.Pool, f correlationFil
 	}
 
 	return &CorrelationsResponse{Correlations: correlations, Total: total}, nil
+}
+
+// --- Actor Profile ---
+
+// ActorProfile is a comprehensive dossier built dynamically from the graph.
+type ActorProfile struct {
+	EntityID   string         `json:"entityId"`
+	Name       string         `json:"name"`
+	Type       string         `json:"type"`
+	Aliases    []string       `json:"aliases"`
+	Properties map[string]any `json:"properties"`
+
+	Malware        []LinkedEntity       `json:"malware"`
+	Tools          []LinkedEntity       `json:"tools"`
+	Infrastructure []LinkedEntity       `json:"infrastructure"`
+	Targets        []LinkedEntity       `json:"targets"`
+	Campaigns      []LinkedEntity       `json:"campaigns"`
+
+	RecentFindings  []ActorFindingSummary `json:"recentFindings"`
+	FindingCount    int                   `json:"findingCount"`
+	Correlations    []CorrelationItem     `json:"correlations"`
+	AnalyticalNotes []AnalyticalNoteItem  `json:"analyticalNotes"`
+
+	FirstSeen   *time.Time `json:"firstSeen"`
+	LastSeen    *time.Time `json:"lastSeen"`
+	ThreatLevel string     `json:"threatLevel"`
+}
+
+// LinkedEntity is an entity connected to the actor via graph edges.
+type LinkedEntity struct {
+	EntityID     string         `json:"entityId"`
+	Type         string         `json:"type"`
+	Name         string         `json:"name"`
+	Properties   map[string]any `json:"properties"`
+	Relationship string         `json:"relationship"`
+	EdgeCount    int            `json:"edgeCount"`
+}
+
+// ActorFindingSummary is a compact finding for actor profile views.
+type ActorFindingSummary struct {
+	ID          string    `json:"id"`
+	Category    string    `json:"category"`
+	SubCategory *string   `json:"subCategory,omitempty"`
+	Severity    string    `json:"severity"`
+	Summary     string    `json:"summary"`
+	SourceName  string    `json:"sourceName"`
+	CollectedAt time.Time `json:"collectedAt"`
+}
+
+// AnalyticalNoteItem is a note for API responses.
+type AnalyticalNoteItem struct {
+	ID         string    `json:"id"`
+	NoteType   string    `json:"noteType"`
+	Title      string    `json:"title"`
+	Content    string    `json:"content"`
+	Confidence float64   `json:"confidence"`
+	CreatedBy  string    `json:"createdBy"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+func queryActorProfile(ctx context.Context, pool *pgxpool.Pool, id string) (*ActorProfile, error) {
+	// 1. Fetch the entity.
+	var entityType string
+	var propsJSON []byte
+	err := pool.QueryRow(ctx,
+		`SELECT type, properties FROM entities WHERE id = $1`, id,
+	).Scan(&entityType, &propsJSON)
+	if err != nil {
+		return nil, fmt.Errorf("entity not found: %w", err)
+	}
+
+	props := map[string]any{}
+	if len(propsJSON) > 0 {
+		json.Unmarshal(propsJSON, &props)
+	}
+
+	name := id
+	if n, ok := props["name"].(string); ok && n != "" {
+		name = n
+	}
+
+	var aliases []string
+	if a, ok := props["aliases"].([]any); ok {
+		for _, v := range a {
+			if s, ok := v.(string); ok {
+				aliases = append(aliases, s)
+			}
+		}
+	}
+	if aliases == nil {
+		aliases = []string{}
+	}
+
+	profile := &ActorProfile{
+		EntityID:   id,
+		Name:       name,
+		Type:       entityType,
+		Aliases:    aliases,
+		Properties: props,
+	}
+
+	// 2. Fetch connected entities via edges.
+	rows, err := pool.Query(ctx, `
+		SELECT e.id, e.type, COALESCE(e.properties->>'name', e.id),
+		       e.properties, edge.relationship, COUNT(*) OVER (PARTITION BY e.id)
+		FROM edges edge
+		JOIN entities e ON e.id = edge.target_id
+		WHERE edge.source_id = $1
+		UNION ALL
+		SELECT e.id, e.type, COALESCE(e.properties->>'name', e.id),
+		       e.properties, edge.relationship, COUNT(*) OVER (PARTITION BY e.id)
+		FROM edges edge
+		JOIN entities e ON e.id = edge.source_id
+		WHERE edge.target_id = $1
+		LIMIT 100`, id)
+	if err != nil {
+		return nil, fmt.Errorf("edges query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var le LinkedEntity
+		var lePropsJSON []byte
+		if err := rows.Scan(&le.EntityID, &le.Type, &le.Name, &lePropsJSON, &le.Relationship, &le.EdgeCount); err != nil {
+			continue
+		}
+		if len(lePropsJSON) > 0 {
+			json.Unmarshal(lePropsJSON, &le.Properties)
+		}
+		if le.Properties == nil {
+			le.Properties = map[string]any{}
+		}
+
+		switch {
+		case le.Type == "malware":
+			profile.Malware = append(profile.Malware, le)
+		case le.Type == "tool":
+			profile.Tools = append(profile.Tools, le)
+		case le.Type == "ip" || le.Type == "domain" || le.Type == "url":
+			profile.Infrastructure = append(profile.Infrastructure, le)
+		case le.Type == "campaign":
+			profile.Campaigns = append(profile.Campaigns, le)
+		case le.Relationship == "targets":
+			profile.Targets = append(profile.Targets, le)
+		}
+	}
+	rows.Close()
+
+	// Initialize nil slices.
+	if profile.Malware == nil {
+		profile.Malware = []LinkedEntity{}
+	}
+	if profile.Tools == nil {
+		profile.Tools = []LinkedEntity{}
+	}
+	if profile.Infrastructure == nil {
+		profile.Infrastructure = []LinkedEntity{}
+	}
+	if profile.Targets == nil {
+		profile.Targets = []LinkedEntity{}
+	}
+	if profile.Campaigns == nil {
+		profile.Campaigns = []LinkedEntity{}
+	}
+
+	// 3. Fetch findings referencing this actor via entity edges to source entities.
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT rc.id)
+		FROM raw_content rc
+		JOIN edges edge ON edge.target_id = 'source:' || rc.source_name
+		WHERE edge.source_id = $1
+		  AND rc.classified = true AND rc.category != 'irrelevant'`, id,
+	).Scan(&profile.FindingCount)
+	if err != nil {
+		profile.FindingCount = 0
+	}
+
+	findingRows, err := pool.Query(ctx, `
+		SELECT DISTINCT rc.id, COALESCE(rc.category, ''), rc.sub_category,
+		       COALESCE(rc.severity, ''), COALESCE(rc.summary, ''),
+		       rc.source_name, rc.collected_at
+		FROM raw_content rc
+		JOIN edges edge ON edge.target_id = 'source:' || rc.source_name
+		WHERE edge.source_id = $1
+		  AND rc.classified = true AND rc.category != 'irrelevant'
+		ORDER BY rc.collected_at DESC
+		LIMIT 20`, id)
+	if err == nil {
+		defer findingRows.Close()
+		for findingRows.Next() {
+			var f ActorFindingSummary
+			if err := findingRows.Scan(&f.ID, &f.Category, &f.SubCategory,
+				&f.Severity, &f.Summary, &f.SourceName, &f.CollectedAt); err != nil {
+				continue
+			}
+			profile.RecentFindings = append(profile.RecentFindings, f)
+		}
+		findingRows.Close()
+	}
+	if profile.RecentFindings == nil {
+		profile.RecentFindings = []ActorFindingSummary{}
+	}
+
+	// 4. Fetch correlations involving this actor.
+	corrRows, err := pool.Query(ctx, `
+		SELECT id, cluster_id, entity_ids, finding_ids, correlation_type,
+		       confidence, method, evidence, created_at, updated_at
+		FROM correlations
+		WHERE $1 = ANY(entity_ids)
+		ORDER BY created_at DESC
+		LIMIT 20`, id)
+	if err == nil {
+		defer corrRows.Close()
+		for corrRows.Next() {
+			var c CorrelationItem
+			var evidenceJSON []byte
+			if err := corrRows.Scan(&c.ID, &c.ClusterID, &c.EntityIDs, &c.FindingIDs,
+				&c.CorrelationType, &c.Confidence, &c.Method, &evidenceJSON,
+				&c.CreatedAt, &c.UpdatedAt); err != nil {
+				continue
+			}
+			if len(evidenceJSON) > 0 {
+				json.Unmarshal(evidenceJSON, &c.Evidence)
+			}
+			if c.Evidence == nil {
+				c.Evidence = map[string]any{}
+			}
+			if c.EntityIDs == nil {
+				c.EntityIDs = []string{}
+			}
+			if c.FindingIDs == nil {
+				c.FindingIDs = []string{}
+			}
+			profile.Correlations = append(profile.Correlations, c)
+		}
+		corrRows.Close()
+	}
+	if profile.Correlations == nil {
+		profile.Correlations = []CorrelationItem{}
+	}
+
+	// 5. Fetch analytical notes.
+	noteRows, err := pool.Query(ctx, `
+		SELECT id, note_type, title, content, confidence, created_by, created_at
+		FROM analytical_notes
+		WHERE entity_id = $1 AND status = 'active'
+		ORDER BY created_at DESC
+		LIMIT 20`, id)
+	if err == nil {
+		defer noteRows.Close()
+		for noteRows.Next() {
+			var n AnalyticalNoteItem
+			if err := noteRows.Scan(&n.ID, &n.NoteType, &n.Title, &n.Content,
+				&n.Confidence, &n.CreatedBy, &n.CreatedAt); err != nil {
+				continue
+			}
+			profile.AnalyticalNotes = append(profile.AnalyticalNotes, n)
+		}
+		noteRows.Close()
+	}
+	if profile.AnalyticalNotes == nil {
+		profile.AnalyticalNotes = []AnalyticalNoteItem{}
+	}
+
+	// 6. First/last seen from findings.
+	var firstSeen, lastSeen *time.Time
+	pool.QueryRow(ctx, `
+		SELECT MIN(rc.collected_at), MAX(rc.collected_at)
+		FROM raw_content rc
+		JOIN edges edge ON edge.target_id = 'source:' || rc.source_name
+		WHERE edge.source_id = $1`, id,
+	).Scan(&firstSeen, &lastSeen)
+	profile.FirstSeen = firstSeen
+	profile.LastSeen = lastSeen
+
+	// 7. Threat level from actor_profiles if exists, otherwise derive.
+	var threatLevel string
+	err = pool.QueryRow(ctx,
+		`SELECT threat_level FROM actor_profiles WHERE id = $1`, id,
+	).Scan(&threatLevel)
+	if err != nil || threatLevel == "" {
+		threatLevel = "unknown"
+	}
+	profile.ThreatLevel = threatLevel
+
+	return profile, nil
+}
+
+// --- Source Value ---
+
+// SourceValueItem represents a source with its computed value metrics.
+type SourceValueItem struct {
+	ID                      string     `json:"id"`
+	Type                    string     `json:"type"`
+	Identifier              string     `json:"identifier"`
+	Name                    *string    `json:"name"`
+	Status                  string     `json:"status"`
+	UniqueIOCs              int        `json:"uniqueIocs"`
+	CorrelationContributions int       `json:"correlationContributions"`
+	AvgSeverity             float64    `json:"avgSeverity"`
+	SignalToNoise           float64    `json:"signalToNoise"`
+	ValueScore              float64    `json:"valueScore"`
+	ValueComputedAt         *time.Time `json:"valueComputedAt"`
+	ContentCount            int        `json:"contentCount"`
+}
+
+// SourceValueResponse wraps source value results.
+type SourceValueResponse struct {
+	Sources []SourceValueItem `json:"sources"`
+}
+
+func querySourceValues(ctx context.Context, pool *pgxpool.Pool) (*SourceValueResponse, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT s.id, s.type, s.identifier, s.name, s.status,
+		       COALESCE(s.unique_iocs, 0),
+		       COALESCE(s.correlation_contributions, 0),
+		       COALESCE(s.avg_severity, 0),
+		       COALESCE(s.signal_to_noise, 0),
+		       COALESCE(s.value_score, 0),
+		       s.value_computed_at,
+		       (SELECT COUNT(*) FROM raw_content rc WHERE rc.source_name = s.name)
+		FROM sources s
+		WHERE s.status IN ('active', 'approved', 'discovered')
+		ORDER BY COALESCE(s.value_score, 0) DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("source values query: %w", err)
+	}
+	defer rows.Close()
+
+	var sources []SourceValueItem
+	for rows.Next() {
+		var sv SourceValueItem
+		if err := rows.Scan(&sv.ID, &sv.Type, &sv.Identifier, &sv.Name, &sv.Status,
+			&sv.UniqueIOCs, &sv.CorrelationContributions, &sv.AvgSeverity,
+			&sv.SignalToNoise, &sv.ValueScore, &sv.ValueComputedAt,
+			&sv.ContentCount); err != nil {
+			continue
+		}
+		sources = append(sources, sv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("source values rows: %w", err)
+	}
+	if sources == nil {
+		sources = []SourceValueItem{}
+	}
+
+	return &SourceValueResponse{Sources: sources}, nil
+}
+
+// --- Sub-categories ---
+
+// SubCategoryCount represents a sub-category with its parent category and count.
+type SubCategoryCount struct {
+	SubCategory string `json:"sub_category"`
+	Category    string `json:"category"`
+	Count       int    `json:"count"`
+}
+
+func querySubcategories(ctx context.Context, pool *pgxpool.Pool) ([]SubCategoryCount, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT sub_category, category, COUNT(*) AS cnt
+		FROM raw_content
+		WHERE sub_category IS NOT NULL AND sub_category != ''
+		GROUP BY sub_category, category
+		ORDER BY category, cnt DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("subcategories query: %w", err)
+	}
+	defer rows.Close()
+
+	var results []SubCategoryCount
+	for rows.Next() {
+		var sc SubCategoryCount
+		if err := rows.Scan(&sc.SubCategory, &sc.Category, &sc.Count); err != nil {
+			continue
+		}
+		results = append(results, sc)
+	}
+	if results == nil {
+		results = []SubCategoryCount{}
+	}
+	return results, nil
+}
+
+// --- Analytical Notes ---
+
+// NotesResponse wraps paginated analytical notes.
+type NotesResponse struct {
+	Notes []NoteListItem `json:"notes"`
+	Total int64          `json:"total"`
+}
+
+// NoteListItem is a note for list views.
+type NoteListItem struct {
+	ID            string    `json:"id"`
+	FindingID     *string   `json:"findingId,omitempty"`
+	EntityID      *string   `json:"entityId,omitempty"`
+	CorrelationID *string   `json:"correlationId,omitempty"`
+	NoteType      string    `json:"noteType"`
+	Title         string    `json:"title"`
+	Content       string    `json:"content"`
+	Confidence    float64   `json:"confidence"`
+	CreatedBy     string    `json:"createdBy"`
+	ModelUsed     *string   `json:"modelUsed,omitempty"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+type notesFilter struct {
+	NoteType string
+	Status   string
+	EntityID string
+	Limit    int
+	Offset   int
+}
+
+func queryNotes(ctx context.Context, pool *pgxpool.Pool, f notesFilter) (*NotesResponse, error) {
+	var conditions []string
+	var args []interface{}
+	argIdx := 0
+
+	nextArg := func() string {
+		argIdx++
+		return fmt.Sprintf("$%d", argIdx)
+	}
+
+	if f.NoteType != "" {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("note_type = %s", p))
+		args = append(args, f.NoteType)
+	}
+	if f.Status != "" {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("status = %s", p))
+		args = append(args, f.Status)
+	} else {
+		conditions = append(conditions, "status = 'active'")
+	}
+	if f.EntityID != "" {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("entity_id = %s", p))
+		args = append(args, f.EntityID)
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int64
+	pool.QueryRow(ctx, "SELECT COUNT(*) FROM analytical_notes "+where, args...).Scan(&total)
+
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	limitP := nextArg()
+	offsetP := nextArg()
+	sql := fmt.Sprintf(`
+		SELECT id, finding_id, entity_id, correlation_id,
+		       note_type, title, content, confidence,
+		       created_by, model_used, status, created_at
+		FROM analytical_notes %s
+		ORDER BY created_at DESC
+		LIMIT %s OFFSET %s`, where, limitP, offsetP)
+	args = append(args, limit, f.Offset)
+
+	rows, err := pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("notes query: %w", err)
+	}
+	defer rows.Close()
+
+	var notes []NoteListItem
+	for rows.Next() {
+		var n NoteListItem
+		if err := rows.Scan(&n.ID, &n.FindingID, &n.EntityID, &n.CorrelationID,
+			&n.NoteType, &n.Title, &n.Content, &n.Confidence,
+			&n.CreatedBy, &n.ModelUsed, &n.Status, &n.CreatedAt); err != nil {
+			continue
+		}
+		notes = append(notes, n)
+	}
+	if notes == nil {
+		notes = []NoteListItem{}
+	}
+
+	return &NotesResponse{Notes: notes, Total: total}, nil
+}
+
+// --- Correlation Decisions ---
+
+// DecisionsResponse wraps paginated correlation decisions.
+type DecisionsResponse struct {
+	Decisions []DecisionItem `json:"decisions"`
+	Total     int64          `json:"total"`
+}
+
+// DecisionItem represents a correlation decision for API responses.
+type DecisionItem struct {
+	ID                    string    `json:"id"`
+	CandidateID           string    `json:"candidateId"`
+	ClusterID             string    `json:"clusterId"`
+	Decision              string    `json:"decision"`
+	Confidence            float64   `json:"confidence"`
+	Reasoning             string    `json:"reasoning"`
+	PromotedCorrelationID *string   `json:"promotedCorrelationId,omitempty"`
+	ModelUsed             *string   `json:"modelUsed,omitempty"`
+	CreatedAt             time.Time `json:"createdAt"`
+}
+
+type decisionsFilter struct {
+	Decision string
+	Limit    int
+	Offset   int
+}
+
+func queryCorrelationDecisions(ctx context.Context, pool *pgxpool.Pool, f decisionsFilter) (*DecisionsResponse, error) {
+	var conditions []string
+	var args []interface{}
+	argIdx := 0
+
+	nextArg := func() string {
+		argIdx++
+		return fmt.Sprintf("$%d", argIdx)
+	}
+
+	if f.Decision != "" {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("decision = %s", p))
+		args = append(args, f.Decision)
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int64
+	pool.QueryRow(ctx, "SELECT COUNT(*) FROM correlation_decisions "+where, args...).Scan(&total)
+
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	limitP := nextArg()
+	offsetP := nextArg()
+	sql := fmt.Sprintf(`
+		SELECT id, candidate_id, cluster_id, decision, confidence,
+		       reasoning, promoted_correlation_id, model_used, created_at
+		FROM correlation_decisions %s
+		ORDER BY created_at DESC
+		LIMIT %s OFFSET %s`, where, limitP, offsetP)
+	args = append(args, limit, f.Offset)
+
+	rows, err := pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("decisions query: %w", err)
+	}
+	defer rows.Close()
+
+	var decisions []DecisionItem
+	for rows.Next() {
+		var d DecisionItem
+		if err := rows.Scan(&d.ID, &d.CandidateID, &d.ClusterID, &d.Decision,
+			&d.Confidence, &d.Reasoning, &d.PromotedCorrelationID,
+			&d.ModelUsed, &d.CreatedAt); err != nil {
+			continue
+		}
+		decisions = append(decisions, d)
+	}
+	if decisions == nil {
+		decisions = []DecisionItem{}
+	}
+
+	return &DecisionsResponse{Decisions: decisions, Total: total}, nil
+}
+
+// --- Intelligence Briefs ---
+
+// BriefListItem is a compact representation for the briefs list view.
+type BriefListItem struct {
+	ID               string         `json:"id"`
+	PeriodStart      time.Time      `json:"periodStart"`
+	PeriodEnd        time.Time      `json:"periodEnd"`
+	BriefType        string         `json:"briefType"`
+	Title            string         `json:"title"`
+	ExecutiveSummary string         `json:"executiveSummary"`
+	Metrics          map[string]any `json:"metrics"`
+	GeneratedAt      time.Time      `json:"generatedAt"`
+}
+
+// BriefDetail is the full brief including content and sections.
+type BriefDetail struct {
+	BriefListItem
+	Content              string         `json:"content"`
+	Sections             map[string]any `json:"sections"`
+	ModelUsed            *string        `json:"modelUsed,omitempty"`
+	GenerationDurationMs int            `json:"generationDurationMs"`
+}
+
+// BriefsResponse wraps paginated briefs.
+type BriefsResponse struct {
+	Briefs []BriefListItem `json:"briefs"`
+	Total  int64           `json:"total"`
+}
+
+func queryBriefs(ctx context.Context, pool *pgxpool.Pool, briefType string, limit, offset int) (*BriefsResponse, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var total int64
+	err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM intelligence_briefs WHERE brief_type = $1`,
+		briefType,
+	).Scan(&total)
+	if err != nil {
+		return nil, fmt.Errorf("briefs: count: %w", err)
+	}
+
+	rows, err := pool.Query(ctx, `
+		SELECT id, period_start, period_end, brief_type, title, executive_summary,
+		       metrics, generated_at
+		FROM intelligence_briefs
+		WHERE brief_type = $1
+		ORDER BY period_end DESC
+		LIMIT $2 OFFSET $3`, briefType, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("briefs: query: %w", err)
+	}
+	defer rows.Close()
+
+	var briefs []BriefListItem
+	for rows.Next() {
+		var b BriefListItem
+		var metricsJSON []byte
+		if err := rows.Scan(&b.ID, &b.PeriodStart, &b.PeriodEnd, &b.BriefType,
+			&b.Title, &b.ExecutiveSummary, &metricsJSON, &b.GeneratedAt); err != nil {
+			return nil, fmt.Errorf("briefs: scan: %w", err)
+		}
+		if len(metricsJSON) > 0 {
+			json.Unmarshal(metricsJSON, &b.Metrics)
+		}
+		briefs = append(briefs, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("briefs rows: %w", err)
+	}
+	if briefs == nil {
+		briefs = []BriefListItem{}
+	}
+
+	return &BriefsResponse{Briefs: briefs, Total: total}, nil
+}
+
+func queryLatestBrief(ctx context.Context, pool *pgxpool.Pool, briefType string) (*BriefDetail, error) {
+	var b BriefDetail
+	var sectionsJSON, metricsJSON []byte
+
+	err := pool.QueryRow(ctx, `
+		SELECT id, period_start, period_end, brief_type, title, executive_summary,
+		       content, sections, metrics, model_used, generation_duration_ms, generated_at
+		FROM intelligence_briefs
+		WHERE brief_type = $1
+		ORDER BY period_end DESC LIMIT 1`, briefType).Scan(
+		&b.ID, &b.PeriodStart, &b.PeriodEnd, &b.BriefType, &b.Title,
+		&b.ExecutiveSummary, &b.Content, &sectionsJSON, &metricsJSON,
+		&b.ModelUsed, &b.GenerationDurationMs, &b.GeneratedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("latest brief: %w", err)
+	}
+
+	if len(sectionsJSON) > 0 {
+		json.Unmarshal(sectionsJSON, &b.Sections)
+	}
+	if len(metricsJSON) > 0 {
+		json.Unmarshal(metricsJSON, &b.Metrics)
+	}
+
+	return &b, nil
+}
+
+// --- Vulnerability Intelligence ---
+
+// VulnListItem is a compact vulnerability for list views.
+type VulnListItem struct {
+	ID               string     `json:"id"`
+	CVEID            string     `json:"cveId"`
+	Description      *string    `json:"description,omitempty"`
+	CVSSV31Score     *float64   `json:"cvssScore,omitempty"`
+	CVSSSeverity     *string    `json:"cvssSeverity,omitempty"`
+	EPSSScore        *float64   `json:"epssScore,omitempty"`
+	EPSSPercentile   *float64   `json:"epssPercentile,omitempty"`
+	KEVListed        bool       `json:"kevListed"`
+	KEVRansomwareUse bool       `json:"kevRansomwareUse"`
+	ExploitAvailable bool       `json:"exploitAvailable"`
+	DarkWebMentions  int        `json:"darkWebMentions"`
+	PriorityScore    *float64   `json:"priorityScore,omitempty"`
+	PriorityLabel    *string    `json:"priorityLabel,omitempty"`
+	PublishedAt      *time.Time `json:"publishedAt,omitempty"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
+}
+
+// VulnsResponse wraps paginated vulnerabilities.
+type VulnsResponse struct {
+	Vulnerabilities []VulnListItem `json:"vulnerabilities"`
+	Total           int64          `json:"total"`
+}
+
+type vulnsFilter struct {
+	MinPriority *float64
+	KEVOnly     bool
+	MinEPSS     *float64
+	HasExploit  bool
+	HasMentions bool
+	Query       string
+	Limit       int
+	Offset      int
+}
+
+func queryVulnerabilities(ctx context.Context, pool *pgxpool.Pool, f vulnsFilter) (*VulnsResponse, error) {
+	var conditions []string
+	var args []interface{}
+	argIdx := 0
+
+	nextArg := func() string {
+		argIdx++
+		return fmt.Sprintf("$%d", argIdx)
+	}
+
+	if f.MinPriority != nil {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("priority_score >= %s", p))
+		args = append(args, *f.MinPriority)
+	}
+	if f.KEVOnly {
+		conditions = append(conditions, "kev_listed = TRUE")
+	}
+	if f.MinEPSS != nil {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("epss_score >= %s", p))
+		args = append(args, *f.MinEPSS)
+	}
+	if f.HasExploit {
+		conditions = append(conditions, "exploit_available = TRUE")
+	}
+	if f.HasMentions {
+		conditions = append(conditions, "dark_web_mentions > 0")
+	}
+	if f.Query != "" {
+		p := nextArg()
+		conditions = append(conditions, fmt.Sprintf("cve_id ILIKE '%%' || %s || '%%'", p))
+		args = append(args, f.Query)
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int64
+	countSQL := "SELECT COUNT(*) FROM vulnerabilities " + where
+	if err := pool.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("vulns: count: %w", err)
+	}
+
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	limitP := nextArg()
+	offsetP := nextArg()
+	sql := fmt.Sprintf(`
+		SELECT id, cve_id, description, cvss_v31_score, cvss_severity,
+		       epss_score, epss_percentile,
+		       kev_listed, kev_ransomware_use,
+		       exploit_available, dark_web_mentions,
+		       priority_score, priority_label,
+		       published_at, updated_at
+		FROM vulnerabilities %s
+		ORDER BY priority_score DESC NULLS LAST
+		LIMIT %s OFFSET %s`, where, limitP, offsetP)
+	args = append(args, limit, f.Offset)
+
+	rows, err := pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("vulns: query: %w", err)
+	}
+	defer rows.Close()
+
+	var vulns []VulnListItem
+	for rows.Next() {
+		var v VulnListItem
+		if err := rows.Scan(
+			&v.ID, &v.CVEID, &v.Description, &v.CVSSV31Score, &v.CVSSSeverity,
+			&v.EPSSScore, &v.EPSSPercentile,
+			&v.KEVListed, &v.KEVRansomwareUse,
+			&v.ExploitAvailable, &v.DarkWebMentions,
+			&v.PriorityScore, &v.PriorityLabel,
+			&v.PublishedAt, &v.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("vulns: scan: %w", err)
+		}
+		vulns = append(vulns, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("vulns rows: %w", err)
+	}
+	if vulns == nil {
+		vulns = []VulnListItem{}
+	}
+
+	return &VulnsResponse{Vulnerabilities: vulns, Total: total}, nil
 }

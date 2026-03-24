@@ -40,6 +40,9 @@ type RawContent struct {
 	EntitiesExtracted     bool
 	Provenance            string
 	ClassificationVersion int
+	SubCategory           string
+	SubMetadata           map[string]any
+	SubClassified         bool
 }
 
 // SearchQuery defines the filter parameters for searching the raw content
@@ -132,6 +135,40 @@ type CorrelationCandidate struct {
 	UpdatedAt     time.Time
 }
 
+// AnalyticalNote represents a note produced by the Brain or Analyst.
+type AnalyticalNote struct {
+	ID            string    `json:"id"`
+	FindingID     *string   `json:"finding_id,omitempty"`
+	EntityID      *string   `json:"entity_id,omitempty"`
+	CorrelationID *string   `json:"correlation_id,omitempty"`
+	IOCType       *string   `json:"ioc_type,omitempty"`
+	IOCValue      *string   `json:"ioc_value,omitempty"`
+	NoteType      string    `json:"note_type"`
+	Title         string    `json:"title"`
+	Content       string    `json:"content"`
+	Confidence    float64   `json:"confidence"`
+	CreatedBy     string    `json:"created_by"`
+	ModelUsed     *string   `json:"model_used,omitempty"`
+	Status        string    `json:"status"`
+	SupersededBy  *string   `json:"superseded_by,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// CorrelationDecision records an Analyst's decision about a correlation candidate.
+type CorrelationDecision struct {
+	ID                    string         `json:"id"`
+	CandidateID           string         `json:"candidate_id"`
+	ClusterID             string         `json:"cluster_id"`
+	Decision              string         `json:"decision"`
+	Confidence            float64        `json:"confidence"`
+	Reasoning             string         `json:"reasoning"`
+	PromotedCorrelationID *string        `json:"promoted_correlation_id,omitempty"`
+	ContextSnapshot       map[string]any `json:"context_snapshot"`
+	ModelUsed             *string        `json:"model_used,omitempty"`
+	CreatedAt             time.Time      `json:"created_at"`
+}
+
 // CorrelationFilter controls filtering for FetchCorrelations.
 type CorrelationFilter struct {
 	Type          string
@@ -139,6 +176,21 @@ type CorrelationFilter struct {
 	Since         *time.Time
 	Limit         int
 	Offset        int
+}
+
+// Entity represents a node in the entity graph.
+type Entity struct {
+	ID         string         `json:"id"`
+	Type       string         `json:"type"`
+	Properties map[string]any `json:"properties"`
+}
+
+// NeighborEntity represents an adjacent entity in the graph.
+type NeighborEntity struct {
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+	Relationship string `json:"relationship"`
+	Direction    string `json:"direction"` // "outgoing" or "incoming"
 }
 
 // Store provides CRUD and query operations on the raw_content table.
@@ -237,7 +289,8 @@ func (s *Store) FetchUnclassified(ctx context.Context, limit int) ([]RawContent,
 SELECT id, source_type, source_id, source_name, content, content_hash,
        author, author_id, url, language, collected_at, posted_at,
        metadata, classified, category, tags, severity, summary,
-       entities_extracted, provenance, classification_version
+       entities_extracted, provenance, classification_version,
+       sub_category, sub_metadata, sub_classified
 FROM raw_content
 WHERE classified = false
 ORDER BY collected_at ASC
@@ -271,7 +324,8 @@ func (s *Store) FetchClassifiedUnextracted(ctx context.Context, limit int) ([]Ra
 SELECT id, source_type, source_id, source_name, content, content_hash,
        author, author_id, url, language, collected_at, posted_at,
        metadata, classified, category, tags, severity, summary,
-       entities_extracted, provenance, classification_version
+       entities_extracted, provenance, classification_version,
+       sub_category, sub_metadata, sub_classified
 FROM raw_content
 WHERE classified = true AND entities_extracted = false
 ORDER BY collected_at ASC
@@ -319,11 +373,15 @@ WHERE classification_version IS NULL OR classification_version < $1`
 // ioc_sightings for cross-source correlation.
 func (s *Store) UpsertIOC(ctx context.Context, iocType, value, iocContext, sourceContentID string) error {
 	const query = `
-INSERT INTO iocs (type, value, context, source_content_id)
-VALUES ($1, $2, $3, $4)
+INSERT INTO iocs (type, value, context, source_content_id, base_score, threat_score, active)
+VALUES ($1, $2, $3, $4, 0.5, 0.5, TRUE)
 ON CONFLICT (type, value) DO UPDATE
 SET sighting_count = iocs.sighting_count + 1,
-    last_seen = NOW()`
+    last_seen = NOW(),
+    active = TRUE,
+    deactivated_at = NULL,
+    base_score = GREATEST(iocs.base_score, 0.5),
+    threat_score = GREATEST(iocs.threat_score, 0.5)`
 
 	_, err := s.pool.Exec(ctx, query, iocType, value, iocContext, sourceContentID)
 	if err != nil {
@@ -824,7 +882,8 @@ func (s *Store) Search(ctx context.Context, query SearchQuery) ([]RawContent, er
 SELECT id, source_type, source_id, source_name, content, content_hash,
        author, author_id, url, language, collected_at, posted_at,
        metadata, classified, category, tags, severity, summary,
-       entities_extracted, provenance, classification_version
+       entities_extracted, provenance, classification_version,
+       sub_category, sub_metadata, sub_classified
 FROM raw_content`
 
 	if len(conditions) > 0 {
@@ -970,6 +1029,7 @@ type scanner interface {
 func scanRawContent(row scanner) (RawContent, error) {
 	var rc RawContent
 	var metaJSON []byte
+	var subMetaJSON []byte
 
 	err := row.Scan(
 		&rc.ID, &rc.SourceType, &rc.SourceID, &rc.SourceName,
@@ -981,6 +1041,7 @@ func scanRawContent(row scanner) (RawContent, error) {
 		&rc.Severity, &rc.Summary,
 		&rc.EntitiesExtracted,
 		&rc.Provenance, &rc.ClassificationVersion,
+		&rc.SubCategory, &subMetaJSON, &rc.SubClassified,
 	)
 	if err != nil {
 		return RawContent{}, fmt.Errorf("archive: scan raw_content: %w", err)
@@ -991,6 +1052,429 @@ func scanRawContent(row scanner) (RawContent, error) {
 			return RawContent{}, fmt.Errorf("archive: unmarshal metadata: %w", err)
 		}
 	}
+	if len(subMetaJSON) > 0 {
+		if err := json.Unmarshal(subMetaJSON, &rc.SubMetadata); err != nil {
+			return RawContent{}, fmt.Errorf("archive: unmarshal sub_metadata: %w", err)
+		}
+	}
 
 	return rc, nil
+}
+
+// ---------------------------------------------------------------------------
+// Sub-classification (Librarian)
+// ---------------------------------------------------------------------------
+
+// FetchUnsubclassified returns classified + entity-extracted items that haven't
+// been sub-classified yet, ordered oldest first.
+func (s *Store) FetchUnsubclassified(ctx context.Context, limit int) ([]RawContent, error) {
+	const query = `
+SELECT id, source_type, source_id, source_name, content, content_hash,
+       author, author_id, url, language, collected_at, posted_at,
+       metadata, classified, category, tags, severity, summary,
+       entities_extracted, provenance, classification_version,
+       sub_category, sub_metadata, sub_classified
+FROM raw_content
+WHERE classified = TRUE
+  AND entities_extracted = TRUE
+  AND sub_classified = FALSE
+  AND category IS NOT NULL
+  AND category != 'irrelevant'
+ORDER BY collected_at ASC
+LIMIT $1`
+
+	rows, err := s.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch unsubclassified: %w", err)
+	}
+	defer rows.Close()
+
+	var results []RawContent
+	for rows.Next() {
+		rc, err := scanRawContent(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, rc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch unsubclassified rows: %w", err)
+	}
+
+	return results, nil
+}
+
+// MarkSubClassified updates a raw_content record with Librarian results.
+func (s *Store) MarkSubClassified(ctx context.Context, id string, subCategory string, subMetadata map[string]any) error {
+	metaJSON, err := json.Marshal(subMetadata)
+	if err != nil {
+		return fmt.Errorf("archive: marshal sub_metadata: %w", err)
+	}
+	const query = `
+UPDATE raw_content
+SET sub_classified = true, sub_category = $2, sub_metadata = $3
+WHERE id = $1`
+
+	ct, err := s.pool.Exec(ctx, query, id, subCategory, metaJSON)
+	if err != nil {
+		return fmt.Errorf("archive: mark sub_classified %s: %w", id, err)
+	}
+	if ct.RowsAffected() == 0 {
+		return fmt.Errorf("archive: mark sub_classified: no row with id %s", id)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Analytical Notes (Brain memory)
+// ---------------------------------------------------------------------------
+
+// InsertAnalyticalNote stores a new analytical note.
+func (s *Store) InsertAnalyticalNote(ctx context.Context, note *AnalyticalNote) error {
+	const query = `
+INSERT INTO analytical_notes (
+    finding_id, entity_id, correlation_id, ioc_type, ioc_value,
+    note_type, title, content, confidence,
+    created_by, model_used, status
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+RETURNING id, created_at`
+
+	return s.pool.QueryRow(ctx, query,
+		note.FindingID, note.EntityID, note.CorrelationID, note.IOCType, note.IOCValue,
+		note.NoteType, note.Title, note.Content, note.Confidence,
+		note.CreatedBy, note.ModelUsed, note.Status,
+	).Scan(&note.ID, &note.CreatedAt)
+}
+
+// FetchAnalyticalNotesForEntity returns active notes relevant to an entity.
+func (s *Store) FetchAnalyticalNotesForEntity(ctx context.Context, entityID string, limit int) ([]AnalyticalNote, error) {
+	const query = `
+SELECT id, finding_id, entity_id, correlation_id, ioc_type, ioc_value,
+       note_type, title, content, confidence, created_by, model_used,
+       status, created_at, updated_at
+FROM analytical_notes
+WHERE entity_id = $1 AND status = 'active'
+ORDER BY created_at DESC
+LIMIT $2`
+
+	rows, err := s.pool.Query(ctx, query, entityID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch notes for entity %s: %w", entityID, err)
+	}
+	defer rows.Close()
+
+	var results []AnalyticalNote
+	for rows.Next() {
+		n, err := scanAnalyticalNote(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch notes for entity rows: %w", err)
+	}
+	return results, nil
+}
+
+// FetchRecentAnalyticalNotes returns the most recent active notes.
+func (s *Store) FetchRecentAnalyticalNotes(ctx context.Context, limit int) ([]AnalyticalNote, error) {
+	const query = `
+SELECT id, finding_id, entity_id, correlation_id, ioc_type, ioc_value,
+       note_type, title, content, confidence, created_by, model_used,
+       status, created_at, updated_at
+FROM analytical_notes
+WHERE status = 'active'
+ORDER BY created_at DESC
+LIMIT $1`
+
+	rows, err := s.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch recent notes: %w", err)
+	}
+	defer rows.Close()
+
+	var results []AnalyticalNote
+	for rows.Next() {
+		n, err := scanAnalyticalNote(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch recent notes rows: %w", err)
+	}
+	return results, nil
+}
+
+// FetchNotesForCorrelationContext returns notes relevant to a set of entity IDs,
+// for feeding into the Analyst's prompt as context.
+func (s *Store) FetchNotesForCorrelationContext(ctx context.Context, entityIDs []string) ([]AnalyticalNote, error) {
+	const query = `
+SELECT id, finding_id, entity_id, correlation_id, ioc_type, ioc_value,
+       note_type, title, content, confidence, created_by, model_used,
+       status, created_at, updated_at
+FROM analytical_notes
+WHERE entity_id = ANY($1) AND status = 'active'
+ORDER BY created_at DESC
+LIMIT 20`
+
+	rows, err := s.pool.Query(ctx, query, entityIDs)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch notes for correlation context: %w", err)
+	}
+	defer rows.Close()
+
+	var results []AnalyticalNote
+	for rows.Next() {
+		n, err := scanAnalyticalNote(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch notes for correlation context rows: %w", err)
+	}
+	return results, nil
+}
+
+// scanAnalyticalNote reads a single row into an AnalyticalNote struct.
+func scanAnalyticalNote(row scanner) (AnalyticalNote, error) {
+	var n AnalyticalNote
+	err := row.Scan(
+		&n.ID, &n.FindingID, &n.EntityID, &n.CorrelationID,
+		&n.IOCType, &n.IOCValue,
+		&n.NoteType, &n.Title, &n.Content, &n.Confidence,
+		&n.CreatedBy, &n.ModelUsed,
+		&n.Status, &n.CreatedAt, &n.UpdatedAt,
+	)
+	if err != nil {
+		return AnalyticalNote{}, fmt.Errorf("archive: scan analytical_note: %w", err)
+	}
+	return n, nil
+}
+
+// ---------------------------------------------------------------------------
+// Correlation Decisions (Analyst audit trail)
+// ---------------------------------------------------------------------------
+
+// InsertCorrelationDecision logs an Analyst decision about a candidate.
+func (s *Store) InsertCorrelationDecision(ctx context.Context, d *CorrelationDecision) error {
+	snapshotJSON, err := json.Marshal(d.ContextSnapshot)
+	if err != nil {
+		return fmt.Errorf("archive: marshal context_snapshot: %w", err)
+	}
+	const query = `
+INSERT INTO correlation_decisions (
+    candidate_id, cluster_id, decision, confidence, reasoning,
+    promoted_correlation_id, context_snapshot, model_used
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, created_at`
+
+	return s.pool.QueryRow(ctx, query,
+		d.CandidateID, d.ClusterID, d.Decision, d.Confidence, d.Reasoning,
+		d.PromotedCorrelationID, snapshotJSON, d.ModelUsed,
+	).Scan(&d.ID, &d.CreatedAt)
+}
+
+// UpdateCandidateStatus updates the status of a correlation candidate.
+func (s *Store) UpdateCandidateStatus(ctx context.Context, id string, status string) error {
+	const query = `UPDATE correlation_candidates SET status = $2, updated_at = NOW() WHERE id = $1`
+	_, err := s.pool.Exec(ctx, query, id, status)
+	if err != nil {
+		return fmt.Errorf("archive: update candidate status %s: %w", id, err)
+	}
+	return nil
+}
+
+// FetchPendingCandidates returns correlation candidates that haven't been
+// evaluated by the Analyst, ordered by signal strength.
+func (s *Store) FetchPendingCandidates(ctx context.Context, limit int) ([]CorrelationCandidate, error) {
+	const query = `
+SELECT id, cluster_id, entity_ids, finding_ids, candidate_type,
+       signal_count, signals, seen_count, status, created_at, updated_at
+FROM correlation_candidates
+WHERE status = 'pending'
+ORDER BY signal_count DESC, created_at ASC
+LIMIT $1`
+
+	rows, err := s.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch pending candidates: %w", err)
+	}
+	defer rows.Close()
+
+	var results []CorrelationCandidate
+	for rows.Next() {
+		var c CorrelationCandidate
+		var signalsJSON []byte
+		err := rows.Scan(
+			&c.ID, &c.ClusterID, &c.EntityIDs, &c.FindingIDs,
+			&c.CandidateType, &c.SignalCount, &signalsJSON,
+			&c.SeenCount, &c.Status, &c.CreatedAt, &c.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("archive: scan pending candidate: %w", err)
+		}
+		if len(signalsJSON) > 0 {
+			if err := json.Unmarshal(signalsJSON, &c.Signals); err != nil {
+				return nil, fmt.Errorf("archive: unmarshal candidate signals: %w", err)
+			}
+		}
+		results = append(results, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch pending candidates rows: %w", err)
+	}
+	return results, nil
+}
+
+// ---------------------------------------------------------------------------
+// Finding context lookups (for Librarian sub-classification)
+// ---------------------------------------------------------------------------
+
+// FetchEntityNamesForFinding returns entity names linked to a finding via
+// IOC sightings and graph edges.
+func (s *Store) FetchEntityNamesForFinding(ctx context.Context, findingID string) ([]string, error) {
+	const query = `
+SELECT DISTINCT name FROM (
+    -- IOC entities linked via sightings
+    SELECT COALESCE(e.properties->>'value', e.properties->>'name', e.id) AS name
+    FROM ioc_sightings s
+    JOIN entities e ON e.id = 'ioc:' || s.ioc_type || ':' || s.ioc_value
+    WHERE s.raw_content_id = $1::uuid
+    UNION
+    -- Named entities mentioned in the same source
+    SELECT COALESCE(e.properties->>'name', e.id) AS name
+    FROM entities e
+    JOIN edges edge ON edge.source_id = e.id
+    JOIN raw_content rc ON edge.target_id = 'source:' || rc.source_name AND rc.id = $1::uuid
+    WHERE e.type NOT IN ('channel')
+) sub
+LIMIT 50`
+
+	rows, err := s.pool.Query(ctx, query, findingID)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch entity names for finding %s: %w", findingID, err)
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("archive: scan entity name: %w", err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch entity names rows: %w", err)
+	}
+	return names, nil
+}
+
+// FetchIOCValuesForFinding returns IOC "type:value" strings linked to a finding.
+func (s *Store) FetchIOCValuesForFinding(ctx context.Context, findingID string) ([]string, error) {
+	const query = `
+SELECT DISTINCT ioc_type || ':' || ioc_value
+FROM ioc_sightings
+WHERE raw_content_id = $1::uuid
+ORDER BY 1
+LIMIT 50`
+
+	rows, err := s.pool.Query(ctx, query, findingID)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch ioc values for finding %s: %w", findingID, err)
+	}
+	defer rows.Close()
+
+	var values []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, fmt.Errorf("archive: scan ioc value: %w", err)
+		}
+		values = append(values, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch ioc values rows: %w", err)
+	}
+	return values, nil
+}
+
+// ---------------------------------------------------------------------------
+// Single-record lookups (for Analyst context building)
+// ---------------------------------------------------------------------------
+
+// FetchRawContentByID returns a single raw_content record by UUID.
+func (s *Store) FetchRawContentByID(ctx context.Context, id string) (*RawContent, error) {
+	const query = `
+SELECT id, source_type, source_id, source_name, content, content_hash,
+       author, author_id, url, language, collected_at, posted_at,
+       metadata, classified, category, tags, severity, summary,
+       entities_extracted, provenance, classification_version,
+       sub_category, sub_metadata, sub_classified
+FROM raw_content
+WHERE id = $1`
+
+	rc, err := scanRawContent(s.pool.QueryRow(ctx, query, id))
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch raw_content by id %s: %w", id, err)
+	}
+	return &rc, nil
+}
+
+// FetchEntityByID returns a single entity from the graph.
+func (s *Store) FetchEntityByID(ctx context.Context, entityID string) (*Entity, error) {
+	const query = `SELECT id, type, properties FROM entities WHERE id = $1`
+
+	var e Entity
+	var propsJSON []byte
+	err := s.pool.QueryRow(ctx, query, entityID).Scan(&e.ID, &e.Type, &propsJSON)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch entity %s: %w", entityID, err)
+	}
+	if len(propsJSON) > 0 {
+		if err := json.Unmarshal(propsJSON, &e.Properties); err != nil {
+			return nil, fmt.Errorf("archive: unmarshal entity properties: %w", err)
+		}
+	}
+	return &e, nil
+}
+
+// FetchEntityNeighbors returns entities connected to entityID within the given
+// number of hops. Currently supports 1-hop only.
+func (s *Store) FetchEntityNeighbors(ctx context.Context, entityID string, _ int) ([]NeighborEntity, error) {
+	const query = `
+SELECT e.id, e.type, edge.relationship, 'outgoing'
+FROM edges edge
+JOIN entities e ON e.id = edge.target_id
+WHERE edge.source_id = $1
+UNION ALL
+SELECT e.id, e.type, edge.relationship, 'incoming'
+FROM edges edge
+JOIN entities e ON e.id = edge.source_id
+WHERE edge.target_id = $1
+LIMIT 30`
+
+	rows, err := s.pool.Query(ctx, query, entityID)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch neighbors for %s: %w", entityID, err)
+	}
+	defer rows.Close()
+
+	var neighbors []NeighborEntity
+	for rows.Next() {
+		var n NeighborEntity
+		if err := rows.Scan(&n.ID, &n.Type, &n.Relationship, &n.Direction); err != nil {
+			return nil, fmt.Errorf("archive: scan neighbor: %w", err)
+		}
+		neighbors = append(neighbors, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch neighbors rows: %w", err)
+	}
+	return neighbors, nil
 }

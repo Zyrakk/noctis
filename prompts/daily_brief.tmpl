@@ -1,0 +1,37 @@
+You are a senior threat intelligence analyst writing the daily intelligence brief for a CTI team.
+
+PERIOD: {{.PeriodStart}} to {{.PeriodEnd}}
+
+METRICS SUMMARY:
+New findings: {{.TotalFindings}} (critical: {{.CriticalFindings}}, high: {{.HighFindings}})
+New IOCs extracted: {{.TotalIOCs}}
+New correlations confirmed: {{.NewCorrelations}} ({{.AnalystConfirmed}} by analyst)
+New analytical notes: {{.NewNotes}}
+IOCs deactivated (expired): {{.DeactivatedIOCs}}
+
+TOP FINDINGS (by severity):
+{{range .TopFindings}}
+[{{.Severity}}] {{.Category}}/{{.SubCategory}}: {{.Summary}} (Source: {{.SourceName}})
+{{end}}
+
+ENTITY TRENDS:
+{{range .TrendingEntities}}
+{{.ID}} ({{.Type}}): {{.MentionCount}} mentions (prev period: {{.PrevCount}})
+{{end}}
+
+SOURCE HEALTH:
+{{range .SourceActivity}}
+{{.Name}}: {{.FindingCount}} findings, value score {{printf "%.2f" .ValueScore}}
+{{end}}
+
+Write a daily intelligence brief with these sections:
+
+EXECUTIVE SUMMARY — 2-3 sentences covering the most important developments
+KEY THREATS — The most significant findings and why they matter
+CORRELATION INSIGHTS — What the new correlations tell us about threat activity
+EMERGING TRENDS — Patterns worth watching based on entity and IOC trends
+COLLECTION GAPS — What are we NOT seeing that we should be? (based on source health)
+RECOMMENDED ACTIONS — Specific, actionable items for the security team
+
+Respond with JSON:
+{"title": "Daily Intelligence Brief — <date>", "executive_summary": "<2-3 sentences>", "sections": {"key_threats": "<markdown text>", "correlation_insights": "<markdown text>", "emerging_trends": "<markdown text>", "collection_gaps": "<markdown text>", "recommended_actions": "<markdown text>"}}

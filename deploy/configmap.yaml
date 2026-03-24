@@ -99,16 +99,24 @@ data:
         requestsPerMinute: 20
 
       llmFast:
-        provider: glm
-        baseURL: "https://open.bigmodel.cn/api/coding/paas/v4"
-        model: "GLM-4-Plus"
-        apiKey: "${NOCTIS_LLM_API_KEY}"
-        maxConcurrency: 20
+        provider: groq
+        baseURL: "https://api.groq.com/openai/v1"
+        model: "llama-4-scout-17b-16e-instruct"
+        apiKey: "${NOCTIS_GROQ_API_KEY}"
+        maxConcurrency: 5
+
+      llmBrain:
+        provider: gemini
+        baseURL: "https://generativelanguage.googleapis.com/v1beta/openai"
+        model: "gemini-3.1-pro-preview"
+        apiKey: "${NOCTIS_GEMINI_API_KEY}"
+        maxConcurrent: 2
 
       collection:
         archiveAll: true
         classificationWorkers: 8
         entityExtractionWorkers: 2
+        librarianWorkers: 1
         classificationBatchSize: 10
         maxContentLength: 50000
 
@@ -188,6 +196,22 @@ data:
         intervalMinutes: 15
         minEvidenceThreshold: 3
         temporalWindowHours: 48
+
+      analyst:
+        enabled: true
+        intervalMinutes: 60
+        batchSize: 10
+        minSignalCount: 2
+        promoteThreshold: 0.7
+
+      iocLifecycle:
+        enabled: true
+        intervalMinutes: 60
+        deactivateThreshold: 0.1
+
+      briefGenerator:
+        enabled: true
+        scheduleHour: 6
 
       dashboard:
         enabled: true

@@ -8,6 +8,10 @@ import Findings from './pages/Findings.jsx'
 import IOCs from './pages/IOCs.jsx'
 import Sources from './pages/Sources.jsx'
 import Graph from './pages/Graph.jsx'
+import Correlations from './pages/Correlations.jsx'
+import AnalyticalNotes from './pages/AnalyticalNotes.jsx'
+import Briefs from './pages/Briefs.jsx'
+import SystemStatus from './pages/SystemStatus.jsx'
 
 // Simple client-side router (avoids react-router CDN version issues)
 function useRouter() {
@@ -59,6 +63,10 @@ function AppRoutes() {
     '/dashboard/iocs': IOCs,
     '/dashboard/sources': Sources,
     '/dashboard/graph': Graph,
+    '/dashboard/correlations': Correlations,
+    '/dashboard/notes': AnalyticalNotes,
+    '/dashboard/briefs': Briefs,
+    '/dashboard/system': SystemStatus,
   }
 
   const PageComponent = dashboardPages[path]

@@ -1,4 +1,4 @@
-package ingest
+package brain
 
 import (
 	"context"
@@ -9,7 +9,21 @@ import (
 	"time"
 
 	"github.com/Zyrakk/noctis/internal/archive"
+	"github.com/Zyrakk/noctis/internal/config"
+	"github.com/Zyrakk/noctis/internal/modules"
 )
+
+// CorrelationStore defines the archive operations used by the correlation engine.
+// The real archive.Store satisfies this interface.
+type CorrelationStore interface {
+	FindSharedIOCs(ctx context.Context, minSources int) ([]archive.SharedIOCResult, error)
+	FindHandleReuse(ctx context.Context, minSources int) ([]archive.HandleReuseResult, error)
+	FindTemporalIOCOverlap(ctx context.Context, windowHours int, minSharedIOCs int) ([]archive.TemporalOverlapResult, error)
+	FindEntityClusters(ctx context.Context, entityType string, minConnections int) ([]archive.EntityClusterResult, error)
+	UpsertCorrelation(ctx context.Context, c *archive.Correlation) error
+	UpsertCandidate(ctx context.Context, c *archive.CorrelationCandidate) error
+	UpsertEntity(ctx context.Context, id, entityType string, properties map[string]any) error
+}
 
 // toolWhitelist contains entity names that are legitimate security/forensics
 // tools and should not serve as the sole basis for campaign clustering.
@@ -30,16 +44,88 @@ var toolWhitelist = map[string]bool{
 	"phishing": true,
 }
 
-// correlationStore defines the archive operations used by the correlation engine.
-// The real archive.Store satisfies this interface.
-type correlationStore interface {
-	FindSharedIOCs(ctx context.Context, minSources int) ([]archive.SharedIOCResult, error)
-	FindHandleReuse(ctx context.Context, minSources int) ([]archive.HandleReuseResult, error)
-	FindTemporalIOCOverlap(ctx context.Context, windowHours int, minSharedIOCs int) ([]archive.TemporalOverlapResult, error)
-	FindEntityClusters(ctx context.Context, entityType string, minConnections int) ([]archive.EntityClusterResult, error)
-	UpsertCorrelation(ctx context.Context, c *archive.Correlation) error
-	UpsertCandidate(ctx context.Context, c *archive.CorrelationCandidate) error
-	UpsertEntity(ctx context.Context, id, entityType string, properties map[string]interface{}) error
+// Correlator is the correlation sub-module with its own status tracking.
+type Correlator struct {
+	store  CorrelationStore
+	cfg    config.CorrelationConfig
+	status *modules.StatusTracker
+}
+
+// NewCorrelator creates a correlator bound to the given store and config.
+func NewCorrelator(store CorrelationStore, cfg config.CorrelationConfig) *Correlator {
+	c := &Correlator{
+		store:  store,
+		cfg:    cfg,
+		status: modules.NewStatusTracker(modules.ModCorrelator, "Correlator", "brain"),
+	}
+	c.status.SetEnabled(cfg.Enabled)
+	return c
+}
+
+// Run starts the correlation engine on a periodic interval and blocks until
+// ctx is cancelled.
+func (c *Correlator) Run(ctx context.Context) {
+	if !c.cfg.Enabled {
+		return
+	}
+	c.status.MarkStarted()
+	defer c.status.MarkStopped()
+
+	interval := time.Duration(c.cfg.IntervalMinutes) * time.Minute
+	if interval <= 0 {
+		interval = 15 * time.Minute
+	}
+	c.status.SetExtra("interval", interval.String())
+
+	log.Printf("brain: correlator started (interval=%s, threshold=%d)", interval, c.cfg.MinEvidenceThreshold)
+
+	// Run once immediately on startup, then on interval.
+	c.runCycle(ctx)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("brain: correlator stopping")
+			return
+		case <-ticker.C:
+			c.runCycle(ctx)
+		}
+	}
+}
+
+// runCycle calls each rule function in sequence and logs totals.
+func (c *Correlator) runCycle(ctx context.Context) {
+	start := time.Now()
+
+	var totalCorrelations, totalCandidates int
+
+	co, ca := c.correlateSharedIOCs(ctx)
+	totalCorrelations += co
+	totalCandidates += ca
+
+	co, ca = c.correlateHandleReuse(ctx)
+	totalCorrelations += co
+	totalCandidates += ca
+
+	co, ca = c.correlateTemporalOverlap(ctx)
+	totalCorrelations += co
+	totalCandidates += ca
+
+	co, ca = c.correlateEntityClusters(ctx)
+	totalCorrelations += co
+	totalCandidates += ca
+
+	// Update status tracker.
+	c.status.SetExtra("last_cycle_duration", time.Since(start).String())
+	c.status.SetExtra("last_cycle_correlations", totalCorrelations)
+	c.status.SetExtra("last_cycle_candidates", totalCandidates)
+	c.status.RecordSuccess()
+
+	log.Printf("brain: correlation cycle complete in %s — %d correlations, %d candidates",
+		time.Since(start).Round(time.Millisecond), totalCorrelations, totalCandidates)
 }
 
 // corrClusterID generates a deterministic cluster ID for deduplication.
@@ -59,67 +145,15 @@ func clampConfidence(v float64) float64 {
 	return v
 }
 
-// correlationWorker runs the correlation engine on a periodic interval.
-func (p *IngestPipeline) correlationWorker(ctx context.Context) {
-	interval := time.Duration(p.corrCfg.IntervalMinutes) * time.Minute
-	if interval <= 0 {
-		interval = 15 * time.Minute
-	}
-
-	log.Printf("ingest: correlation worker started (interval=%s, threshold=%d)", interval, p.corrCfg.MinEvidenceThreshold)
-
-	// Run once immediately on startup, then on interval.
-	p.runCorrelationCycle(ctx)
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Printf("ingest: correlation worker stopping")
-			return
-		case <-ticker.C:
-			p.runCorrelationCycle(ctx)
-		}
-	}
-}
-
-// runCorrelationCycle calls each rule function in sequence and logs totals.
-func (p *IngestPipeline) runCorrelationCycle(ctx context.Context) {
-	start := time.Now()
-	log.Printf("ingest: correlation cycle starting")
-
-	var totalCorrelations, totalCandidates int
-
-	c, cand := p.correlateSharedIOCs(ctx)
-	totalCorrelations += c
-	totalCandidates += cand
-
-	c, cand = p.correlateHandleReuse(ctx)
-	totalCorrelations += c
-	totalCandidates += cand
-
-	c, cand = p.correlateTemporalOverlap(ctx)
-	totalCorrelations += c
-	totalCandidates += cand
-
-	c, cand = p.correlateEntityClusters(ctx)
-	totalCorrelations += c
-	totalCandidates += cand
-
-	log.Printf("ingest: correlation cycle complete in %s — %d correlations, %d candidates",
-		time.Since(start).Round(time.Millisecond), totalCorrelations, totalCandidates)
-}
-
-func (p *IngestPipeline) correlateSharedIOCs(ctx context.Context) (correlations, candidates int) {
-	results, err := p.corrStore.FindSharedIOCs(ctx, 2)
+func (c *Correlator) correlateSharedIOCs(ctx context.Context) (correlations, candidates int) {
+	results, err := c.store.FindSharedIOCs(ctx, 2)
 	if err != nil {
-		log.Printf("ingest: correlate shared iocs: query error: %v", err)
+		log.Printf("brain: correlate shared iocs: query error: %v", err)
+		c.status.RecordError(err)
 		return 0, 0
 	}
 
-	threshold := p.corrCfg.MinEvidenceThreshold
+	threshold := c.cfg.MinEvidenceThreshold
 	if threshold <= 0 {
 		threshold = 3
 	}
@@ -133,7 +167,7 @@ func (p *IngestPipeline) correlateSharedIOCs(ctx context.Context) (correlations,
 			entityIDs = append(entityIDs, fmt.Sprintf("source:%s", src))
 		}
 
-		evidence := map[string]interface{}{
+		evidence := map[string]any{
 			"ioc_type":    r.IOCType,
 			"ioc_value":   r.IOCValue,
 			"sources":     r.Sources,
@@ -151,8 +185,9 @@ func (p *IngestPipeline) correlateSharedIOCs(ctx context.Context) (correlations,
 				Method:          "rule",
 				Evidence:        evidence,
 			}
-			if err := p.corrStore.UpsertCorrelation(ctx, corr); err != nil {
-				log.Printf("ingest: correlate shared iocs: upsert error: %v", err)
+			if err := c.store.UpsertCorrelation(ctx, corr); err != nil {
+				log.Printf("brain: correlate shared iocs: upsert error: %v", err)
+				c.status.RecordError(err)
 				continue
 			}
 			correlations++
@@ -166,8 +201,9 @@ func (p *IngestPipeline) correlateSharedIOCs(ctx context.Context) (correlations,
 				Signals:       evidence,
 				Status:        "pending",
 			}
-			if err := p.corrStore.UpsertCandidate(ctx, cand); err != nil {
-				log.Printf("ingest: correlate shared iocs: candidate error: %v", err)
+			if err := c.store.UpsertCandidate(ctx, cand); err != nil {
+				log.Printf("brain: correlate shared iocs: candidate error: %v", err)
+				c.status.RecordError(err)
 				continue
 			}
 			candidates++
@@ -176,14 +212,15 @@ func (p *IngestPipeline) correlateSharedIOCs(ctx context.Context) (correlations,
 	return correlations, candidates
 }
 
-func (p *IngestPipeline) correlateHandleReuse(ctx context.Context) (correlations, candidates int) {
-	results, err := p.corrStore.FindHandleReuse(ctx, 2)
+func (c *Correlator) correlateHandleReuse(ctx context.Context) (correlations, candidates int) {
+	results, err := c.store.FindHandleReuse(ctx, 2)
 	if err != nil {
-		log.Printf("ingest: correlate handle reuse: query error: %v", err)
+		log.Printf("brain: correlate handle reuse: query error: %v", err)
+		c.status.RecordError(err)
 		return 0, 0
 	}
 
-	threshold := p.corrCfg.MinEvidenceThreshold
+	threshold := c.cfg.MinEvidenceThreshold
 	if threshold <= 0 {
 		threshold = 3
 	}
@@ -196,22 +233,23 @@ func (p *IngestPipeline) correlateHandleReuse(ctx context.Context) (correlations
 		}
 		clusterID := corrClusterID("handle_reuse", r.Author+":"+authorID)
 
-		// Create/update actor entity with same normalization as bridgeLLMEntitiesToGraph.
+		// Create/update actor entity with same normalization as graph bridge.
 		normalized := strings.ToLower(strings.ReplaceAll(r.Author, " ", "_"))
 		entityID := fmt.Sprintf("entity:threat_actor:%s", normalized)
-		props := map[string]interface{}{
+		props := map[string]any{
 			"name":    r.Author,
 			"sources": r.Sources,
 		}
 		if r.AuthorID != "" {
 			props["author_id"] = r.AuthorID
 		}
-		if err := p.corrStore.UpsertEntity(ctx, entityID, "threat_actor", props); err != nil {
-			log.Printf("ingest: correlate handle reuse: upsert entity error: %v", err)
+		if err := c.store.UpsertEntity(ctx, entityID, "threat_actor", props); err != nil {
+			log.Printf("brain: correlate handle reuse: upsert entity error: %v", err)
+			c.status.RecordError(err)
 		}
 
 		entityIDs := []string{entityID}
-		evidence := map[string]interface{}{
+		evidence := map[string]any{
 			"author":      r.Author,
 			"author_id":   r.AuthorID,
 			"sources":     r.Sources,
@@ -229,8 +267,9 @@ func (p *IngestPipeline) correlateHandleReuse(ctx context.Context) (correlations
 				Method:          "rule",
 				Evidence:        evidence,
 			}
-			if err := p.corrStore.UpsertCorrelation(ctx, corr); err != nil {
-				log.Printf("ingest: correlate handle reuse: upsert error: %v", err)
+			if err := c.store.UpsertCorrelation(ctx, corr); err != nil {
+				log.Printf("brain: correlate handle reuse: upsert error: %v", err)
+				c.status.RecordError(err)
 				continue
 			}
 			correlations++
@@ -244,8 +283,9 @@ func (p *IngestPipeline) correlateHandleReuse(ctx context.Context) (correlations
 				Signals:       evidence,
 				Status:        "pending",
 			}
-			if err := p.corrStore.UpsertCandidate(ctx, cand); err != nil {
-				log.Printf("ingest: correlate handle reuse: candidate error: %v", err)
+			if err := c.store.UpsertCandidate(ctx, cand); err != nil {
+				log.Printf("brain: correlate handle reuse: candidate error: %v", err)
+				c.status.RecordError(err)
 				continue
 			}
 			candidates++
@@ -254,19 +294,20 @@ func (p *IngestPipeline) correlateHandleReuse(ctx context.Context) (correlations
 	return correlations, candidates
 }
 
-func (p *IngestPipeline) correlateTemporalOverlap(ctx context.Context) (correlations, candidates int) {
-	windowHours := p.corrCfg.TemporalWindowHours
+func (c *Correlator) correlateTemporalOverlap(ctx context.Context) (correlations, candidates int) {
+	windowHours := c.cfg.TemporalWindowHours
 	if windowHours <= 0 {
 		windowHours = 48
 	}
 
-	results, err := p.corrStore.FindTemporalIOCOverlap(ctx, windowHours, 2)
+	results, err := c.store.FindTemporalIOCOverlap(ctx, windowHours, 2)
 	if err != nil {
-		log.Printf("ingest: correlate temporal overlap: query error: %v", err)
+		log.Printf("brain: correlate temporal overlap: query error: %v", err)
+		c.status.RecordError(err)
 		return 0, 0
 	}
 
-	threshold := p.corrCfg.MinEvidenceThreshold
+	threshold := c.cfg.MinEvidenceThreshold
 	if threshold <= 0 {
 		threshold = 3
 	}
@@ -291,7 +332,7 @@ func (p *IngestPipeline) correlateTemporalOverlap(ctx context.Context) (correlat
 		}
 
 		findingIDs := []string{r.FindingA, r.FindingB}
-		evidence := map[string]interface{}{
+		evidence := map[string]any{
 			"finding_a":    r.FindingA,
 			"finding_b":    r.FindingB,
 			"source_a":     r.SourceA,
@@ -311,8 +352,9 @@ func (p *IngestPipeline) correlateTemporalOverlap(ctx context.Context) (correlat
 				Method:          "rule",
 				Evidence:        evidence,
 			}
-			if err := p.corrStore.UpsertCorrelation(ctx, corr); err != nil {
-				log.Printf("ingest: correlate temporal overlap: upsert error: %v", err)
+			if err := c.store.UpsertCorrelation(ctx, corr); err != nil {
+				log.Printf("brain: correlate temporal overlap: upsert error: %v", err)
+				c.status.RecordError(err)
 				continue
 			}
 			correlations++
@@ -326,8 +368,9 @@ func (p *IngestPipeline) correlateTemporalOverlap(ctx context.Context) (correlat
 				Signals:       evidence,
 				Status:        "pending",
 			}
-			if err := p.corrStore.UpsertCandidate(ctx, cand); err != nil {
-				log.Printf("ingest: correlate temporal overlap: candidate error: %v", err)
+			if err := c.store.UpsertCandidate(ctx, cand); err != nil {
+				log.Printf("brain: correlate temporal overlap: candidate error: %v", err)
+				c.status.RecordError(err)
 				continue
 			}
 			candidates++
@@ -336,22 +379,24 @@ func (p *IngestPipeline) correlateTemporalOverlap(ctx context.Context) (correlat
 	return correlations, candidates
 }
 
-func (p *IngestPipeline) correlateEntityClusters(ctx context.Context) (correlations, candidates int) {
-	threshold := p.corrCfg.MinEvidenceThreshold
+func (c *Correlator) correlateEntityClusters(ctx context.Context) (correlations, candidates int) {
+	threshold := c.cfg.MinEvidenceThreshold
 	if threshold <= 0 {
 		threshold = 3
 	}
 
 	// Find actors sharing infrastructure/malware.
-	actorResults, err := p.corrStore.FindEntityClusters(ctx, "threat_actor", 2)
+	actorResults, err := c.store.FindEntityClusters(ctx, "threat_actor", 2)
 	if err != nil {
-		log.Printf("ingest: correlate entity clusters: actor query error: %v", err)
+		log.Printf("brain: correlate entity clusters: actor query error: %v", err)
+		c.status.RecordError(err)
 	}
 
 	// Find malware families sharing C2/infrastructure.
-	malwareResults, err := p.corrStore.FindEntityClusters(ctx, "malware", 2)
+	malwareResults, err := c.store.FindEntityClusters(ctx, "malware", 2)
 	if err != nil {
-		log.Printf("ingest: correlate entity clusters: malware query error: %v", err)
+		log.Printf("brain: correlate entity clusters: malware query error: %v", err)
+		c.status.RecordError(err)
 	}
 
 	allResults := make([]archive.EntityClusterResult, 0, len(actorResults)+len(malwareResults))
@@ -380,7 +425,7 @@ func (p *IngestPipeline) correlateEntityClusters(ctx context.Context) (correlati
 		clusterID := corrClusterID("campaign", a+":"+b)
 
 		entityIDs := append([]string{r.EntityA, r.EntityB}, r.SharedIDs...)
-		evidence := map[string]interface{}{
+		evidence := map[string]any{
 			"entity_a":        r.EntityA,
 			"name_a":          r.NameA,
 			"entity_b":        r.EntityB,
@@ -400,8 +445,9 @@ func (p *IngestPipeline) correlateEntityClusters(ctx context.Context) (correlati
 				Method:          "rule",
 				Evidence:        evidence,
 			}
-			if err := p.corrStore.UpsertCorrelation(ctx, corr); err != nil {
-				log.Printf("ingest: correlate entity clusters: upsert error: %v", err)
+			if err := c.store.UpsertCorrelation(ctx, corr); err != nil {
+				log.Printf("brain: correlate entity clusters: upsert error: %v", err)
+				c.status.RecordError(err)
 				continue
 			}
 			correlations++
@@ -415,8 +461,9 @@ func (p *IngestPipeline) correlateEntityClusters(ctx context.Context) (correlati
 				Signals:       evidence,
 				Status:        "pending",
 			}
-			if err := p.corrStore.UpsertCandidate(ctx, cand); err != nil {
-				log.Printf("ingest: correlate entity clusters: candidate error: %v", err)
+			if err := c.store.UpsertCandidate(ctx, cand); err != nil {
+				log.Printf("brain: correlate entity clusters: candidate error: %v", err)
+				c.status.RecordError(err)
 				continue
 			}
 			candidates++

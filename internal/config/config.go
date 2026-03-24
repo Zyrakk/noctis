@@ -36,6 +36,10 @@ type Config struct {
 	Storage     StorageConfig    `yaml:"storage"`
 	Dashboard   DashboardConfig  `yaml:"dashboard"`
 	Correlation CorrelationConfig `yaml:"correlation"`
+	Analyst      AnalystConfig      `yaml:"analyst"`
+	IOCLifecycle   IOCLifecycleConfig `yaml:"iocLifecycle"`
+	BriefGenerator BriefConfig        `yaml:"briefGenerator"`
+	LLMBrain       LLMConfig          `yaml:"llmBrain"`
 }
 
 // CollectionConfig controls archive-everything behavior and background workers.
@@ -43,6 +47,7 @@ type CollectionConfig struct {
 	ArchiveAll              bool `yaml:"archiveAll"`
 	ClassificationWorkers   int  `yaml:"classificationWorkers"`
 	EntityExtractionWorkers int  `yaml:"entityExtractionWorkers"`
+	LibrarianWorkers        int  `yaml:"librarianWorkers"`
 	ClassificationBatchSize int  `yaml:"classificationBatchSize"`
 	MaxContentLength        int  `yaml:"maxContentLength"`
 }
@@ -73,6 +78,28 @@ type CorrelationConfig struct {
 	IntervalMinutes      int  `yaml:"intervalMinutes"`
 	MinEvidenceThreshold int  `yaml:"minEvidenceThreshold"`
 	TemporalWindowHours  int  `yaml:"temporalWindowHours"`
+}
+
+// AnalystConfig controls the LLM-based correlation analyst.
+type AnalystConfig struct {
+	Enabled          bool    `yaml:"enabled"`
+	IntervalMinutes  int     `yaml:"intervalMinutes"`
+	BatchSize        int     `yaml:"batchSize"`
+	MinSignalCount   int     `yaml:"minSignalCount"`
+	PromoteThreshold float64 `yaml:"promoteThreshold"`
+}
+
+// IOCLifecycleConfig controls the periodic IOC decay and deactivation.
+type IOCLifecycleConfig struct {
+	Enabled             bool    `yaml:"enabled"`
+	IntervalMinutes     int     `yaml:"intervalMinutes"`
+	DeactivateThreshold float64 `yaml:"deactivateThreshold"`
+}
+
+// BriefConfig controls the daily intelligence brief generator.
+type BriefConfig struct {
+	Enabled      bool `yaml:"enabled"`
+	ScheduleHour int  `yaml:"scheduleHour"`
 }
 
 // SourcesConfig groups all ingest source configurations.

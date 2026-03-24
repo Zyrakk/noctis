@@ -5,4 +5,6 @@ bin/
 vendor/
 deploy/secrets.yaml
 web/node_modules/
+docs/superpowers/
+docs/noctis-full-context.md
 

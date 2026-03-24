@@ -1,4 +1,4 @@
-package ingest
+package brain
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// mockCorrStore — in-memory mock for correlationStore interface
+// mockCorrStore — in-memory mock for CorrelationStore interface
 // ---------------------------------------------------------------------------
 
 type mockCorrStore struct {
@@ -51,7 +51,7 @@ func (m *mockCorrStore) UpsertCandidate(_ context.Context, c *archive.Correlatio
 	m.upsertedCandidates = append(m.upsertedCandidates, c)
 	return nil
 }
-func (m *mockCorrStore) UpsertEntity(_ context.Context, id, entityType string, _ map[string]interface{}) error {
+func (m *mockCorrStore) UpsertEntity(_ context.Context, id, entityType string, _ map[string]any) error {
 	m.upsertedEntities[id] = entityType
 	return nil
 }
@@ -101,15 +101,12 @@ func TestClampConfidence(t *testing.T) {
 // Rule tests
 // ---------------------------------------------------------------------------
 
-func makeTestPipeline(mock *mockCorrStore) *IngestPipeline {
-	return &IngestPipeline{
-		corrStore: mock,
-		corrCfg: config.CorrelationConfig{
-			Enabled:              true,
-			MinEvidenceThreshold: 3,
-			TemporalWindowHours:  48,
-		},
-	}
+func makeTestCorrelator(mock *mockCorrStore) *Correlator {
+	return NewCorrelator(mock, config.CorrelationConfig{
+		Enabled:              true,
+		MinEvidenceThreshold: 3,
+		TemporalWindowHours:  48,
+	})
 }
 
 func TestCorrelateSharedIOCs_AboveThreshold(t *testing.T) {
@@ -117,9 +114,9 @@ func TestCorrelateSharedIOCs_AboveThreshold(t *testing.T) {
 	mock.sharedIOCs = []archive.SharedIOCResult{
 		{IOCType: "ip", IOCValue: "1.2.3.4", Sources: []string{"a", "b", "c"}, FindingIDs: []string{"f1", "f2", "f3"}, SourceCount: 3},
 	}
-	p := makeTestPipeline(mock)
+	c := makeTestCorrelator(mock)
 
-	corrs, cands := p.correlateSharedIOCs(context.Background())
+	corrs, cands := c.correlateSharedIOCs(context.Background())
 	if corrs != 1 {
 		t.Errorf("correlations = %d, want 1", corrs)
 	}
@@ -129,15 +126,15 @@ func TestCorrelateSharedIOCs_AboveThreshold(t *testing.T) {
 	if len(mock.upsertedCorrelations) != 1 {
 		t.Fatalf("upserted correlations = %d, want 1", len(mock.upsertedCorrelations))
 	}
-	c := mock.upsertedCorrelations[0]
-	if c.CorrelationType != "shared_ioc" {
-		t.Errorf("type = %s, want shared_ioc", c.CorrelationType)
+	cr := mock.upsertedCorrelations[0]
+	if cr.CorrelationType != "shared_ioc" {
+		t.Errorf("type = %s, want shared_ioc", cr.CorrelationType)
 	}
-	if c.Confidence <= 0 || c.Confidence > 1.0 {
-		t.Errorf("confidence = %f, out of range", c.Confidence)
+	if cr.Confidence <= 0 || cr.Confidence > 1.0 {
+		t.Errorf("confidence = %f, out of range", cr.Confidence)
 	}
-	if c.Method != "rule" {
-		t.Errorf("method = %s, want rule", c.Method)
+	if cr.Method != "rule" {
+		t.Errorf("method = %s, want rule", cr.Method)
 	}
 }
 
@@ -146,9 +143,9 @@ func TestCorrelateSharedIOCs_BelowThreshold(t *testing.T) {
 	mock.sharedIOCs = []archive.SharedIOCResult{
 		{IOCType: "domain", IOCValue: "evil.com", Sources: []string{"a", "b"}, FindingIDs: []string{"f1", "f2"}, SourceCount: 2},
 	}
-	p := makeTestPipeline(mock)
+	c := makeTestCorrelator(mock)
 
-	corrs, cands := p.correlateSharedIOCs(context.Background())
+	corrs, cands := c.correlateSharedIOCs(context.Background())
 	if corrs != 0 {
 		t.Errorf("correlations = %d, want 0", corrs)
 	}
@@ -159,9 +156,9 @@ func TestCorrelateSharedIOCs_BelowThreshold(t *testing.T) {
 
 func TestCorrelateSharedIOCs_EmptyResults(t *testing.T) {
 	mock := newMockCorrStore()
-	p := makeTestPipeline(mock)
+	c := makeTestCorrelator(mock)
 
-	corrs, cands := p.correlateSharedIOCs(context.Background())
+	corrs, cands := c.correlateSharedIOCs(context.Background())
 	if corrs != 0 || cands != 0 {
 		t.Errorf("expected 0,0 for empty results, got %d,%d", corrs, cands)
 	}
@@ -172,9 +169,9 @@ func TestCorrelateHandleReuse_AboveThreshold(t *testing.T) {
 	mock.handleReuse = []archive.HandleReuseResult{
 		{Author: "IntelBroker", AuthorID: "ib_123", Sources: []string{"a", "b", "c"}, SourceIDs: []string{"s1", "s2", "s3"}, FindingIDs: []string{"f1", "f2", "f3"}, SourceCount: 3},
 	}
-	p := makeTestPipeline(mock)
+	c := makeTestCorrelator(mock)
 
-	corrs, cands := p.correlateHandleReuse(context.Background())
+	corrs, cands := c.correlateHandleReuse(context.Background())
 	if corrs != 1 {
 		t.Errorf("correlations = %d, want 1", corrs)
 	}
@@ -193,9 +190,9 @@ func TestCorrelateTemporalOverlap_AboveThreshold(t *testing.T) {
 	mock.temporalOverlap = []archive.TemporalOverlapResult{
 		{FindingA: "f1", FindingB: "f2", SourceA: "src_a", SourceB: "src_b", SharedIOCs: []string{"ip:1.2.3.4", "domain:evil.com", "ip:5.6.7.8"}, SharedCount: 3},
 	}
-	p := makeTestPipeline(mock)
+	c := makeTestCorrelator(mock)
 
-	corrs, cands := p.correlateTemporalOverlap(context.Background())
+	corrs, cands := c.correlateTemporalOverlap(context.Background())
 	if corrs != 1 {
 		t.Errorf("correlations = %d, want 1", corrs)
 	}
@@ -212,9 +209,9 @@ func TestCorrelateEntityClusters_MixedThreshold(t *testing.T) {
 	mock.entityClusters["malware"] = []archive.EntityClusterResult{
 		{EntityA: "e:malware:x", NameA: "MalX", EntityB: "e:malware:y", NameB: "MalY", SharedIDs: []string{"c2_1"}, SharedNames: []string{"C2Server"}, SharedCount: 1},
 	}
-	p := makeTestPipeline(mock)
+	c := makeTestCorrelator(mock)
 
-	corrs, cands := p.correlateEntityClusters(context.Background())
+	corrs, cands := c.correlateEntityClusters(context.Background())
 	if corrs != 1 {
 		t.Errorf("correlations = %d, want 1 (actor cluster above threshold)", corrs)
 	}
@@ -231,9 +228,9 @@ func TestCorrelationCycle_AggregatesCounts(t *testing.T) {
 	mock.handleReuse = []archive.HandleReuseResult{
 		{Author: "actor1", Sources: []string{"x", "y"}, SourceIDs: []string{"s1", "s2"}, FindingIDs: []string{"f4", "f5"}, SourceCount: 2},
 	}
-	p := makeTestPipeline(mock)
+	c := makeTestCorrelator(mock)
 
-	p.runCorrelationCycle(context.Background())
+	c.runCycle(context.Background())
 
 	// 1 correlation (shared_ioc above threshold) + 1 candidate (handle below threshold)
 	if len(mock.upsertedCorrelations) != 1 {

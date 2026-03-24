@@ -22,12 +22,14 @@ export default function IOCs() {
   const [searchQ, setSearchQ] = useState('')
   const [page, setPage] = useState(0)
   const [copiedId, setCopiedId] = useState(null)
+  const [showInactive, setShowInactive] = useState(false)
 
   const params = new URLSearchParams()
   if (typeFilter) params.set('type', typeFilter)
   if (searchQ) params.set('q', searchQ)
   params.set('limit', PAGE_SIZE)
   params.set('offset', page * PAGE_SIZE)
+  if (showInactive) params.set('active', 'false')
 
   const { data, loading } = useApi(`/api/iocs?${params.toString()}`)
   const iocs = data?.iocs || []
@@ -44,9 +46,9 @@ export default function IOCs() {
 
   const exportCSV = useCallback(() => {
     if (!iocs.length) return
-    const header = 'type,value,context,first_seen,last_seen,sighting_count'
+    const header = 'type,value,context,first_seen,last_seen,sighting_count,threat_score,active'
     const rows = iocs.map(i =>
-      `"${i.type}","${i.value}","${(i.context || '').replace(/"/g, '""')}","${i.firstSeen}","${i.lastSeen}",${i.sightingCount}`
+      `"${i.type}","${i.value}","${(i.context || '').replace(/"/g, '""')}","${i.firstSeen}","${i.lastSeen}",${i.sightingCount},${i.threatScore || 0},${i.active}`
     )
     const csv = [header, ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -107,6 +109,14 @@ export default function IOCs() {
           className: 'w-full pl-9 pr-3 py-2 bg-noctis-surface border border-noctis-border rounded-lg text-sm text-noctis-text placeholder-noctis-dim focus:outline-none focus:border-noctis-purple transition-colors duration-200 font-mono'
         }),
       ),
+      React.createElement('button', {
+        onClick: () => { setShowInactive(v => !v); setPage(0) },
+        className: `px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors duration-200 whitespace-nowrap ${
+          showInactive
+            ? 'bg-noctis-purple/15 text-noctis-purple-light border border-noctis-purple/30'
+            : 'text-noctis-muted bg-noctis-surface border border-noctis-border hover:border-noctis-border'
+        }`
+      }, showInactive ? 'All IOCs' : 'Active only'),
     ),
 
     // Table (desktop)
@@ -116,7 +126,7 @@ export default function IOCs() {
       React.createElement('table', { className: 'w-full text-sm' },
         React.createElement('thead', null,
           React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
-            ['Type', 'Value', 'Context', 'First Seen', 'Sightings'].map(h =>
+            ['Type', 'Value', 'Context', 'Score', 'Sightings'].map(h =>
               React.createElement('th', {
                 key: h,
                 className: 'px-4 py-3 text-left text-xs font-medium text-noctis-dim uppercase tracking-wider'
@@ -164,8 +174,15 @@ export default function IOCs() {
                   React.createElement('td', { className: 'px-4 py-3 text-xs text-noctis-muted truncate max-w-xs' },
                     ioc.context || '-',
                   ),
-                  React.createElement('td', { className: 'px-4 py-3 text-xs font-mono text-noctis-dim whitespace-nowrap' },
-                    new Date(ioc.firstSeen).toLocaleDateString(),
+                  React.createElement('td', { className: 'px-4 py-3' },
+                    React.createElement('span', {
+                      className: `text-xs font-mono px-2 py-0.5 rounded ${
+                        !ioc.active ? 'bg-noctis-bg text-noctis-dim line-through' :
+                        (ioc.threatScore || 0) >= 0.7 ? 'bg-red-500/15 text-red-400' :
+                        (ioc.threatScore || 0) >= 0.3 ? 'bg-yellow-500/15 text-yellow-400' :
+                        'bg-noctis-bg text-noctis-dim'
+                      }`
+                    }, ioc.active ? ((ioc.threatScore || 0) * 100).toFixed(0) + '%' : 'inactive'),
                   ),
                   React.createElement('td', { className: 'px-4 py-3' },
                     React.createElement('span', {
@@ -204,6 +221,14 @@ export default function IOCs() {
                 ioc.context && React.createElement('p', { className: 'text-xs text-noctis-muted line-clamp-1' }, ioc.context),
                 React.createElement('div', { className: 'flex items-center justify-between mt-1.5' },
                   React.createElement('span', { className: 'text-xs text-noctis-dim' }, `${ioc.sightingCount} sightings`),
+                  React.createElement('span', {
+                    className: `text-xs font-mono ${
+                      !ioc.active ? 'text-noctis-dim line-through' :
+                      (ioc.threatScore || 0) >= 0.7 ? 'text-red-400' :
+                      (ioc.threatScore || 0) >= 0.3 ? 'text-yellow-400' :
+                      'text-noctis-dim'
+                    }`
+                  }, ioc.active ? `${((ioc.threatScore || 0) * 100).toFixed(0)}%` : 'inactive'),
                   copiedId === ioc.id
                     ? React.createElement('span', { className: 'text-xs text-green-400' }, 'Copied!')
                     : React.createElement('span', { className: 'text-xs text-noctis-dim' }, 'Tap to copy'),

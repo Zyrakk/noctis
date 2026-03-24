@@ -1,7 +1,7 @@
 import React from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
-  LayoutDashboard, Search, Shield, Globe, Network, LogOut, Activity, Menu, X
+  LayoutDashboard, Search, Shield, Globe, Network, LogOut, Activity, Menu, X, MonitorCheck, FileText, GitBranch, BookOpen
 } from 'lucide-react'
 
 const navItems = [
@@ -10,6 +10,10 @@ const navItems = [
   { path: '/dashboard/iocs', label: 'IOC Explorer', icon: Shield },
   { path: '/dashboard/sources', label: 'Sources', icon: Globe },
   { path: '/dashboard/graph', label: 'Entity Graph', icon: Network },
+  { path: '/dashboard/correlations', label: 'Correlations', icon: GitBranch },
+  { path: '/dashboard/notes', label: 'Notes', icon: FileText },
+  { path: '/dashboard/briefs', label: 'Briefs', icon: BookOpen },
+  { path: '/dashboard/system', label: 'System', icon: MonitorCheck },
 ]
 
 const bottomNavItems = [
@@ -18,6 +22,10 @@ const bottomNavItems = [
   { path: '/dashboard/iocs', label: 'IOCs', shortLabel: 'IOCs', icon: Shield },
   { path: '/dashboard/sources', label: 'Sources', shortLabel: 'Sources', icon: Globe },
   { path: '/dashboard/graph', label: 'Graph', shortLabel: 'Graph', icon: Network },
+  { path: '/dashboard/correlations', label: 'Correlations', shortLabel: 'Corr', icon: GitBranch },
+  { path: '/dashboard/notes', label: 'Notes', shortLabel: 'Notes', icon: FileText },
+  { path: '/dashboard/briefs', label: 'Briefs', shortLabel: 'Briefs', icon: BookOpen },
+  { path: '/dashboard/system', label: 'System', shortLabel: 'System', icon: MonitorCheck },
 ]
 
 function isActive(itemPath, currentPath) {

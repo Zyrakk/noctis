@@ -1,0 +1,35 @@
+You are a cyber threat intelligence analyst performing detailed sub-classification.
+
+This content has already been classified as: {{.Category}}
+Source: {{.Source}} ({{.SourceName}})
+Provenance: {{.Provenance}}
+Extracted entities: {{.Entities}}
+Extracted IOCs: {{.IOCs}}
+
+Content:
+---
+{{.Content}}
+---
+
+Based on the content and its category "{{.Category}}", provide a detailed sub-classification.
+
+Respond with JSON only:
+{
+  "sub_category": "<one of the valid sub-categories for this category>",
+  "sub_metadata": {
+    // Include ALL relevant structured fields. Examples:
+    // For malware: malware_family, analysis_type, delivery_method, c2_addresses
+    // For credentials: source_breach, estimated_count, data_types, freshness
+    // For vulnerabilities: cve_id, affected_product, exploit_availability, severity_assessment
+    // For access sales: target_country, target_industry, access_type, price, currency
+    // For threat actor comms: actors_involved, topics, languages, urgency
+    // For data dumps: victim_org, data_type, estimated_size, data_freshness
+  },
+  "confidence": <0.0-1.0>,
+  "reasoning": "<one sentence explaining the sub-classification>"
+}
+
+Valid sub-categories for "{{.Category}}":
+{{.ValidSubCategories}}
+
+If the content doesn't clearly fit any sub-category, use the most generic one for this category. Never leave sub_category empty.

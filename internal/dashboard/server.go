@@ -6,8 +6,11 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Zyrakk/noctis/internal/modules"
 )
 
 //go:embed static
@@ -15,19 +18,22 @@ var staticFiles embed.FS
 
 // Server serves the Noctis web dashboard and API.
 type Server struct {
-	pool   *pgxpool.Pool
-	apiKey string
-	mux    *http.ServeMux
-	httpSrv *http.Server
+	pool     *pgxpool.Pool
+	apiKey   string
+	registry *modules.Registry
+	mux      *http.ServeMux
+	httpSrv  *http.Server
 }
 
 // NewServer creates a dashboard Server listening on addr. It requires a
-// PostgreSQL connection pool and an API key for authenticating API requests.
-func NewServer(addr string, pool *pgxpool.Pool, apiKey string) *Server {
+// PostgreSQL connection pool, an API key for authenticating API requests,
+// and a module registry for system status reporting.
+func NewServer(addr string, pool *pgxpool.Pool, apiKey string, registry *modules.Registry) *Server {
 	s := &Server{
-		pool:   pool,
-		apiKey: apiKey,
-		mux:    http.NewServeMux(),
+		pool:     pool,
+		apiKey:   apiKey,
+		registry: registry,
+		mux:      http.NewServeMux(),
 	}
 	s.registerRoutes()
 	s.httpSrv = &http.Server{
@@ -67,6 +73,15 @@ func (s *Server) registerRoutes() {
 	s.mux.Handle("GET /api/entities", s.authMiddleware(http.HandlerFunc(s.handleEntities)))
 	s.mux.Handle("GET /api/graph", s.authMiddleware(http.HandlerFunc(s.handleGraph)))
 	s.mux.Handle("GET /api/correlations", s.authMiddleware(http.HandlerFunc(s.handleCorrelations)))
+	s.mux.Handle("GET /api/correlation-decisions", s.authMiddleware(http.HandlerFunc(s.handleCorrelationDecisions)))
+	s.mux.Handle("GET /api/subcategories", s.authMiddleware(http.HandlerFunc(s.handleSubcategories)))
+	s.mux.Handle("GET /api/notes", s.authMiddleware(http.HandlerFunc(s.handleNotes)))
+	s.mux.Handle("GET /api/actors/{id}/profile", s.authMiddleware(http.HandlerFunc(s.handleActorProfile)))
+	s.mux.Handle("GET /api/sources/value", s.authMiddleware(http.HandlerFunc(s.handleSourceValues)))
+	s.mux.Handle("GET /api/system/status", s.authMiddleware(http.HandlerFunc(s.handleSystemStatus)))
+	s.mux.Handle("GET /api/briefs", s.authMiddleware(http.HandlerFunc(s.handleBriefs)))
+	s.mux.Handle("GET /api/briefs/latest", s.authMiddleware(http.HandlerFunc(s.handleLatestBrief)))
+	s.mux.Handle("GET /api/vulnerabilities", s.authMiddleware(http.HandlerFunc(s.handleVulnerabilities)))
 
 	// Auth validation endpoint
 	s.mux.Handle("POST /api/auth/check", s.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -96,5 +111,19 @@ func (s *Server) registerRoutes() {
 		// SPA fallback: serve index.html for client-side routing
 		r.URL.Path = "/"
 		fileServer.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) handleSystemStatus(w http.ResponseWriter, _ *http.Request) {
+	if s.registry == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"available": false,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"available": true,
+		"modules":   s.registry.StatusesByCategory(),
+		"timestamp": time.Now().UTC(),
 	})
 }

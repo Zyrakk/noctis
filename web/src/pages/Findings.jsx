@@ -9,7 +9,7 @@ const PAGE_SIZE = 30
 
 export default function Findings() {
   const { apiKey } = useAuth()
-  const [filters, setFilters] = useState({ category: '', severity: '', source: '', q: '' })
+  const [filters, setFilters] = useState({ category: '', subCategory: '', severity: '', source: '', q: '' })
   const [page, setPage] = useState(0)
   const [selectedId, setSelectedId] = useState(null)
   const [detail, setDetail] = useState(null)
@@ -29,6 +29,7 @@ export default function Findings() {
 
   const params = new URLSearchParams()
   if (filters.category) params.set('category', filters.category)
+  if (filters.subCategory) params.set('sub_category', filters.subCategory)
   if (filters.severity) params.set('severity', filters.severity)
   if (filters.source) params.set('source', filters.source)
   if (filters.q) params.set('q', filters.q)
@@ -37,6 +38,7 @@ export default function Findings() {
 
   const { data, loading, error } = useApi(`/api/findings?${params.toString()}`)
   const { data: categories } = useApi('/api/categories')
+  const { data: subcategories } = useApi('/api/subcategories')
 
   const findings = data?.findings || []
   const total = data?.total || 0
@@ -145,6 +147,25 @@ export default function Findings() {
         ),
       ),
 
+      // Sub-Category
+      React.createElement('div', null,
+        React.createElement('label', { className: 'block text-xs text-noctis-dim mb-1.5' }, 'Sub-Category'),
+        React.createElement('select', {
+          value: filters.subCategory,
+          onChange: e => updateFilter('subCategory', e.target.value),
+          className: 'w-full px-3 py-2 bg-noctis-surface border border-noctis-border rounded-lg text-sm text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-purple'
+        },
+          React.createElement('option', { value: '' }, 'All Sub-Categories'),
+          (subcategories || [])
+            .filter(sc => !filters.category || sc.category === filters.category)
+            .map(sc =>
+              React.createElement('option', { key: sc.sub_category, value: sc.sub_category },
+                sc.sub_category?.replace(/_/g, ' ') + ` (${sc.count})`,
+              )
+            ),
+        ),
+      ),
+
       // Severity
       React.createElement('div', null,
         React.createElement('label', { className: 'block text-xs text-noctis-dim mb-1.5' }, 'Severity'),
@@ -176,9 +197,9 @@ export default function Findings() {
       ),
 
       // Clear
-      (filters.category || filters.severity || filters.source || filters.q) &&
+      (filters.category || filters.subCategory || filters.severity || filters.source || filters.q) &&
         React.createElement('button', {
-          onClick: () => { setFilters({ category: '', severity: '', source: '', q: '' }); setPage(0) },
+          onClick: () => { setFilters({ category: '', subCategory: '', severity: '', source: '', q: '' }); setPage(0) },
           className: 'text-xs text-noctis-purple-light hover:text-noctis-purple cursor-pointer'
         }, 'Clear all filters'),
     ),
@@ -212,7 +233,7 @@ export default function Findings() {
         React.createElement('table', { className: 'w-full text-sm' },
           React.createElement('thead', null,
             React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
-              ['Time', 'Source', 'Category', 'Severity', 'Summary'].map(h =>
+              ['Time', 'Source', 'Category', 'Sub-Cat', 'Severity', 'Summary'].map(h =>
                 React.createElement('th', {
                   key: h,
                   className: 'px-4 py-3 text-left text-xs font-medium text-noctis-dim uppercase tracking-wider'
@@ -224,7 +245,7 @@ export default function Findings() {
             loading
               ? Array.from({ length: 10 }).map((_, i) =>
                   React.createElement('tr', { key: i, className: 'border-b border-noctis-border/50' },
-                    Array.from({ length: 5 }).map((_, j) =>
+                    Array.from({ length: 6 }).map((_, j) =>
                       React.createElement('td', { key: j, className: 'px-4 py-3' },
                         React.createElement('div', { className: 'skeleton h-4 w-full' }),
                       )
@@ -245,6 +266,13 @@ export default function Findings() {
                     ),
                     React.createElement('td', { className: 'px-4 py-3 text-xs text-noctis-muted' },
                       f.category?.replace(/_/g, ' ') || '-',
+                    ),
+                    React.createElement('td', { className: 'px-4 py-3' },
+                      f.subCategory
+                        ? React.createElement('span', {
+                            className: 'text-[10px] px-1.5 py-0.5 bg-noctis-cyan/10 border border-noctis-cyan/30 rounded text-cyan-400'
+                          }, f.subCategory.replace(/_/g, ' '))
+                        : '-',
                     ),
                     React.createElement('td', { className: 'px-4 py-3' },
                       f.severity ? React.createElement(SeverityBadge, { severity: f.severity }) : '-',
@@ -365,6 +393,29 @@ export default function Findings() {
               React.createElement('span', {
                 className: 'text-xs text-noctis-dim font-mono'
               }, new Date(detail.collectedAt).toLocaleString()),
+            ),
+
+            // Sub-Category
+            detail.subCategory && React.createElement('div', null,
+              React.createElement('h4', { className: 'text-xs text-noctis-dim mb-1' }, 'Sub-Category'),
+              React.createElement('span', {
+                className: 'text-xs px-2 py-0.5 bg-noctis-cyan/10 border border-noctis-cyan/30 rounded text-cyan-400'
+              }, detail.subCategory.replace(/_/g, ' ')),
+            ),
+
+            // Sub-Metadata
+            detail.subMetadata && Object.keys(detail.subMetadata).length > 0 && React.createElement('div', null,
+              React.createElement('h4', { className: 'text-xs text-noctis-dim mb-1' }, 'Detail Metadata'),
+              React.createElement('div', { className: 'space-y-1' },
+                Object.entries(detail.subMetadata).map(([k, v]) =>
+                  React.createElement('div', { key: k, className: 'flex gap-2 text-xs' },
+                    React.createElement('span', { className: 'text-noctis-dim min-w-[100px]' }, k.replace(/_/g, ' ')),
+                    React.createElement('span', { className: 'text-noctis-text font-mono' },
+                      Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v),
+                    ),
+                  )
+                ),
+              ),
             ),
 
             // Summary
@@ -489,6 +540,25 @@ export default function Findings() {
                 c.category?.replace(/_/g, ' '),
               )
             ),
+          ),
+        ),
+
+        // Sub-Category (mobile)
+        React.createElement('div', { className: 'mb-4' },
+          React.createElement('label', { className: 'block text-xs text-noctis-dim mb-1.5' }, 'Sub-Category'),
+          React.createElement('select', {
+            value: filters.subCategory,
+            onChange: e => updateFilter('subCategory', e.target.value),
+            className: 'w-full px-3 py-2 bg-noctis-surface border border-noctis-border rounded-lg text-sm text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-purple'
+          },
+            React.createElement('option', { value: '' }, 'All Sub-Categories'),
+            (subcategories || [])
+              .filter(sc => !filters.category || sc.category === filters.category)
+              .map(sc =>
+                React.createElement('option', { key: sc.sub_category, value: sc.sub_category },
+                  sc.sub_category?.replace(/_/g, ' ') + ` (${sc.count})`,
+                )
+              ),
           ),
         ),
 

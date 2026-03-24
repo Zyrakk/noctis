@@ -2,11 +2,14 @@ package dashboard
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
@@ -22,12 +25,13 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleFindings(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	f := findingsFilter{
-		Category: q.Get("category"),
-		Severity: q.Get("severity"),
-		Source:   q.Get("source"),
-		Query:    q.Get("q"),
-		Limit:    parseIntParam(q.Get("limit"), 50),
-		Offset:   parseIntParam(q.Get("offset"), 0),
+		Category:    q.Get("category"),
+		SubCategory: q.Get("sub_category"),
+		Severity:    q.Get("severity"),
+		Source:      q.Get("source"),
+		Query:       q.Get("q"),
+		Limit:       parseIntParam(q.Get("limit"), 50),
+		Offset:      parseIntParam(q.Get("offset"), 0),
 	}
 
 	if since := q.Get("since"); since != "" {
@@ -69,10 +73,11 @@ func (s *Server) handleFinding(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleIOCs(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	f := iocsFilter{
-		Type:   q.Get("type"),
-		Query:  q.Get("q"),
-		Limit:  parseIntParam(q.Get("limit"), 50),
-		Offset: parseIntParam(q.Get("offset"), 0),
+		Type:       q.Get("type"),
+		Query:      q.Get("q"),
+		ActiveOnly: q.Get("active") != "false",
+		Limit:      parseIntParam(q.Get("limit"), 50),
+		Offset:     parseIntParam(q.Get("offset"), 0),
 	}
 
 	resp, err := queryIOCs(r.Context(), s.pool, f)
@@ -256,6 +261,78 @@ func (s *Server) handleCorrelations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (s *Server) handleSubcategories(w http.ResponseWriter, r *http.Request) {
+	subs, err := querySubcategories(r.Context(), s.pool)
+	if err != nil {
+		slog.Error("dashboard: subcategories", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch subcategories"})
+		return
+	}
+	writeJSON(w, http.StatusOK, subs)
+}
+
+func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := notesFilter{
+		NoteType: q.Get("type"),
+		Status:   q.Get("status"),
+		EntityID: q.Get("entity_id"),
+		Limit:    parseIntParam(q.Get("limit"), 20),
+		Offset:   parseIntParam(q.Get("offset"), 0),
+	}
+
+	resp, err := queryNotes(r.Context(), s.pool, f)
+	if err != nil {
+		slog.Error("dashboard: notes", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch notes"})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handleCorrelationDecisions(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := decisionsFilter{
+		Decision: q.Get("decision"),
+		Limit:    parseIntParam(q.Get("limit"), 20),
+		Offset:   parseIntParam(q.Get("offset"), 0),
+	}
+
+	resp, err := queryCorrelationDecisions(r.Context(), s.pool, f)
+	if err != nil {
+		slog.Error("dashboard: correlation decisions", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch decisions"})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handleActorProfile(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing id"})
+		return
+	}
+
+	profile, err := queryActorProfile(r.Context(), s.pool, id)
+	if err != nil {
+		slog.Error("dashboard: actor profile", "err", err, "id", id)
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "actor not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, profile)
+}
+
+func (s *Server) handleSourceValues(w http.ResponseWriter, r *http.Request) {
+	resp, err := querySourceValues(r.Context(), s.pool)
+	if err != nil {
+		slog.Error("dashboard: source values", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch source values"})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // --- public endpoints (no auth) ---
 
 func (s *Server) handlePublicStats(w http.ResponseWriter, r *http.Request) {
@@ -322,4 +399,70 @@ func parseSince(s string) (time.Time, error) {
 
 	// Try RFC3339
 	return time.Parse(time.RFC3339, s)
+}
+
+func (s *Server) handleBriefs(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	briefType := q.Get("type")
+	if briefType == "" {
+		briefType = "daily"
+	}
+
+	resp, err := queryBriefs(r.Context(), s.pool, briefType,
+		parseIntParam(q.Get("limit"), 20),
+		parseIntParam(q.Get("offset"), 0))
+	if err != nil {
+		slog.Error("dashboard: briefs", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch briefs"})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handleLatestBrief(w http.ResponseWriter, r *http.Request) {
+	briefType := r.URL.Query().Get("type")
+	if briefType == "" {
+		briefType = "daily"
+	}
+
+	brief, err := queryLatestBrief(r.Context(), s.pool, briefType)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "no brief found"})
+			return
+		}
+		slog.Error("dashboard: latest brief", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch latest brief"})
+		return
+	}
+	writeJSON(w, http.StatusOK, brief)
+}
+
+func (s *Server) handleVulnerabilities(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := vulnsFilter{
+		KEVOnly:     q.Get("kev") == "true",
+		HasExploit:  q.Get("exploit") == "true",
+		HasMentions: q.Get("mentions") == "true",
+		Query:       q.Get("q"),
+		Limit:       parseIntParam(q.Get("limit"), 50),
+		Offset:      parseIntParam(q.Get("offset"), 0),
+	}
+
+	if v := q.Get("min_priority"); v != "" {
+		p := parseFloatParam(v, 0)
+		f.MinPriority = &p
+	}
+	if v := q.Get("min_epss"); v != "" {
+		p := parseFloatParam(v, 0)
+		f.MinEPSS = &p
+	}
+
+	resp, err := queryVulnerabilities(r.Context(), s.pool, f)
+	if err != nil {
+		slog.Error("dashboard: vulnerabilities", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch vulnerabilities"})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

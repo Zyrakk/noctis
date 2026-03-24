@@ -1,15 +1,13 @@
 // Package ingest implements the archive-everything ingest pipeline. Every
 // collected finding is persisted to the raw_content archive before any
 // analysis takes place. Findings that match real-time rules are enriched
-// synchronously and dispatched via the alertFn callback. All remaining
-// content is picked up by background classification and entity-extraction
-// workers running in their own goroutines.
+// synchronously and dispatched via the alertFn callback. Background
+// classification/extraction are handled by processor, correlation by brain.
 package ingest
 
 import (
 	"context"
 	"log"
-	"sync"
 
 	"github.com/Zyrakk/noctis/internal/analyzer"
 	"github.com/Zyrakk/noctis/internal/archive"
@@ -17,24 +15,19 @@ import (
 	"github.com/Zyrakk/noctis/internal/dispatcher"
 	"github.com/Zyrakk/noctis/internal/matcher"
 	"github.com/Zyrakk/noctis/internal/models"
+	"github.com/Zyrakk/noctis/internal/processor"
 )
 
-// IngestPipeline is the core processing engine. Collectors call Process() for
-// each finding; Run() starts the background workers.
+// IngestPipeline handles real-time matching and the alert path for incoming
+// findings. Background workers have moved to processor.ProcessingEngine and
+// brain.Brain.
 type IngestPipeline struct {
 	archive          *archive.Store
 	matcher          *matcher.Matcher
-	classifyAnalyzer *analyzer.Analyzer // GLM-4-Plus (fast, high-volume classification)
-	fullAnalyzer     *analyzer.Analyzer // GLM-5 (smart, summarization + extraction)
+	classifyAnalyzer *analyzer.Analyzer // fast LLM for alert-path classification
+	fullAnalyzer     *analyzer.Analyzer // full LLM for alert-path summarization + extraction
 	metrics          *dispatcher.PrometheusMetrics
 	alertFn          func(models.EnrichedFinding)
-	workerCfg        config.CollectionConfig
-	corrCfg          config.CorrelationConfig
-	corrStore        correlationStore
-
-	// Concurrency limiters replace the old time-delay rate limiters.
-	classifySem *concurrencyLimiter // limits concurrent classification calls (GLM-4-Plus)
-	extractSem  *concurrencyLimiter // limits concurrent extraction/summarize calls (GLM-5)
 }
 
 // NewIngestPipeline creates a pipeline that archives every finding and runs
@@ -46,25 +39,10 @@ func NewIngestPipeline(
 	fullAnalyzer *analyzer.Analyzer,
 	metrics *dispatcher.PrometheusMetrics,
 	alertFn func(models.EnrichedFinding),
-	workerCfg config.CollectionConfig,
-	corrCfg config.CorrelationConfig,
-	classifyConcurrency int,
-	extractConcurrency int,
 ) (*IngestPipeline, error) {
 	m, err := matcher.New(matcherRules)
 	if err != nil {
 		return nil, err
-	}
-
-	// Apply defaults for zero-value config fields.
-	if workerCfg.ClassificationWorkers <= 0 {
-		workerCfg.ClassificationWorkers = 8
-	}
-	if workerCfg.EntityExtractionWorkers <= 0 {
-		workerCfg.EntityExtractionWorkers = 2
-	}
-	if workerCfg.ClassificationBatchSize <= 0 {
-		workerCfg.ClassificationBatchSize = 10
 	}
 
 	return &IngestPipeline{
@@ -74,11 +52,6 @@ func NewIngestPipeline(
 		fullAnalyzer:     fullAnalyzer,
 		metrics:          metrics,
 		alertFn:          alertFn,
-		workerCfg:        workerCfg,
-		corrCfg:          corrCfg,
-		corrStore:        archiveStore,
-		classifySem:      newConcurrencyLimiter(classifyConcurrency),
-		extractSem:       newConcurrencyLimiter(extractConcurrency),
 	}, nil
 }
 
@@ -114,11 +87,9 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		Severity:     result.Severity,
 	}
 
-	// 4a. Classify (GLM-4-Plus).
+	// 4a. Classify (fast LLM).
 	var provenance string
-	p.classifySem.Acquire(ctx)
 	classResult, err := p.classifyAnalyzer.Classify(ctx, &f, result.MatchedRules)
-	p.classifySem.Release()
 	if err != nil {
 		log.Printf("ingest: classify error for %s: %v", f.ID, err)
 	} else {
@@ -133,10 +104,8 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		}
 	}
 
-	// 4b. Extract IOCs (GLM-5).
-	p.extractSem.Acquire(ctx)
+	// 4b. Extract IOCs (full LLM).
 	iocs, err := p.fullAnalyzer.ExtractIOCs(ctx, &f)
-	p.extractSem.Release()
 	if err != nil {
 		log.Printf("ingest: extract IOCs error for %s: %v", f.ID, err)
 	} else {
@@ -153,10 +122,8 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		}
 	}
 
-	// 4d. Summarize (GLM-5).
-	p.extractSem.Acquire(ctx)
+	// 4d. Summarize (full LLM).
 	summary, err := p.fullAnalyzer.Summarize(ctx, &f, string(enriched.Category), enriched.Severity)
-	p.extractSem.Release()
 	if err != nil {
 		log.Printf("ingest: summarize error for %s: %v", f.ID, err)
 	} else {
@@ -167,105 +134,15 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 	p.alertFn(enriched)
 
 	// 6. Mark content as classified in archive.
-	tags := tagsFromCategory(string(enriched.Category))
+	tags := processor.TagsFromCategory(string(enriched.Category))
 	if enriched.Confidence < 0.80 {
 		tags = append(tags, "needs_review")
 	}
-	if err := p.archive.MarkClassified(ctx, rc.ID, string(enriched.Category), tags, enriched.Severity.String(), summary, provenance, currentClassificationVersion); err != nil {
+	if err := p.archive.MarkClassified(ctx, rc.ID, string(enriched.Category), tags, enriched.Severity.String(), summary, provenance, processor.CurrentClassificationVersion); err != nil {
 		log.Printf("ingest: mark classified error for %s: %v", rc.ID, err)
 	}
 
 	// Metrics recording is handled by alertFn callback to avoid double-counting.
 
 	return nil
-}
-
-// Run starts all background workers and blocks until ctx is cancelled.
-func (p *IngestPipeline) Run(ctx context.Context) {
-	// Reset old classifications for reprocessing with the current pipeline version.
-	if count, err := p.archive.ResetOldClassifications(ctx, currentClassificationVersion); err != nil {
-		log.Printf("ingest: reclassification reset error: %v", err)
-	} else if count > 0 {
-		log.Printf("ingest: reset %d entries for reclassification (version < %d)", count, currentClassificationVersion)
-	}
-
-	// Backfill entities from existing IOCs on startup.
-	if count, err := p.archive.BackfillEntitiesFromIOCs(ctx); err != nil {
-		log.Printf("ingest: entity backfill error: %v", err)
-	} else if count > 0 {
-		log.Printf("ingest: backfilled %d entities from existing IOCs", count)
-	}
-
-	// Cleanup stale associated_with edges from non-observed entities.
-	if count, err := p.archive.CleanupAssociatedWithEdges(ctx); err != nil {
-		log.Printf("ingest: edge cleanup error: %v", err)
-	} else if count > 0 {
-		log.Printf("ingest: cleaned up %d associated_with edges → referenced_in", count)
-	}
-
-	// Backfill IOC sightings on startup.
-	if count, err := p.archive.BackfillIOCSightings(ctx); err != nil {
-		log.Printf("ingest: ioc sightings backfill error: %v", err)
-	} else if count > 0 {
-		log.Printf("ingest: backfilled %d ioc sightings", count)
-	}
-
-	var wg sync.WaitGroup
-
-	// Start classification workers.
-	for i := 0; i < p.workerCfg.ClassificationWorkers; i++ {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
-			p.classificationWorker(ctx, id)
-		}(i)
-	}
-
-	// Start entity extraction workers.
-	for i := 0; i < p.workerCfg.EntityExtractionWorkers; i++ {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
-			p.entityExtractionWorker(ctx, id)
-		}(i)
-	}
-
-	// Start correlation worker (single instance).
-	if p.corrCfg.Enabled {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			p.correlationWorker(ctx)
-		}()
-	}
-
-	wg.Wait()
-}
-
-// tagsFromCategory derives a basic tag set from the classification category.
-func tagsFromCategory(category string) []string {
-	if category == "" {
-		return nil
-	}
-	tags := []string{category}
-
-	// Add additional contextual tags for well-known categories.
-	switch models.Category(category) {
-	case models.CategoryCredentialLeak:
-		tags = append(tags, "credentials")
-	case models.CategoryMalwareSample:
-		tags = append(tags, "malware")
-	case models.CategoryThreatActorComms:
-		tags = append(tags, "threat_actor")
-	case models.CategoryAccessBroker:
-		tags = append(tags, "access_sale")
-	case models.CategoryDataDump:
-		tags = append(tags, "data_breach")
-	case models.CategoryVulnerability:
-		tags = append(tags, "cve")
-	case models.CategoryCanaryHit:
-		tags = append(tags, "canary")
-	}
-
-	return tags
 }
