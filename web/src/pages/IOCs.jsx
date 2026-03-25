@@ -23,6 +23,7 @@ export default function IOCs() {
   const [page, setPage] = useState(0)
   const [copiedId, setCopiedId] = useState(null)
   const [showInactive, setShowInactive] = useState(false)
+  const [enrichedOnly, setEnrichedOnly] = useState(false)
 
   const params = new URLSearchParams()
   if (typeFilter) params.set('type', typeFilter)
@@ -30,6 +31,7 @@ export default function IOCs() {
   params.set('limit', PAGE_SIZE)
   params.set('offset', page * PAGE_SIZE)
   if (showInactive) params.set('active', 'false')
+  if (enrichedOnly) params.set('enriched', 'true')
 
   const { data, loading } = useApi(`/api/iocs?${params.toString()}`)
   const iocs = data?.iocs || []
@@ -117,6 +119,14 @@ export default function IOCs() {
             : 'text-noctis-muted bg-noctis-surface border border-noctis-border hover:border-noctis-border'
         }`
       }, showInactive ? 'All IOCs' : 'Active only'),
+      React.createElement('button', {
+        onClick: () => { setEnrichedOnly(v => !v); setPage(0) },
+        className: `px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors duration-200 whitespace-nowrap ${
+          enrichedOnly
+            ? 'bg-noctis-purple/15 text-noctis-purple-light border border-noctis-purple/30'
+            : 'text-noctis-muted bg-noctis-surface border border-noctis-border hover:border-noctis-border'
+        }`
+      }, 'Enriched'),
     ),
 
     // Table (desktop)
@@ -126,7 +136,7 @@ export default function IOCs() {
       React.createElement('table', { className: 'w-full text-sm' },
         React.createElement('thead', null,
           React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
-            ['Type', 'Value', 'Context', 'Score', 'Sightings'].map(h =>
+            ['Type', 'Value', 'Context', 'Score', 'Enriched'].map(h =>
               React.createElement('th', {
                 key: h,
                 className: 'px-4 py-3 text-left text-xs font-medium text-noctis-dim uppercase tracking-wider'
@@ -185,9 +195,16 @@ export default function IOCs() {
                     }, ioc.active ? ((ioc.threatScore || 0) * 100).toFixed(0) + '%' : 'inactive'),
                   ),
                   React.createElement('td', { className: 'px-4 py-3' },
-                    React.createElement('span', {
-                      className: 'text-xs font-mono px-2 py-0.5 bg-noctis-bg rounded text-noctis-muted'
-                    }, ioc.sightingCount),
+                    ioc.enrichmentSources?.length > 0
+                      ? React.createElement('div', { className: 'flex gap-1' },
+                          ioc.enrichmentSources.map(src =>
+                            React.createElement('span', {
+                              key: src,
+                              className: 'text-[10px] px-1.5 py-0.5 bg-noctis-cyan/10 text-cyan-400 rounded font-mono'
+                            }, src)
+                          ),
+                        )
+                      : null,
                   ),
                 )
               ),

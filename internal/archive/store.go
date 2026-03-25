@@ -1481,3 +1481,66 @@ LIMIT 30`
 
 // Pool returns the underlying connection pool for transaction use.
 func (s *Store) Pool() *pgxpool.Pool { return s.pool }
+
+// IOCForEnrichment holds the IOC fields needed by the enrichment pipeline.
+type IOCForEnrichment struct {
+	ID          string
+	Type        string
+	Value       string
+	Context     string
+	FirstSeen   time.Time
+	ThreatScore float64
+	BaseScore   float64
+}
+
+// FetchUnenrichedIOCs returns active IOCs that haven't been enriched yet.
+func (s *Store) FetchUnenrichedIOCs(ctx context.Context, limit int) ([]IOCForEnrichment, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	const query = `
+	SELECT id, type, value, COALESCE(context, ''), first_seen,
+	       COALESCE(threat_score, 0.5), COALESCE(base_score, 0.5)
+	FROM iocs
+	WHERE active = TRUE AND enriched_at IS NULL
+	ORDER BY first_seen ASC
+	LIMIT $1`
+
+	rows, err := s.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("archive: fetch unenriched iocs: %w", err)
+	}
+	defer rows.Close()
+
+	var results []IOCForEnrichment
+	for rows.Next() {
+		var ioc IOCForEnrichment
+		if err := rows.Scan(&ioc.ID, &ioc.Type, &ioc.Value, &ioc.Context,
+			&ioc.FirstSeen, &ioc.ThreatScore, &ioc.BaseScore); err != nil {
+			return nil, fmt.Errorf("archive: scan unenriched ioc: %w", err)
+		}
+		results = append(results, ioc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive: fetch unenriched iocs rows: %w", err)
+	}
+	return results, nil
+}
+
+// MarkIOCEnriched stores enrichment results for an IOC.
+func (s *Store) MarkIOCEnriched(ctx context.Context, iocType, value string, enrichment map[string]any, sources []string, newBaseScore float64) error {
+	enrichJSON, err := json.Marshal(enrichment)
+	if err != nil {
+		return fmt.Errorf("archive: marshal enrichment: %w", err)
+	}
+	const query = `
+	UPDATE iocs
+	SET enrichment = $3, enriched_at = NOW(), enrichment_sources = $4,
+	    base_score = GREATEST(base_score, $5), threat_score = GREATEST(threat_score, $5)
+	WHERE type = $1 AND value = $2`
+	_, err = s.pool.Exec(ctx, query, iocType, value, enrichJSON, sources, newBaseScore)
+	if err != nil {
+		return fmt.Errorf("archive: mark ioc enriched (%s, %s): %w", iocType, value, err)
+	}
+	return nil
+}

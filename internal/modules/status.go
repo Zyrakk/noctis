@@ -28,6 +28,7 @@ const (
 	ModEntityExtractor ModuleID = "processor.entity_extractor"
 	ModGraphBridge     ModuleID = "processor.graph_bridge"
 	ModIOCLifecycle    ModuleID = "processor.ioc_lifecycle"
+	ModEnrichment      ModuleID = "processor.enrichment"
 
 	// Brain sub-modules
 	ModCorrelator ModuleID = "brain.correlator"

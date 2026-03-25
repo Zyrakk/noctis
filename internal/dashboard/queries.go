@@ -57,15 +57,18 @@ type FindingDetail struct {
 
 // IOCItem represents an indicator of compromise.
 type IOCItem struct {
-	ID            string    `json:"id"`
-	Type          string    `json:"type"`
-	Value         string    `json:"value"`
-	Context       *string   `json:"context"`
-	FirstSeen     time.Time `json:"firstSeen"`
-	LastSeen      time.Time `json:"lastSeen"`
-	SightingCount int       `json:"sightingCount"`
-	ThreatScore   *float64  `json:"threatScore,omitempty"`
-	Active        bool      `json:"active"`
+	ID                string         `json:"id"`
+	Type              string         `json:"type"`
+	Value             string         `json:"value"`
+	Context           *string        `json:"context"`
+	FirstSeen         time.Time      `json:"firstSeen"`
+	LastSeen          time.Time      `json:"lastSeen"`
+	SightingCount     int            `json:"sightingCount"`
+	ThreatScore       *float64       `json:"threatScore,omitempty"`
+	Active            bool           `json:"active"`
+	Enrichment        map[string]any `json:"enrichment,omitempty"`
+	EnrichedAt        *time.Time     `json:"enrichedAt,omitempty"`
+	EnrichmentSources []string       `json:"enrichmentSources,omitempty"`
 }
 
 // IOCsResponse wraps paginated IOCs.
@@ -351,7 +354,7 @@ func queryFinding(ctx context.Context, pool *pgxpool.Pool, id string) (*FindingD
 
 	// Linked IOCs
 	rows, err := pool.Query(ctx, `
-		SELECT id, type, value, context, first_seen, last_seen, sighting_count, threat_score, active
+		SELECT id, type, value, context, first_seen, last_seen, sighting_count, threat_score, active, enrichment, enriched_at, enrichment_sources
 		FROM iocs WHERE source_content_id = $1
 		ORDER BY sighting_count DESC`, id)
 	if err != nil {
@@ -361,8 +364,12 @@ func queryFinding(ctx context.Context, pool *pgxpool.Pool, id string) (*FindingD
 
 	for rows.Next() {
 		var ioc IOCItem
-		if err := rows.Scan(&ioc.ID, &ioc.Type, &ioc.Value, &ioc.Context, &ioc.FirstSeen, &ioc.LastSeen, &ioc.SightingCount, &ioc.ThreatScore, &ioc.Active); err != nil {
+		var enrichJSON []byte
+		if err := rows.Scan(&ioc.ID, &ioc.Type, &ioc.Value, &ioc.Context, &ioc.FirstSeen, &ioc.LastSeen, &ioc.SightingCount, &ioc.ThreatScore, &ioc.Active, &enrichJSON, &ioc.EnrichedAt, &ioc.EnrichmentSources); err != nil {
 			return nil, fmt.Errorf("finding ioc scan: %w", err)
+		}
+		if len(enrichJSON) > 0 {
+			json.Unmarshal(enrichJSON, &ioc.Enrichment)
 		}
 		fd.IOCs = append(fd.IOCs, ioc)
 	}
@@ -375,11 +382,12 @@ func queryFinding(ctx context.Context, pool *pgxpool.Pool, id string) (*FindingD
 
 // iocsFilter holds parsed query parameters for IOC search.
 type iocsFilter struct {
-	Type       string
-	Query      string
-	ActiveOnly bool
-	Limit      int
-	Offset     int
+	Type         string
+	Query        string
+	ActiveOnly   bool
+	EnrichedOnly bool
+	Limit        int
+	Offset       int
 }
 
 func queryIOCs(ctx context.Context, pool *pgxpool.Pool, f iocsFilter) (*IOCsResponse, error) {
@@ -405,6 +413,9 @@ func queryIOCs(ctx context.Context, pool *pgxpool.Pool, f iocsFilter) (*IOCsResp
 	if f.ActiveOnly {
 		conditions = append(conditions, "active = TRUE")
 	}
+	if f.EnrichedOnly {
+		conditions = append(conditions, "enriched_at IS NOT NULL")
+	}
 
 	where := ""
 	if len(conditions) > 0 {
@@ -428,7 +439,7 @@ func queryIOCs(ctx context.Context, pool *pgxpool.Pool, f iocsFilter) (*IOCsResp
 	limitP := nextArg()
 	offsetP := nextArg()
 	sql := fmt.Sprintf(`
-		SELECT id, type, value, context, first_seen, last_seen, sighting_count, threat_score, active
+		SELECT id, type, value, context, first_seen, last_seen, sighting_count, threat_score, active, enrichment, enriched_at, enrichment_sources
 		FROM iocs %s
 		ORDER BY threat_score DESC NULLS LAST
 		LIMIT %s OFFSET %s`, where, limitP, offsetP)
@@ -443,8 +454,12 @@ func queryIOCs(ctx context.Context, pool *pgxpool.Pool, f iocsFilter) (*IOCsResp
 	var iocs []IOCItem
 	for rows.Next() {
 		var ioc IOCItem
-		if err := rows.Scan(&ioc.ID, &ioc.Type, &ioc.Value, &ioc.Context, &ioc.FirstSeen, &ioc.LastSeen, &ioc.SightingCount, &ioc.ThreatScore, &ioc.Active); err != nil {
+		var enrichJSON []byte
+		if err := rows.Scan(&ioc.ID, &ioc.Type, &ioc.Value, &ioc.Context, &ioc.FirstSeen, &ioc.LastSeen, &ioc.SightingCount, &ioc.ThreatScore, &ioc.Active, &enrichJSON, &ioc.EnrichedAt, &ioc.EnrichmentSources); err != nil {
 			return nil, fmt.Errorf("iocs scan: %w", err)
+		}
+		if len(enrichJSON) > 0 {
+			json.Unmarshal(enrichJSON, &ioc.Enrichment)
 		}
 		iocs = append(iocs, ioc)
 	}

@@ -218,6 +218,13 @@ data:
         intervalHours: 6
         nvdApiKey: "${NOCTIS_NVD_API_KEY}"
 
+      enrichment:
+        enabled: true
+        intervalMinutes: 30
+        batchSize: 20
+        abuseipdbKey: "${NOCTIS_ABUSEIPDB_KEY}"
+        virusTotalKey: "${NOCTIS_VT_KEY}"
+
       dashboard:
         enabled: true
         port: 3000

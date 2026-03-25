@@ -40,6 +40,7 @@ type Config struct {
 	IOCLifecycle   IOCLifecycleConfig `yaml:"iocLifecycle"`
 	BriefGenerator BriefConfig        `yaml:"briefGenerator"`
 	Vuln           VulnConfig         `yaml:"vuln"`
+	Enrichment     EnrichmentConfig   `yaml:"enrichment"`
 	LLMBrain       LLMConfig          `yaml:"llmBrain"`
 }
 
@@ -108,6 +109,15 @@ type VulnConfig struct {
 	Enabled       bool   `yaml:"enabled"`
 	IntervalHours int    `yaml:"intervalHours"`
 	NVDAPIKey     string `yaml:"nvdApiKey"`
+}
+
+// EnrichmentConfig controls the IOC enrichment pipeline.
+type EnrichmentConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	IntervalMinutes int    `yaml:"intervalMinutes"`
+	BatchSize       int    `yaml:"batchSize"`
+	AbuseIPDBKey    string `yaml:"abuseipdbKey"`
+	VirusTotalKey   string `yaml:"virusTotalKey"`
 }
 
 // SourcesConfig groups all ingest source configurations.

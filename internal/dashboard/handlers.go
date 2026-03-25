@@ -73,11 +73,12 @@ func (s *Server) handleFinding(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleIOCs(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	f := iocsFilter{
-		Type:       q.Get("type"),
-		Query:      q.Get("q"),
-		ActiveOnly: q.Get("active") != "false",
-		Limit:      parseIntParam(q.Get("limit"), 50),
-		Offset:     parseIntParam(q.Get("offset"), 0),
+		Type:         q.Get("type"),
+		Query:        q.Get("q"),
+		ActiveOnly:   q.Get("active") != "false",
+		EnrichedOnly: q.Get("enriched") == "true",
+		Limit:        parseIntParam(q.Get("limit"), 50),
+		Offset:       parseIntParam(q.Get("offset"), 0),
 	}
 
 	resp, err := queryIOCs(r.Context(), s.pool, f)

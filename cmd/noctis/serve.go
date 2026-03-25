@@ -27,6 +27,7 @@ import (
 	"github.com/Zyrakk/noctis/internal/llm"
 	"github.com/Zyrakk/noctis/internal/models"
 	"github.com/Zyrakk/noctis/internal/modules"
+	"github.com/Zyrakk/noctis/internal/enrichment"
 	"github.com/Zyrakk/noctis/internal/processor"
 	"github.com/Zyrakk/noctis/internal/vuln"
 )
@@ -337,6 +338,20 @@ func newServeCmd() *cobra.Command {
 			vulnIngestor := vuln.NewVulnIngestor(archiveStore, cfg.Vuln)
 			registry.Register(vulnIngestor.Status())
 			go vulnIngestor.Run(pipelineCtx)
+
+			// Start IOC enrichment pipeline.
+			var enrichProviders []enrichment.EnrichmentProvider
+			if cfg.Enrichment.AbuseIPDBKey != "" {
+				enrichProviders = append(enrichProviders, enrichment.NewAbuseIPDBProvider(cfg.Enrichment.AbuseIPDBKey))
+			}
+			if cfg.Enrichment.VirusTotalKey != "" {
+				enrichProviders = append(enrichProviders, enrichment.NewVirusTotalProvider(cfg.Enrichment.VirusTotalKey))
+			}
+			enrichProviders = append(enrichProviders, enrichment.NewCRTShProvider())
+
+			enricher := enrichment.NewEnricher(archiveStore, cfg.Enrichment, enrichProviders)
+			registry.Register(enricher.Status())
+			go enricher.Run(pipelineCtx)
 
 			// Build collector manager with status tracking.
 			collectorMgr := collector.NewCollectorManager(
