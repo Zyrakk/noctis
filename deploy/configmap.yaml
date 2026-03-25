@@ -105,7 +105,7 @@ data:
         model: "meta-llama/llama-4-scout-17b-16e-instruct"
         apiKey: "${NOCTIS_GROQ_API_KEY}"
         maxConcurrency: 5
-        tokensPerMinute: 30000
+        tokensPerMinute: 300000
 
       llmBrain:
         provider: gemini
@@ -114,7 +114,7 @@ data:
         apiKey: "${NOCTIS_GEMINI_API_KEY}"
         maxConcurrent: 2
         tokensPerMinute: 60000
-        monthlyBudgetUSD: 14.0
+        monthlyBudgetUSD: 17.0
         inputCostPer1M: 2.0
         outputCostPer1M: 12.0
 
