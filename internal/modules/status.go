@@ -33,6 +33,7 @@ const (
 	ModCorrelator ModuleID = "brain.correlator"
 	ModAnalyst        ModuleID = "brain.analyst"    // future: LLM correlation confirmation
 	ModBriefGenerator ModuleID = "brain.brief_generator"
+	ModQueryEngine    ModuleID = "brain.query_engine"
 	ModAttributor     ModuleID = "brain.attributor" // future: actor attribution
 
 	// Infrastructure

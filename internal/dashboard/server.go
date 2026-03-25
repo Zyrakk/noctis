@@ -16,13 +16,29 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
+// NLQueryEngine is the interface for the natural language query engine.
+type NLQueryEngine interface {
+	Query(ctx context.Context, question string) (*NLQueryResult, error)
+}
+
+// NLQueryResult mirrors brain.QueryResult for the dashboard package.
+type NLQueryResult struct {
+	Query    string   `json:"query"`
+	SQL      string   `json:"sql"`
+	Columns  []string `json:"columns"`
+	Rows     [][]any  `json:"rows"`
+	RowCount int      `json:"row_count"`
+	Duration string   `json:"duration"`
+}
+
 // Server serves the Noctis web dashboard and API.
 type Server struct {
-	pool     *pgxpool.Pool
-	apiKey   string
-	registry *modules.Registry
-	mux      *http.ServeMux
-	httpSrv  *http.Server
+	pool        *pgxpool.Pool
+	apiKey      string
+	registry    *modules.Registry
+	mux         *http.ServeMux
+	httpSrv     *http.Server
+	queryEngine NLQueryEngine
 }
 
 // NewServer creates a dashboard Server listening on addr. It requires a
@@ -54,6 +70,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpSrv.Shutdown(ctx)
 }
 
+// SetQueryEngine registers the natural language query engine.
+func (s *Server) SetQueryEngine(qe NLQueryEngine) {
+	s.queryEngine = qe
+}
+
 func (s *Server) registerRoutes() {
 	// Static file server from embedded FS
 	staticFS, _ := fs.Sub(staticFiles, "static")
@@ -83,6 +104,7 @@ func (s *Server) registerRoutes() {
 	s.mux.Handle("GET /api/briefs/latest", s.authMiddleware(http.HandlerFunc(s.handleLatestBrief)))
 	s.mux.Handle("GET /api/vulnerabilities", s.authMiddleware(http.HandlerFunc(s.handleVulnerabilities)))
 	s.mux.Handle("GET /api/vulnerabilities/{cve}", s.authMiddleware(http.HandlerFunc(s.handleVulnerabilityDetail)))
+	s.mux.Handle("POST /api/query", s.authMiddleware(http.HandlerFunc(s.handleQuery)))
 
 	// Auth validation endpoint
 	s.mux.Handle("POST /api/auth/check", s.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -13,6 +13,7 @@ import AnalyticalNotes from './pages/AnalyticalNotes.jsx'
 import Briefs from './pages/Briefs.jsx'
 import SystemStatus from './pages/SystemStatus.jsx'
 import Vulnerabilities from './pages/Vulnerabilities.jsx'
+import Query from './pages/Query.jsx'
 
 // Simple client-side router (avoids react-router CDN version issues)
 function useRouter() {
@@ -69,6 +70,7 @@ function AppRoutes() {
     '/dashboard/vulns': Vulnerabilities,
     '/dashboard/briefs': Briefs,
     '/dashboard/system': SystemStatus,
+    '/dashboard/query': Query,
   }
 
   const PageComponent = dashboardPages[path]

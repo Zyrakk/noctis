@@ -563,3 +563,14 @@ func (a *Analyzer) GenerateBrief(ctx context.Context, data *BriefPromptData) (*B
 
 	return &result, nil
 }
+
+// RawCompletion sends a prompt and returns the raw text response without JSON parsing.
+func (a *Analyzer) RawCompletion(ctx context.Context, prompt string) (string, error) {
+	resp, err := a.client.ChatCompletion(ctx, []llm.Message{
+		{Role: "user", Content: prompt},
+	})
+	if err != nil {
+		return "", fmt.Errorf("analyzer: raw completion: %w", err)
+	}
+	return resp.Content, nil
+}

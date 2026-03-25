@@ -1,7 +1,7 @@
 import React from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
-  LayoutDashboard, Search, Shield, Globe, Network, LogOut, Activity, Menu, X, MonitorCheck, FileText, GitBranch, BookOpen, Bug
+  LayoutDashboard, Search, Shield, Globe, Network, LogOut, Activity, Menu, X, MonitorCheck, FileText, GitBranch, BookOpen, Bug, MessageSquare
 } from 'lucide-react'
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
   { path: '/dashboard/notes', label: 'Notes', icon: FileText },
   { path: '/dashboard/vulns', label: 'Vulnerabilities', icon: Bug },
   { path: '/dashboard/briefs', label: 'Briefs', icon: BookOpen },
+  { path: '/dashboard/query', label: 'Query', icon: MessageSquare },
   { path: '/dashboard/system', label: 'System', icon: MonitorCheck },
 ]
 
@@ -27,6 +28,7 @@ const bottomNavItems = [
   { path: '/dashboard/notes', label: 'Notes', shortLabel: 'Notes', icon: FileText },
   { path: '/dashboard/vulns', label: 'Vulns', shortLabel: 'Vulns', icon: Bug },
   { path: '/dashboard/briefs', label: 'Briefs', shortLabel: 'Briefs', icon: BookOpen },
+  { path: '/dashboard/query', label: 'Query', shortLabel: 'Query', icon: MessageSquare },
   { path: '/dashboard/system', label: 'System', shortLabel: 'System', icon: MonitorCheck },
 ]
 

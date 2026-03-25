@@ -482,3 +482,35 @@ func (s *Server) handleVulnerabilityDetail(w http.ResponseWriter, r *http.Reques
 	}
 	writeJSON(w, http.StatusOK, detail)
 }
+
+func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
+	if s.queryEngine == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "query engine not available"})
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<16) // 64KB max
+
+	var req struct {
+		Question string `json:"question"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if req.Question == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "question is required"})
+		return
+	}
+
+	result, err := s.queryEngine.Query(r.Context(), req.Question)
+	if err != nil {
+		slog.Error("dashboard: query", "question", req.Question, "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "query failed",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}

@@ -31,6 +31,26 @@ import (
 	"github.com/Zyrakk/noctis/internal/vuln"
 )
 
+// queryEngineAdapter wraps brain.QueryEngine to satisfy dashboard.NLQueryEngine.
+type queryEngineAdapter struct {
+	engine *brain.QueryEngine
+}
+
+func (a *queryEngineAdapter) Query(ctx context.Context, question string) (*dashboard.NLQueryResult, error) {
+	result, err := a.engine.Query(ctx, question)
+	if err != nil {
+		return nil, err
+	}
+	return &dashboard.NLQueryResult{
+		Query:    result.Query,
+		SQL:      result.SQL,
+		Columns:  result.Columns,
+		Rows:     result.Rows,
+		RowCount: result.RowCount,
+		Duration: result.Duration,
+	}, nil
+}
+
 func newServeCmd() *cobra.Command {
 	var configPath string
 
@@ -245,6 +265,13 @@ func newServeCmd() *cobra.Command {
 				brainConcurrency,
 				cfg.BriefGenerator,
 			)
+
+			// Create natural language query engine (on-demand, not periodic).
+			queryEngine := brain.NewQueryEngine(brainAnalyzer, pool, brainConcurrency, brainProvider, brainModel)
+			registry.Register(queryEngine.Status())
+			if dashServer != nil {
+				dashServer.SetQueryEngine(&queryEngineAdapter{engine: queryEngine})
+			}
 
 			// Build ingest pipeline (real-time matching + alert path only).
 			ingestPipeline, err := ingest.NewIngestPipeline(
