@@ -106,6 +106,7 @@ data:
         apiKey: "${NOCTIS_GROQ_API_KEY}"
         maxConcurrency: 5
         tokensPerMinute: 300000
+        tokensPerDay: 500000
 
       llmBrain:
         provider: gemini
@@ -120,7 +121,7 @@ data:
 
       collection:
         archiveAll: true
-        classificationWorkers: 8
+        classificationWorkers: 3
         entityExtractionWorkers: 1
         librarianWorkers: 1
         classificationBatchSize: 10

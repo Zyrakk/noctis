@@ -1116,6 +1116,7 @@ WHERE classified = TRUE
   AND entities_extracted = TRUE
   AND sub_classified = FALSE
   AND category IS NOT NULL
+  AND category != ''
   AND category != 'irrelevant'
 ORDER BY collected_at ASC
 LIMIT $1`

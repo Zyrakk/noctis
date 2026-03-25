@@ -147,7 +147,7 @@ func newServeCmd() *cobra.Command {
 			// Build LLM clients
 			// GLM-5 — smart model for summarization and entity extraction
 			fullClient := llm.NewOpenAICompatClient(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.LLM.Model)
-			fullClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLM.TokensPerMinute))
+			fullClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLM.TokensPerMinute, 0))
 
 			// Build Prometheus metrics
 			metrics := dispatcher.NewPrometheusMetrics(prometheus.DefaultRegisterer)
@@ -163,7 +163,7 @@ func newServeCmd() *cobra.Command {
 			var classifyAnalyzer *analyzer.Analyzer
 			if cfg.LLMFast.Model != "" {
 				fastClient := llm.NewOpenAICompatClient(cfg.LLMFast.BaseURL, cfg.LLMFast.APIKey, cfg.LLMFast.Model)
-				fastClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLMFast.TokensPerMinute))
+				fastClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLMFast.TokensPerMinute, cfg.LLMFast.TokensPerDay))
 				classifyAnalyzer = analyzer.New(fastClient, promptsDir)
 				slog.Info("dual LLM mode", "fast", cfg.LLMFast.Model, "full", cfg.LLM.Model)
 			} else {
@@ -243,7 +243,7 @@ func newServeCmd() *cobra.Command {
 			brainConcurrency := 1
 			if cfg.LLMBrain.BaseURL != "" {
 				brainClient := llm.NewOpenAICompatClient(cfg.LLMBrain.BaseURL, cfg.LLMBrain.APIKey, cfg.LLMBrain.Model)
-				brainClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLMBrain.TokensPerMinute))
+				brainClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLMBrain.TokensPerMinute, 0))
 				if cfg.LLMBrain.MonthlyBudgetUSD > 0 {
 					brainSpending = llm.NewSpendingTracker(
 						cfg.LLMBrain.InputCostPer1M,

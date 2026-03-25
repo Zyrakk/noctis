@@ -249,6 +249,7 @@ type LLMFastConfig struct {
 	APIKey          string `yaml:"apiKey"`
 	MaxConcurrency  int    `yaml:"maxConcurrency"`
 	TokensPerMinute int    `yaml:"tokensPerMinute"`
+	TokensPerDay    int    `yaml:"tokensPerDay"`
 }
 
 // LLMConfig configures the language model client.
