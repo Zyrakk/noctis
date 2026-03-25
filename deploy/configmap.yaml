@@ -89,7 +89,7 @@ data:
       llm:
         provider: glm
         baseURL: "https://open.bigmodel.cn/api/coding/paas/v4"
-        model: "GLM-5"
+        model: "glm-4.7"
         apiKey: "${NOCTIS_LLM_API_KEY}"
         maxTokens: 1024
         temperature: 0.1
@@ -97,7 +97,7 @@ data:
         retries: 3
         maxConcurrent: 2
         requestsPerMinute: 20
-        tokensPerMinute: 30000
+        tokensPerMinute: 3000
 
       llmFast:
         provider: groq
@@ -121,7 +121,7 @@ data:
       collection:
         archiveAll: true
         classificationWorkers: 8
-        entityExtractionWorkers: 2
+        entityExtractionWorkers: 1
         librarianWorkers: 1
         classificationBatchSize: 10
         maxContentLength: 50000
