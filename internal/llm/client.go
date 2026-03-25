@@ -8,9 +8,17 @@ type Message struct {
 	Content string `json:"content"`
 }
 
+// Usage holds token counts returned by the API.
+type Usage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
 // Response holds the result from a chat completion call.
 type Response struct {
 	Content string
+	Usage   Usage
 }
 
 // Options collects optional overrides for a chat completion request.

@@ -243,25 +243,30 @@ type RuleConfig struct {
 // LLMFastConfig configures a secondary (fast) LLM model used for high-volume
 // structured tasks like classification. Falls back to the primary LLM if unset.
 type LLMFastConfig struct {
-	Provider       string `yaml:"provider"`
-	BaseURL        string `yaml:"baseURL"`
-	Model          string `yaml:"model"`
-	APIKey         string `yaml:"apiKey"`
-	MaxConcurrency int    `yaml:"maxConcurrency"`
+	Provider        string `yaml:"provider"`
+	BaseURL         string `yaml:"baseURL"`
+	Model           string `yaml:"model"`
+	APIKey          string `yaml:"apiKey"`
+	MaxConcurrency  int    `yaml:"maxConcurrency"`
+	TokensPerMinute int    `yaml:"tokensPerMinute"`
 }
 
 // LLMConfig configures the language model client.
 type LLMConfig struct {
-	Provider         string        `yaml:"provider"`
-	BaseURL          string        `yaml:"baseURL"`
-	Model            string        `yaml:"model"`
-	APIKey           string        `yaml:"apiKey"`
-	MaxTokens        int           `yaml:"maxTokens"`
-	Temperature      float64       `yaml:"temperature"`
-	Timeout          time.Duration `yaml:"timeout"`
-	Retries          int           `yaml:"retries"`
-	MaxConcurrent    int           `yaml:"maxConcurrent"`
-	RequestsPerMinute int          `yaml:"requestsPerMinute"`
+	Provider          string        `yaml:"provider"`
+	BaseURL           string        `yaml:"baseURL"`
+	Model             string        `yaml:"model"`
+	APIKey            string        `yaml:"apiKey"`
+	MaxTokens         int           `yaml:"maxTokens"`
+	Temperature       float64       `yaml:"temperature"`
+	Timeout           time.Duration `yaml:"timeout"`
+	Retries           int           `yaml:"retries"`
+	MaxConcurrent     int           `yaml:"maxConcurrent"`
+	RequestsPerMinute int           `yaml:"requestsPerMinute"`
+	TokensPerMinute   int           `yaml:"tokensPerMinute"`
+	MonthlyBudgetUSD  float64       `yaml:"monthlyBudgetUSD"`
+	InputCostPer1M    float64       `yaml:"inputCostPer1M"`
+	OutputCostPer1M   float64       `yaml:"outputCostPer1M"`
 }
 
 // ProfilingConfig configures actor profiling behaviour.

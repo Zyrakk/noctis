@@ -24,11 +24,7 @@ PREVIOUS ANALYTICAL NOTES:
 
 QUESTION: Is this correlation real and meaningful for threat intelligence purposes?
 
-Consider:
-1. Could the shared signals be coincidental? (e.g., shared hosting on a CDN, common tool usage)
-2. Is there enough evidence to confidently link these entities?
-3. Does this correlation provide actionable intelligence?
-4. Do previous analytical notes support or contradict this correlation?
+Consider: coincidental signals (CDN, common tools), evidence strength, actionable value, prior notes.
 
-Respond with JSON:
-{"decision": "promote|reject|defer", "confidence": <0.0-1.0>, "reasoning": "<2-3 sentences explaining your judgment>", "missing_evidence": "<what additional data would increase confidence, or empty string>"}
+Be concise — respond in under 150 words total. Output only the JSON below:
+{"decision": "promote|reject|defer", "confidence": <0.0-1.0>, "reasoning": "<one sentence justification>", "missing_evidence": "<what additional data would help, or empty>"}

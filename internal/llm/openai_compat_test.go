@@ -1,11 +1,13 @@
 package llm_test
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Zyrakk/noctis/internal/llm"
 )
@@ -77,7 +79,9 @@ func TestOpenAICompatClient_ChatCompletion(t *testing.T) {
 }
 
 func TestOpenAICompatClient_ErrorResponse(t *testing.T) {
+	var attempts int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
 		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = w.Write([]byte(`{"error": "rate limit exceeded"}`))
 	}))
@@ -85,11 +89,18 @@ func TestOpenAICompatClient_ErrorResponse(t *testing.T) {
 
 	client := llm.NewOpenAICompatClient(srv.URL, "key", "model")
 
-	_, err := client.ChatCompletion(t.Context(), []llm.Message{
+	// Use a short timeout so retries are cancelled quickly.
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	_, err := client.ChatCompletion(ctx, []llm.Message{
 		{Role: "user", Content: "hello"},
 	})
 	if err == nil {
 		t.Fatal("expected error for 429 response, got nil")
+	}
+	if attempts < 1 {
+		t.Errorf("expected at least 1 attempt, got %d", attempts)
 	}
 }
 

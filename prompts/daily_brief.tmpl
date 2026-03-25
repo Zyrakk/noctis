@@ -24,14 +24,15 @@ SOURCE HEALTH:
 {{.Name}}: {{.FindingCount}} findings, value score {{printf "%.2f" .ValueScore}}
 {{end}}
 
-Write a daily intelligence brief with these sections:
+Write a concise daily intelligence brief. Keep the entire brief under 500 words. Be direct — bullet points preferred over prose.
 
-EXECUTIVE SUMMARY — 2-3 sentences covering the most important developments
-KEY THREATS — The most significant findings and why they matter
-CORRELATION INSIGHTS — What the new correlations tell us about threat activity
-EMERGING TRENDS — Patterns worth watching based on entity and IOC trends
-COLLECTION GAPS — What are we NOT seeing that we should be? (based on source health)
-RECOMMENDED ACTIONS — Specific, actionable items for the security team
+Sections:
+EXECUTIVE SUMMARY — 2-3 sentences, most important developments only
+KEY THREATS — Top findings and why they matter (3-5 bullets)
+CORRELATION INSIGHTS — What new correlations reveal (2-3 bullets)
+EMERGING TRENDS — Patterns worth watching (2-3 bullets)
+COLLECTION GAPS — What we're missing (1-2 bullets)
+RECOMMENDED ACTIONS — Specific next steps (3-5 bullets)
 
 Respond with JSON:
-{"title": "Daily Intelligence Brief — <date>", "executive_summary": "<2-3 sentences>", "sections": {"key_threats": "<markdown text>", "correlation_insights": "<markdown text>", "emerging_trends": "<markdown text>", "collection_gaps": "<markdown text>", "recommended_actions": "<markdown text>"}}
+{"title": "Daily Intelligence Brief — <date>", "executive_summary": "<2-3 sentences>", "sections": {"key_threats": "<markdown>", "correlation_insights": "<markdown>", "emerging_trends": "<markdown>", "collection_gaps": "<markdown>", "recommended_actions": "<markdown>"}}

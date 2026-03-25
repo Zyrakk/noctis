@@ -95,6 +95,7 @@ func (a *Analyst) runCycle(ctx context.Context) {
 	}
 
 	if len(candidates) == 0 {
+		log.Printf("brain: analyst: no pending candidates, skipping LLM evaluation")
 		a.status.SetExtra("last_cycle_candidates", 0)
 		return
 	}

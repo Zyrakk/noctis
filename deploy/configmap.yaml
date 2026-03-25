@@ -97,13 +97,15 @@ data:
         retries: 3
         maxConcurrent: 2
         requestsPerMinute: 20
+        tokensPerMinute: 30000
 
       llmFast:
         provider: groq
         baseURL: "https://api.groq.com/openai/v1"
-        model: "llama-4-scout-17b-16e-instruct"
+        model: "meta-llama/llama-4-scout-17b-16e-instruct"
         apiKey: "${NOCTIS_GROQ_API_KEY}"
         maxConcurrency: 5
+        tokensPerMinute: 30000
 
       llmBrain:
         provider: gemini
@@ -111,6 +113,10 @@ data:
         model: "gemini-3.1-pro-preview"
         apiKey: "${NOCTIS_GEMINI_API_KEY}"
         maxConcurrent: 2
+        tokensPerMinute: 60000
+        monthlyBudgetUSD: 14.0
+        inputCostPer1M: 2.0
+        outputCostPer1M: 12.0
 
       collection:
         archiveAll: true
@@ -199,8 +205,8 @@ data:
 
       analyst:
         enabled: true
-        intervalMinutes: 60
-        batchSize: 10
+        intervalMinutes: 120
+        batchSize: 5
         minSignalCount: 2
         promoteThreshold: 0.7
 

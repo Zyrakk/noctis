@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Zyrakk/noctis/internal/llm"
 	"github.com/Zyrakk/noctis/internal/modules"
 )
 
@@ -33,12 +34,13 @@ type NLQueryResult struct {
 
 // Server serves the Noctis web dashboard and API.
 type Server struct {
-	pool        *pgxpool.Pool
-	apiKey      string
-	registry    *modules.Registry
-	mux         *http.ServeMux
-	httpSrv     *http.Server
-	queryEngine NLQueryEngine
+	pool            *pgxpool.Pool
+	apiKey          string
+	registry        *modules.Registry
+	mux             *http.ServeMux
+	httpSrv         *http.Server
+	queryEngine     NLQueryEngine
+	spendingTracker *llm.SpendingTracker
 }
 
 // NewServer creates a dashboard Server listening on addr. It requires a
@@ -73,6 +75,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // SetQueryEngine registers the natural language query engine.
 func (s *Server) SetQueryEngine(qe NLQueryEngine) {
 	s.queryEngine = qe
+}
+
+// SetSpendingTracker registers a spending tracker for display on the dashboard.
+func (s *Server) SetSpendingTracker(st *llm.SpendingTracker) {
+	s.spendingTracker = st
 }
 
 func (s *Server) registerRoutes() {
@@ -145,9 +152,13 @@ func (s *Server) handleSystemStatus(w http.ResponseWriter, _ *http.Request) {
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	result := map[string]any{
 		"available": true,
 		"modules":   s.registry.StatusesByCategory(),
 		"timestamp": time.Now().UTC(),
-	})
+	}
+	if s.spendingTracker != nil {
+		result["gemini_spending"] = s.spendingTracker.Snapshot()
+	}
+	writeJSON(w, http.StatusOK, result)
 }

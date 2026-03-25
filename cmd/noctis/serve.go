@@ -147,6 +147,7 @@ func newServeCmd() *cobra.Command {
 			// Build LLM clients
 			// GLM-5 — smart model for summarization and entity extraction
 			fullClient := llm.NewOpenAICompatClient(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.LLM.Model)
+			fullClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLM.TokensPerMinute))
 
 			// Build Prometheus metrics
 			metrics := dispatcher.NewPrometheusMetrics(prometheus.DefaultRegisterer)
@@ -162,6 +163,7 @@ func newServeCmd() *cobra.Command {
 			var classifyAnalyzer *analyzer.Analyzer
 			if cfg.LLMFast.Model != "" {
 				fastClient := llm.NewOpenAICompatClient(cfg.LLMFast.BaseURL, cfg.LLMFast.APIKey, cfg.LLMFast.Model)
+				fastClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLMFast.TokensPerMinute))
 				classifyAnalyzer = analyzer.New(fastClient, promptsDir)
 				slog.Info("dual LLM mode", "fast", cfg.LLMFast.Model, "full", cfg.LLM.Model)
 			} else {
@@ -237,9 +239,24 @@ func newServeCmd() *cobra.Command {
 			// Brain analyzer — Gemini 3.1 Pro for analytical reasoning (falls back to full LLM).
 			var brainAnalyzer *analyzer.Analyzer
 			var brainProvider, brainModel string
+			var brainSpending *llm.SpendingTracker
 			brainConcurrency := 1
 			if cfg.LLMBrain.BaseURL != "" {
 				brainClient := llm.NewOpenAICompatClient(cfg.LLMBrain.BaseURL, cfg.LLMBrain.APIKey, cfg.LLMBrain.Model)
+				brainClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLMBrain.TokensPerMinute))
+				if cfg.LLMBrain.MonthlyBudgetUSD > 0 {
+					brainSpending = llm.NewSpendingTracker(
+						cfg.LLMBrain.InputCostPer1M,
+						cfg.LLMBrain.OutputCostPer1M,
+						cfg.LLMBrain.MonthlyBudgetUSD,
+					)
+					brainClient.SetSpendingTracker(brainSpending)
+					slog.Info("brain spending tracker enabled",
+						"budget_usd", cfg.LLMBrain.MonthlyBudgetUSD,
+						"input_cost_per_1m", cfg.LLMBrain.InputCostPer1M,
+						"output_cost_per_1m", cfg.LLMBrain.OutputCostPer1M,
+					)
+				}
 				brainAnalyzer = analyzer.New(brainClient, promptsDir)
 				brainProvider = cfg.LLMBrain.Provider
 				brainModel = cfg.LLMBrain.Model
@@ -272,6 +289,9 @@ func newServeCmd() *cobra.Command {
 			registry.Register(queryEngine.Status())
 			if dashServer != nil {
 				dashServer.SetQueryEngine(&queryEngineAdapter{engine: queryEngine})
+				if brainSpending != nil {
+					dashServer.SetSpendingTracker(brainSpending)
+				}
 			}
 
 			// Build ingest pipeline (real-time matching + alert path only).
