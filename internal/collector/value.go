@@ -4,12 +4,19 @@ import (
 	"context"
 	"log"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Zyrakk/noctis/internal/modules"
 )
+
+// sourceValueRef holds the fields needed to identify a source and match
+// its content in raw_content. Used by SourceValueAnalyzer.
+type sourceValueRef struct {
+	id, sourceType, identifier, name string
+}
 
 // SourceValueAnalyzer periodically computes value metrics for each source
 // and writes results to the sources table.
@@ -60,9 +67,9 @@ func (a *SourceValueAnalyzer) Run(ctx context.Context) {
 func (a *SourceValueAnalyzer) runCycle(ctx context.Context) {
 	start := time.Now()
 
-	// Get all sources with their names.
+	// Get all sources with their names, types, and identifiers.
 	rows, err := a.pool.Query(ctx, `
-		SELECT id, COALESCE(name, identifier) FROM sources
+		SELECT id, type, identifier, COALESCE(name, identifier) FROM sources
 		WHERE status IN ('active', 'approved', 'discovered')`)
 	if err != nil {
 		a.status.RecordError(err)
@@ -70,13 +77,10 @@ func (a *SourceValueAnalyzer) runCycle(ctx context.Context) {
 		return
 	}
 
-	type sourceRef struct {
-		id, name string
-	}
-	var sources []sourceRef
+	var sources []sourceValueRef
 	for rows.Next() {
-		var s sourceRef
-		if err := rows.Scan(&s.id, &s.name); err != nil {
+		var s sourceValueRef
+		if err := rows.Scan(&s.id, &s.sourceType, &s.identifier, &s.name); err != nil {
 			continue
 		}
 		sources = append(sources, s)
@@ -91,7 +95,7 @@ func (a *SourceValueAnalyzer) runCycle(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		a.computeSourceValue(ctx, src.id, src.name)
+		a.computeSourceValue(ctx, src)
 	}
 
 	a.status.RecordSuccess()
@@ -102,19 +106,36 @@ func (a *SourceValueAnalyzer) runCycle(ctx context.Context) {
 		time.Since(start).Round(time.Millisecond), len(sources))
 }
 
-func (a *SourceValueAnalyzer) computeSourceValue(ctx context.Context, sourceID, sourceName string) {
+func (a *SourceValueAnalyzer) computeSourceValue(ctx context.Context, src sourceValueRef) {
+	// Resolve match parameters. For telegram sources, extract the username
+	// from the t.me URL and resolve the numeric channel ID so we can match
+	// ALL messages (both catchup and live) regardless of source_name variant.
+	sourceName := src.name
+	channelID := "" // populated for telegram sources
+
+	if strings.HasPrefix(src.sourceType, "telegram") {
+		username := extractUsername(src.identifier)
+		if username != "" {
+			sourceName = username
+			_ = a.pool.QueryRow(ctx, `
+				SELECT source_id FROM raw_content
+				WHERE source_type = 'telegram' AND source_name = $1
+				LIMIT 1`, username).Scan(&channelID)
+		}
+	}
+
 	// 1. unique_iocs: IOCs first seen in this source (not seen elsewhere within 7 days prior).
 	var uniqueIOCs int
 	a.pool.QueryRow(ctx, `
 		SELECT COUNT(DISTINCT s.ioc_value) FROM ioc_sightings s
-		WHERE s.source_name = $1
+		WHERE (s.source_name = $1 OR s.source_id = $2)
 		AND NOT EXISTS (
 			SELECT 1 FROM ioc_sightings s2
 			WHERE s2.ioc_value = s.ioc_value AND s2.ioc_type = s.ioc_type
-			AND s2.source_name != $1
+			AND NOT (s2.source_name = $1 OR s2.source_id = $2)
 			AND s2.created_at < s.created_at
 			AND s2.created_at > s.created_at - INTERVAL '7 days'
-		)`, sourceName).Scan(&uniqueIOCs)
+		)`, sourceName, channelID).Scan(&uniqueIOCs)
 
 	// 2. correlation_contributions: correlations where a finding from this source appears.
 	var correlationContribs int
@@ -123,8 +144,8 @@ func (a *SourceValueAnalyzer) computeSourceValue(ctx context.Context, sourceID, 
 		WHERE EXISTS (
 			SELECT 1 FROM unnest(c.finding_ids) fid
 			JOIN raw_content rc ON rc.id = fid::uuid
-			WHERE rc.source_name = $1
-		)`, sourceName).Scan(&correlationContribs)
+			WHERE rc.source_name = $1 OR rc.source_id = $2
+		)`, sourceName, channelID).Scan(&correlationContribs)
 
 	// 3. avg_severity: numeric average (critical=4, high=3, medium=2, low=1, info=0).
 	var avgSeverity float64
@@ -140,8 +161,8 @@ func (a *SourceValueAnalyzer) computeSourceValue(ctx context.Context, sourceID, 
 			END
 		), 0)
 		FROM raw_content
-		WHERE source_name = $1 AND classified = true
-		AND category IS NOT NULL AND category != 'irrelevant'`, sourceName).Scan(&avgSeverity)
+		WHERE (source_name = $1 OR source_id = $2) AND classified = true
+		AND category IS NOT NULL AND category != 'irrelevant'`, sourceName, channelID).Scan(&avgSeverity)
 
 	// 4. signal_to_noise: non-irrelevant / total.
 	var totalFindings, nonIrrelevant int
@@ -149,7 +170,7 @@ func (a *SourceValueAnalyzer) computeSourceValue(ctx context.Context, sourceID, 
 		SELECT COUNT(*),
 		       COUNT(*) FILTER (WHERE category IS NOT NULL AND category != 'irrelevant')
 		FROM raw_content
-		WHERE source_name = $1 AND classified = true`, sourceName,
+		WHERE (source_name = $1 OR source_id = $2) AND classified = true`, sourceName, channelID,
 	).Scan(&totalFindings, &nonIrrelevant)
 
 	var signalToNoise float64
@@ -160,7 +181,8 @@ func (a *SourceValueAnalyzer) computeSourceValue(ctx context.Context, sourceID, 
 	// 5. freshness_score: 1.0 if something in last 24h, exponential decay.
 	var lastCollectedAt *time.Time
 	a.pool.QueryRow(ctx, `
-		SELECT MAX(collected_at) FROM raw_content WHERE source_name = $1`, sourceName,
+		SELECT MAX(collected_at) FROM raw_content
+		WHERE source_name = $1 OR source_id = $2`, sourceName, channelID,
 	).Scan(&lastCollectedAt)
 
 	freshnessScore := 0.0
@@ -198,7 +220,7 @@ func (a *SourceValueAnalyzer) computeSourceValue(ctx context.Context, sourceID, 
 		    value_score = $6,
 		    value_computed_at = NOW()
 		WHERE id = $1`,
-		sourceID, uniqueIOCs, correlationContribs, avgSeverity, signalToNoise, valueScore)
+		src.id, uniqueIOCs, correlationContribs, avgSeverity, signalToNoise, valueScore)
 	if err != nil {
 		log.Printf("collector: source value: update error for %s: %v", sourceName, err)
 	}

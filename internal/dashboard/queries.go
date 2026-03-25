@@ -528,13 +528,19 @@ func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType st
 	sql := fmt.Sprintf(`
 		SELECT s.id, s.type, s.identifier, s.name, s.status, s.last_collected,
 		       s.error_count, s.created_at,
-		       COALESCE(c.cnt, 0) AS content_count
+		       COALESCE((
+		           SELECT COUNT(*) FROM raw_content rc
+		           WHERE rc.source_name = s.name
+		              OR rc.source_id = s.identifier
+		              OR (s.type LIKE 'telegram%%' AND rc.source_type = 'telegram'
+		                  AND rc.source_id = (
+		                      SELECT rc2.source_id FROM raw_content rc2
+		                      WHERE rc2.source_type = 'telegram'
+		                      AND rc2.source_name = REGEXP_REPLACE(s.identifier, '^https?://t\.me/', '')
+		                      LIMIT 1
+		                  ))
+		       ), 0) AS content_count
 		FROM sources s
-		LEFT JOIN (
-			SELECT source_id, COUNT(*) AS cnt
-			FROM raw_content
-			GROUP BY source_id
-		) c ON c.source_id = s.identifier
 		%s
 		ORDER BY s.created_at DESC
 		LIMIT %s OFFSET %s`, where, limitP, offsetP)
