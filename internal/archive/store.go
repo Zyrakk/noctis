@@ -614,9 +614,10 @@ func (s *Store) UpsertCorrelation(ctx context.Context, c *Correlation) error {
 INSERT INTO correlations (cluster_id, entity_ids, finding_ids, correlation_type, confidence, method, evidence)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (cluster_id) DO UPDATE
-SET entity_ids = $2, finding_ids = $3, confidence = $5, evidence = $7, updated_at = NOW()`
+SET entity_ids = $2, finding_ids = $3, confidence = $5, evidence = $7, updated_at = NOW()
+RETURNING id`
 
-	_, err = s.pool.Exec(ctx, query, c.ClusterID, c.EntityIDs, findingIDs, c.CorrelationType, c.Confidence, c.Method, evidenceJSON)
+	err = s.pool.QueryRow(ctx, query, c.ClusterID, c.EntityIDs, findingIDs, c.CorrelationType, c.Confidence, c.Method, evidenceJSON).Scan(&c.ID)
 	if err != nil {
 		return fmt.Errorf("archive: upsert correlation: %w", err)
 	}
