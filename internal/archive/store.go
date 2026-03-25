@@ -1031,20 +1031,56 @@ func scanRawContent(row scanner) (RawContent, error) {
 	var metaJSON []byte
 	var subMetaJSON []byte
 
+	// Nullable TEXT columns use *string scan targets so NULL becomes ""
+	// instead of a scan error. sub_category is NULL for all rows not yet
+	// sub-classified; the others are nullable per schema even though
+	// current INSERT paths always write empty strings.
+	var author, authorID, url, language *string
+	var category, severity, summary *string
+	var provenance, subCategory *string
+
 	err := row.Scan(
 		&rc.ID, &rc.SourceType, &rc.SourceID, &rc.SourceName,
 		&rc.Content, &rc.ContentHash,
-		&rc.Author, &rc.AuthorID, &rc.URL, &rc.Language,
+		&author, &authorID, &url, &language,
 		&rc.CollectedAt, &rc.PostedAt,
 		&metaJSON,
-		&rc.Classified, &rc.Category, &rc.Tags,
-		&rc.Severity, &rc.Summary,
+		&rc.Classified, &category, &rc.Tags,
+		&severity, &summary,
 		&rc.EntitiesExtracted,
-		&rc.Provenance, &rc.ClassificationVersion,
-		&rc.SubCategory, &subMetaJSON, &rc.SubClassified,
+		&provenance, &rc.ClassificationVersion,
+		&subCategory, &subMetaJSON, &rc.SubClassified,
 	)
 	if err != nil {
 		return RawContent{}, fmt.Errorf("archive: scan raw_content: %w", err)
+	}
+
+	if author != nil {
+		rc.Author = *author
+	}
+	if authorID != nil {
+		rc.AuthorID = *authorID
+	}
+	if url != nil {
+		rc.URL = *url
+	}
+	if language != nil {
+		rc.Language = *language
+	}
+	if category != nil {
+		rc.Category = *category
+	}
+	if severity != nil {
+		rc.Severity = *severity
+	}
+	if summary != nil {
+		rc.Summary = *summary
+	}
+	if provenance != nil {
+		rc.Provenance = *provenance
+	}
+	if subCategory != nil {
+		rc.SubCategory = *subCategory
 	}
 
 	if len(metaJSON) > 0 {
