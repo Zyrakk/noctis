@@ -51,9 +51,9 @@ func testFinding() *models.Finding {
 	}
 }
 
-// TestStripCodeFences verifies that markdown code fences are removed from LLM
-// responses before JSON parsing.
-func TestStripCodeFences(t *testing.T) {
+// TestExtractJSON verifies that JSON is correctly extracted from LLM responses
+// that may include preamble text, code fences, or postamble commentary.
+func TestExtractJSON(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
@@ -62,18 +62,22 @@ func TestStripCodeFences(t *testing.T) {
 		{"plain json", `{"a":"b"}`, `{"a":"b"}`},
 		{"json fence", "```json\n{\"a\":\"b\"}\n```", `{"a":"b"}`},
 		{"bare fence", "```\n{\"a\":\"b\"}\n```", `{"a":"b"}`},
-		{"trailing only", "{\"a\":\"b\"}\n```", `{"a":"b"}`},
+		{"trailing fence only", "{\"a\":\"b\"}\n```", `{"a":"b"}`},
 		{"with whitespace", "  ```json\n{\"a\":\"b\"}\n```  ", `{"a":"b"}`},
 		{"array", "```json\n[1,2,3]\n```", `[1,2,3]`},
 		{"trailing newlines", "```json\n{\"a\":\"b\"}\n```\n\n", `{"a":"b"}`},
 		{"no newline after tag", "```json{\"a\":\"b\"}```", `{"a":"b"}`},
 		{"preamble text", "Here is the result:\n```json\n{\"a\":\"b\"}\n```", `{"a":"b"}`},
+		{"preamble bare fence", "Here is the output:\n\n```\n{\"a\":\"b\"}\n```", `{"a":"b"}`},
+		{"preamble with lang tag", "Based on analysis:\n\n```json\n{\"a\":\"b\"}\n```\n", `{"a":"b"}`},
+		{"preamble and postamble", "Result:\n{\"a\":\"b\"}\nNote: done.", `{"a":"b"}`},
+		{"real classify response", "Here is the classification:\n\n```json\n{\"category\":\"malware_sample\",\"confidence\":0.9}\n```", `{"category":"malware_sample","confidence":0.9}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := stripCodeFences(tt.input)
+			got := extractJSON(tt.input)
 			if got != tt.want {
-				t.Errorf("stripCodeFences() = %q, want %q", got, tt.want)
+				t.Errorf("extractJSON(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}

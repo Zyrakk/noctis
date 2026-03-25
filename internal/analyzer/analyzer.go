@@ -149,35 +149,45 @@ func (a *Analyzer) renderTemplate(name string, data any) (string, error) {
 	return buf.String(), nil
 }
 
-// stripCodeFences removes markdown code fences that LLMs (especially GLM)
-// wrap around JSON responses. Handles ```json\n...\n```, ```\n...\n```,
-// and trailing ```.
-func stripCodeFences(s string) string {
+// extractJSON extracts a JSON object or array from an LLM response that may
+// contain preamble text, markdown code fences, or postamble commentary.
+// It finds the first { or [ and the last matching } or ], returning only
+// the JSON substring. This handles all common LLM response formats:
+//   - Raw JSON: {"key": "value"}
+//   - Code-fenced: ```json\n{"key": "value"}\n```
+//   - Preamble: "Here is the output:\n\n```\n{"key": "value"}\n```"
+//   - Postamble: {"key": "value"}\n\nNote: this is my analysis.
+func extractJSON(s string) string {
 	s = strings.TrimSpace(s)
-	// Remove opening fence: ```json or ```
-	if strings.HasPrefix(s, "```") {
-		s = s[3:]
-		// Remove optional language tag (e.g., "json")
-		if idx := strings.Index(s, "\n"); idx != -1 && idx < 20 {
-			s = s[idx+1:]
-		}
-		// Trim again so the closing-fence check works even with trailing newlines.
-		s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return s
 	}
-	// Remove closing fence
-	if strings.HasSuffix(s, "```") {
-		s = s[:len(s)-3]
-	}
-	s = strings.TrimSpace(s)
 
-	// Handle thinking model preamble: find first JSON start.
-	// Models like Gemini may emit reasoning text before the JSON.
-	if len(s) > 0 && s[0] != '{' && s[0] != '[' {
-		if idx := strings.IndexAny(s, "{["); idx != -1 {
-			s = s[idx:]
-		}
+	// Find the first JSON start character.
+	startObj := strings.Index(s, "{")
+	startArr := strings.Index(s, "[")
+
+	start := -1
+	var closeChar byte
+	if startObj >= 0 && (startArr < 0 || startObj <= startArr) {
+		start = startObj
+		closeChar = '}'
+	} else if startArr >= 0 {
+		start = startArr
+		closeChar = ']'
 	}
-	return strings.TrimSpace(s)
+
+	if start < 0 {
+		return s // no JSON found, return as-is for error reporting
+	}
+
+	// Find the last matching close character.
+	end := strings.LastIndexByte(s, closeChar)
+	if end <= start {
+		return s
+	}
+
+	return s[start : end+1]
 }
 
 // truncate returns the first n characters of s, appending "..." if truncated.
@@ -213,7 +223,7 @@ func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matche
 	}
 
 	var result classifyResponse
-	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
 		return nil, fmt.Errorf("analyzer: classify parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 	return &result, nil
@@ -239,7 +249,7 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 	}
 
 	var entries []iocEntry
-	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &entries); err != nil {
+	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &entries); err != nil {
 		return nil, fmt.Errorf("analyzer: extract_iocs parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
@@ -307,7 +317,7 @@ func (a *Analyzer) ExtractEntities(ctx context.Context, finding *models.Finding,
 	}
 
 	var result EntityExtractionResult
-	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
 		return nil, fmt.Errorf("analyzer: extract_entities parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 	return &result, nil
@@ -340,7 +350,7 @@ func (a *Analyzer) AssessSeverity(ctx context.Context, finding *models.Finding, 
 	}
 
 	var result severityResponse
-	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
 		return models.SeverityInfo, fmt.Errorf("analyzer: severity parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
@@ -421,7 +431,7 @@ func (a *Analyzer) SubClassify(ctx context.Context, finding *models.Finding, cat
 	}
 
 	var result SubClassifyResult
-	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
 		return nil, fmt.Errorf("analyzer: sub_classify parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
@@ -478,7 +488,7 @@ func (a *Analyzer) EvaluateCorrelation(ctx context.Context, data *CorrelationPro
 	}
 
 	var result CorrelationEvalResult
-	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
 		return nil, fmt.Errorf("analyzer: evaluate_correlation parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
@@ -555,7 +565,7 @@ func (a *Analyzer) GenerateBrief(ctx context.Context, data *BriefPromptData) (*B
 	}
 
 	var result BriefResult
-	if err := json.Unmarshal([]byte(stripCodeFences(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
 		return nil, fmt.Errorf("analyzer: daily_brief parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
