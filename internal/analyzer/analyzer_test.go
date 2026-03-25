@@ -65,6 +65,9 @@ func TestStripCodeFences(t *testing.T) {
 		{"trailing only", "{\"a\":\"b\"}\n```", `{"a":"b"}`},
 		{"with whitespace", "  ```json\n{\"a\":\"b\"}\n```  ", `{"a":"b"}`},
 		{"array", "```json\n[1,2,3]\n```", `[1,2,3]`},
+		{"trailing newlines", "```json\n{\"a\":\"b\"}\n```\n\n", `{"a":"b"}`},
+		{"no newline after tag", "```json{\"a\":\"b\"}```", `{"a":"b"}`},
+		{"preamble text", "Here is the result:\n```json\n{\"a\":\"b\"}\n```", `{"a":"b"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

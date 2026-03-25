@@ -161,6 +161,8 @@ func stripCodeFences(s string) string {
 		if idx := strings.Index(s, "\n"); idx != -1 && idx < 20 {
 			s = s[idx+1:]
 		}
+		// Trim again so the closing-fence check works even with trailing newlines.
+		s = strings.TrimSpace(s)
 	}
 	// Remove closing fence
 	if strings.HasSuffix(s, "```") {
