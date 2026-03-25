@@ -1,6 +1,10 @@
 package modules
 
-import "sync"
+import (
+	"slices"
+	"strings"
+	"sync"
+)
 
 // Registry holds references to all module status trackers in the system.
 // Components register themselves at startup; the dashboard reads the registry.
@@ -32,7 +36,8 @@ func (r *Registry) AllStatuses() map[string]ModuleStatus {
 	return result
 }
 
-// StatusesByCategory returns statuses grouped by category.
+// StatusesByCategory returns statuses grouped by category, sorted by name
+// within each category for stable ordering across requests.
 func (r *Registry) StatusesByCategory() map[string][]ModuleStatus {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -40,6 +45,11 @@ func (r *Registry) StatusesByCategory() map[string][]ModuleStatus {
 	for _, tracker := range r.trackers {
 		s := tracker.Status()
 		result[s.Category] = append(result[s.Category], s)
+	}
+	for _, mods := range result {
+		slices.SortFunc(mods, func(a, b ModuleStatus) int {
+			return strings.Compare(a.Name, b.Name)
+		})
 	}
 	return result
 }
