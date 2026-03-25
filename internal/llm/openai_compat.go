@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -132,7 +133,7 @@ func (c *OpenAICompatClient) ChatCompletion(ctx context.Context, messages []Mess
 
 		// Only retry on 429 (rate limited).
 		var httpErr *httpStatusError
-		if !asHTTPStatusError(err, &httpErr) || httpErr.statusCode != http.StatusTooManyRequests {
+		if !errors.As(err, &httpErr) || httpErr.statusCode != http.StatusTooManyRequests {
 			return nil, err
 		}
 
@@ -144,10 +145,12 @@ func (c *OpenAICompatClient) ChatCompletion(ctx context.Context, messages []Mess
 			"provider", c.baseURL,
 		)
 
+		timer := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return nil, ctx.Err()
-		case <-time.After(backoff):
+		case <-timer.C:
 		}
 	}
 	return nil, fmt.Errorf("llm: retries exhausted: %w", lastErr)
@@ -213,15 +216,6 @@ type httpStatusError struct {
 
 func (e *httpStatusError) Error() string {
 	return fmt.Sprintf("llm: HTTP %d: %s", e.statusCode, e.body)
-}
-
-// asHTTPStatusError is a helper that mimics errors.As for *httpStatusError.
-func asHTTPStatusError(err error, target **httpStatusError) bool {
-	if e, ok := err.(*httpStatusError); ok {
-		*target = e
-		return true
-	}
-	return false
 }
 
 // parseRetryAfter parses a Retry-After header value (seconds).

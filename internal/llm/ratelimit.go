@@ -71,11 +71,12 @@ func (r *RateLimiter) Wait(ctx context.Context, estimatedTokens int) error {
 		wait = max(wait, 10*time.Millisecond)
 		r.mu.Unlock()
 
+		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return ctx.Err()
-		case <-time.After(wait):
-			// loop back and try again
+		case <-timer.C:
 		}
 	}
 }
