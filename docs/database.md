@@ -2,368 +2,287 @@
 
 ## Overview
 
-Noctis uses PostgreSQL 16 (`postgres:16-alpine` in production) with a pgx/v5 connection pool. The schema is applied through 3 additive migration files totalling 8 tables. Migrations run automatically at startup via `database.RunMigrations` in `serve.go` — no manual steps required.
+Noctis uses PostgreSQL 16 (`postgres:16-alpine` in production) with a pgx/v5 connection pool. The schema is applied through 9 sequential migration files run automatically at startup via `database.RunMigrations` in `serve.go`. No manual steps required.
 
-Connection is managed through a `pgxpool.Pool` configured via the `DATABASE_URL` environment variable (see `docs/configuration.md`).
+Connection is configured via the `DATABASE_URL` environment variable (see `docs/configuration.md`). All queries use parameterized SQL via `pgxpool.Pool`.
 
 ---
 
-## Migration 001_init.sql — Core Tables
+## Migration History
 
-These three tables form the original schema: enriched findings, honeytokens, and threat actor profiles.
+### 001_init.sql — Core Tables
 
-### `findings`
+Establishes the original three-table schema: enriched findings, honeytokens, and threat actor profiles.
 
-Legacy enriched findings produced by the rule-matching and LLM classification pipeline. Superseded by `raw_content` + `iocs` in migration 003, but retained for backward compatibility.
+**Tables created:** `findings`, `canary_tokens`, `actor_profiles`
+
+- `findings` — Legacy enriched findings from the original rule-matching and LLM classification pipeline. Superseded by `raw_content` + `iocs` in 003 but retained for backward compatibility. Key columns: `id TEXT PK`, `source`, `source_id`, `source_name`, `content`, `content_hash` (SHA-256, indexed), `metadata JSONB`, `matched_rules JSONB`, `severity`, `category`, `iocs JSONB`, `llm_analysis`, `confidence REAL`.
+- `canary_tokens` — Honeytokens planted in monitored environments to detect breaches. Key columns: `id TEXT PK`, `type`, `value TEXT UNIQUE`, `planted_at`, `planted_in`, `triggered BOOL`, `triggered_at`, `triggered_in`.
+- `actor_profiles` — Threat actor dossiers with behavioral fingerprints. Key columns: `id TEXT PK`, `known_handles JSONB`, `platforms JSONB`, `style_embedding JSONB`, `posting_cadence JSONB`, `first_seen`, `last_seen`, `threat_level`, `linked_findings JSONB`.
+
+---
+
+### 002_graph.sql — Entity Graph
+
+Adds the property graph for entity relationship tracking.
+
+**Tables created:** `entities`, `edges`
+
+- `entities` — Typed nodes in the knowledge graph. `id TEXT PK` (format: `entity:type:name`), `type TEXT` (threat_actor, malware, tool, ip, domain, url, campaign), `properties JSONB`, `created_at`, `updated_at`. Indexed on `type`.
+- `edges` — Directed relationships between entities. `id TEXT PK`, `source_id TEXT FK → entities(id) ON DELETE CASCADE`, `target_id TEXT FK → entities(id) ON DELETE CASCADE`, `relationship TEXT`, `properties JSONB`, `created_at`. Indexed on `source_id`, `target_id`, `relationship`.
+
+---
+
+### 003_pivot.sql — Intelligence Archive, IOC Store, Artifacts, Source Registry
+
+The pivot migration that introduces the full intelligence pipeline tables. These are the primary operational tables.
+
+**Tables created:** `raw_content`, `iocs`, `artifacts`, `sources`
+
+- `raw_content` — Central archive storing every collected item regardless of relevance. UUID PK. Key columns: `source_type` (telegram, paste, forum, web, rss), `source_id`, `source_name`, `content TEXT`, `content_hash TEXT UNIQUE` (SHA-256, deduplication), `author`, `author_id`, `url`, `language`, `collected_at TIMESTAMPTZ`, `posted_at TIMESTAMPTZ`, `metadata JSONB`, `classified BOOL DEFAULT FALSE`, `category TEXT`, `tags TEXT[]`, `severity TEXT`, `summary TEXT`, `entities_extracted BOOL DEFAULT FALSE`. Indexes include a partial index on `collected_at ASC WHERE classified = FALSE` for efficient queue processing.
+- `iocs` — All indicators of compromise extracted across all content. UUID PK. Key columns: `type TEXT` (ip, domain, hash_md5, hash_sha256, email, crypto_wallet, url, cve), `value TEXT`, `context TEXT`, `source_content_id UUID FK → raw_content(id)`, `first_seen`, `last_seen`, `sighting_count INT DEFAULT 1`, `confidence REAL DEFAULT 0.5`. `UNIQUE(type, value)` constraint deduplicates across sources.
+- `artifacts` — Downloaded binary files and attachments. UUID PK. Key columns: `source_content_id UUID FK → raw_content(id)`, `filename`, `mime_type`, `size_bytes BIGINT`, `sha256 TEXT UNIQUE`, `storage_path TEXT` (NFS volume path), `tags TEXT[]`, `analyzed BOOL`, `analysis JSONB`.
+- `sources` — Registry of all monitored and discovered sources. UUID PK. Key columns: `identifier TEXT UNIQUE`, `name TEXT`, `type TEXT` (telegram_channel, telegram_group, forum, paste_site, web, rss), `status TEXT` (discovered, approved, active, paused, dead, banned), `discovered_from UUID`, `last_collected`, `collection_interval TEXT`, `error_count INT`, `metadata JSONB`. Indexed on `status` and `type`.
+
+---
+
+### 004_cleanup_discovered.sql — Junk Source Purge
+
+A one-time data migration (no schema changes). Deletes rows from `sources` where `status = 'discovered'` and the identifier matches known noise: social media platforms (LinkedIn, YouTube, Twitter/X, Discord), URL shorteners, documentation sites (W3C, Microsoft, Habr, Medium), fuzzing artifacts (`FUZZ`), localhost references, and truncated IP patterns (`^\d+\.\d+\.\d+$`).
+
+---
+
+### 005_provenance.sql — Classification Provenance
+
+Adds two columns to `raw_content` for reclassification support:
+
+- `provenance TEXT DEFAULT ''` — Records which collector or pipeline version produced the item. Indexed.
+- `classification_version INT DEFAULT 1` — Incremented when the classifier is updated, enabling `ResetOldClassifications` to re-queue stale items.
+
+---
+
+### 006_correlations.sql — Cross-Source Correlation Engine
+
+Adds multi-source IOC sighting tracking and the two-tier correlation tables.
+
+**Tables created:** `ioc_sightings`, `correlations`, `correlation_candidates`
+
+- `ioc_sightings` — Records every IOC sighting across raw_content entries, preserving multi-source provenance that the single `source_content_id` FK on `iocs` cannot capture. Composite PK: `(ioc_type, ioc_value, raw_content_id)`. Columns: `ioc_type`, `ioc_value`, `raw_content_id UUID FK → raw_content(id)`, `source_id`, `source_name`, `created_at`. Used by the correlation rules to query shared IOC signals.
+- `correlations` — Confirmed correlations that met the evidence threshold. UUID PK. Key columns: `cluster_id TEXT UNIQUE` (deterministic SHA-256 hash of type + inputs), `entity_ids TEXT[]`, `finding_ids TEXT[]`, `correlation_type TEXT` (shared_ioc, handle_reuse, temporal_ioc_overlap, campaign_cluster), `confidence REAL`, `method TEXT DEFAULT 'rule'`, `evidence JSONB`. Indexed on `cluster_id UNIQUE`, `correlation_type`, `created_at DESC`.
+- `correlation_candidates` — Weak signals below the evidence threshold, queued for LLM evaluation. UUID PK. Key columns: `cluster_id TEXT UNIQUE`, `entity_ids TEXT[]`, `finding_ids TEXT[]`, `candidate_type TEXT`, `signal_count INT`, `signals JSONB`, `seen_count INT DEFAULT 1`, `status TEXT DEFAULT 'pending'` (pending, reviewed, promoted, rejected). Indexed on `cluster_id UNIQUE`, `status`, `candidate_type`.
+
+---
+
+### 007_phase2.sql — Sub-Classification, Analytical Notes, Correlation Decisions, Source Value
+
+Phase 2 additions enabling fine-grained content classification, LLM memory, analyst audit trail, and source quality tracking.
+
+**Schema changes to `raw_content`:**
+- `sub_category TEXT` — Fine-grained content type determined by the Librarian module (e.g., specific malware family, tool category, access type within a top-level category).
+- `sub_metadata JSONB DEFAULT '{}'` — Structured key-value metadata from the Librarian (tool names, availability, hosting type, etc.).
+- `sub_classified BOOL DEFAULT FALSE` — Whether the Librarian has processed this item.
+- Partial index: `WHERE classified = TRUE AND entities_extracted = TRUE AND sub_classified = FALSE` for Librarian queue processing.
+
+**Tables created:** `analytical_notes`, `correlation_decisions`
+
+- `analytical_notes` — The Brain's persistent memory: LLM-generated and human analytical conclusions. UUID PK. Subject linkage: at least one of `finding_id UUID FK → raw_content(id)`, `entity_id TEXT`, `correlation_id UUID FK → correlations(id)`, `ioc_type + ioc_value` must be set. Key columns: `note_type TEXT` (correlation_judgment, attribution, pattern, prediction, warning, context), `title TEXT`, `content TEXT`, `confidence REAL`, `created_by TEXT` (analyst, correlator, human), `model_used TEXT`, `status TEXT` (active, superseded, retracted), `superseded_by UUID FK → analytical_notes(id)`. Indexed on `finding_id`, `entity_id`, `correlation_id`, `note_type`, `status = 'active'`, `created_at DESC`.
+- `correlation_decisions` — Audit trail of every LLM decision on correlation candidates, serving as a fine-tuning dataset. UUID PK. Key columns: `candidate_id UUID FK → correlation_candidates(id)`, `cluster_id TEXT`, `decision TEXT` (promote, reject, defer), `confidence REAL`, `reasoning TEXT`, `promoted_correlation_id UUID FK → correlations(id)`, `context_snapshot JSONB` (evidence + graph context fed to the model), `model_used TEXT`. Indexed on `candidate_id`, `cluster_id`, `decision`.
+
+**Schema changes to `sources`:**
+- `unique_iocs INT DEFAULT 0`
+- `correlation_contributions INT DEFAULT 0`
+- `avg_severity REAL DEFAULT 0.0`
+- `signal_to_noise REAL DEFAULT 0.0`
+- `value_score REAL DEFAULT 0.0`
+- `value_computed_at TIMESTAMPTZ`
+
+---
+
+### 008_phase3.sql — IOC Lifecycle, Intelligence Briefs, Vulnerabilities
+
+**Schema changes to `iocs`:**
+- `threat_score REAL DEFAULT 0.5` — Current decayed score; primary sort key for active IOC queries.
+- `base_score REAL DEFAULT 0.5` — Score at last sighting; decay anchor.
+- `active BOOL DEFAULT TRUE` — False when threat_score drops below the deactivation threshold.
+- `deactivated_at TIMESTAMPTZ`
+- `lifetime_days INT` — Expected half-life by type; drives decay rate.
+- `publicly_reported BOOL DEFAULT FALSE`
+- Partial indexes: `WHERE active = TRUE` on `active` and `threat_score DESC`.
+
+**Tables created:** `intelligence_briefs`, `vulnerabilities`
+
+- `intelligence_briefs` — LLM-generated periodic summaries for analysts. UUID PK. Key columns: `period_start TIMESTAMPTZ`, `period_end TIMESTAMPTZ`, `brief_type TEXT DEFAULT 'daily'` (daily, weekly, monthly, incident, threat_actor), `title TEXT`, `executive_summary TEXT`, `content TEXT`, `sections JSONB` (keyed by section name), `metrics JSONB` (quantitative counts), `model_used TEXT`, `generated_at TIMESTAMPTZ`, `generation_duration_ms INT`. Indexed on `period_end DESC` and `brief_type`.
+- `vulnerabilities` — CVE/CVSS/EPSS/KEV tracking. UUID PK. Key columns: `cve_id TEXT UNIQUE`, `description TEXT`, `cvss_v31_score REAL`, `cvss_v31_vector TEXT`, `cvss_severity TEXT` (CRITICAL, HIGH, MEDIUM, LOW, NONE), `cwe_ids TEXT[]`, `affected_products JSONB`, `reference_urls JSONB`, `published_at`, `last_modified_at`, `epss_score REAL`, `epss_percentile REAL`, `epss_updated_at`, `kev_listed BOOL DEFAULT FALSE`, `kev_date_added`, `kev_due_date`, `kev_ransomware_use BOOL`, `exploit_available BOOL DEFAULT FALSE`, `dark_web_mentions INT DEFAULT 0`, `first_seen_noctis`, `last_seen_noctis`, `priority_score REAL`, `priority_label TEXT`. Indexed on `cve_id`, `priority_score DESC NULLS LAST`, `kev_listed WHERE kev_listed = TRUE`, `epss_score DESC NULLS LAST`, `dark_web_mentions DESC WHERE > 0`.
+
+---
+
+### 009_enrichment.sql — IOC Enrichment
+
+**Schema changes to `iocs`:**
+- `enrichment JSONB DEFAULT '{}'` — Results from external threat intelligence APIs (VirusTotal, Shodan, etc.).
+- `enriched_at TIMESTAMPTZ` — Timestamp of last enrichment run.
+- `enrichment_sources TEXT[] DEFAULT '{}'` — Which APIs contributed data.
+- Partial index: `WHERE active = TRUE AND enriched_at IS NULL` on `first_seen ASC` for enrichment queue ordering.
+
+---
+
+## Table Reference
+
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `findings` | Legacy enriched findings (pre-pivot) | `id TEXT PK`, `content_hash`, `matched_rules JSONB`, `iocs JSONB`, `llm_analysis`, `confidence` |
+| `canary_tokens` | Honeytoken breach detection | `value TEXT UNIQUE`, `planted_in`, `triggered BOOL`, `triggered_at` |
+| `actor_profiles` | Threat actor behavioral fingerprints | `known_handles JSONB`, `style_embedding JSONB`, `threat_level` |
+| `entities` | Knowledge graph nodes | `id TEXT PK`, `type TEXT`, `properties JSONB` |
+| `edges` | Knowledge graph directed edges | `source_id FK`, `target_id FK`, `relationship TEXT`, `properties JSONB` |
+| `raw_content` | Central intelligence archive (all collected items) | `content_hash UNIQUE`, `source_type`, `classified BOOL`, `category`, `severity`, `summary`, `sub_category`, `sub_classified` |
+| `iocs` | Extracted indicators of compromise | `UNIQUE(type,value)`, `threat_score`, `base_score`, `active`, `lifetime_days`, `enrichment JSONB` |
+| `ioc_sightings` | Multi-source IOC provenance log | `PK(ioc_type, ioc_value, raw_content_id)`, `source_id`, `source_name` |
+| `artifacts` | Downloaded binary files | `sha256 UNIQUE`, `storage_path`, `analyzed BOOL`, `analysis JSONB` |
+| `sources` | Source registry | `identifier UNIQUE`, `status`, `type`, `value_score`, `signal_to_noise` |
+| `correlations` | Confirmed cross-source correlations | `cluster_id UNIQUE`, `correlation_type`, `confidence`, `entity_ids TEXT[]`, `evidence JSONB` |
+| `correlation_candidates` | Weak signals pending LLM evaluation | `cluster_id UNIQUE`, `status`, `signal_count`, `signals JSONB` |
+| `analytical_notes` | LLM and human analytical conclusions | `note_type`, `confidence`, `status`, `superseded_by FK` |
+| `correlation_decisions` | Analyst LLM decision audit trail | `candidate_id FK`, `decision`, `reasoning`, `context_snapshot JSONB` |
+| `intelligence_briefs` | Periodic LLM-generated intelligence summaries | `brief_type`, `period_start/end`, `sections JSONB`, `metrics JSONB` |
+| `vulnerabilities` | CVE tracking with CVSS/EPSS/KEV enrichment | `cve_id UNIQUE`, `priority_score`, `kev_listed`, `epss_score`, `dark_web_mentions` |
+
+---
+
+## Key Queries
+
+### FetchUnclassified
+
+Used by the classification pipeline workers to pull a batch of unprocessed items in FIFO order:
 
 ```sql
-CREATE TABLE IF NOT EXISTS findings (
-    id TEXT PRIMARY KEY,
-    source TEXT NOT NULL,
-    source_id TEXT NOT NULL,
-    source_name TEXT NOT NULL,
-    content TEXT NOT NULL,
-    content_hash TEXT NOT NULL,
-    author TEXT,
-    timestamp TIMESTAMPTZ NOT NULL,
-    collected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    metadata JSONB DEFAULT '{}',
-    match_type TEXT,
-    matched_rules JSONB DEFAULT '[]',
-    severity TEXT DEFAULT 'info',
-    category TEXT,
-    iocs JSONB DEFAULT '[]',
-    llm_analysis TEXT,
-    confidence REAL DEFAULT 0.0
-);
+SELECT id, source_type, source_id, source_name, content, content_hash,
+       author, author_id, url, language, collected_at, posted_at,
+       metadata, classified, category, tags, severity, summary,
+       entities_extracted, provenance, classification_version,
+       sub_category, sub_metadata, sub_classified
+FROM raw_content
+WHERE classified = false
+ORDER BY collected_at ASC
+LIMIT $1
 ```
 
-Key fields:
-- `source` / `source_id` / `source_name` — origin platform and channel identifiers
-- `content_hash` — SHA-256 for deduplication
-- `matched_rules` — JSONB array of triggered Sigma/custom rules
-- `iocs` — JSONB array of extracted indicators (superseded by the `iocs` table in 003)
-- `llm_analysis` — raw LLM output text
-- `confidence` — float score from classifier
-
-Indexes: `content_hash`, `source`, `severity`, `collected_at`
+Hits the partial index `idx_raw_content_unclassified`. An analogous `FetchClassifiedUnextracted` query (using `WHERE classified = true AND entities_extracted = false`) feeds the entity extraction pipeline.
 
 ---
 
-### `canary_tokens`
+### UpdateIOCScores (Decay Formula)
 
-Planted honeytokens monitored for exfiltration. When a token appears in the wild, `triggered` flips to TRUE and the sighting context is recorded.
+Applied periodically by `IOCLifecycleManager`. Two-pass update:
+
+**Pass 1 — Apply exponential decay to all active IOCs:**
 
 ```sql
-CREATE TABLE IF NOT EXISTS canary_tokens (
-    id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    value TEXT NOT NULL UNIQUE,
-    planted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    planted_in TEXT NOT NULL,
-    triggered BOOLEAN NOT NULL DEFAULT FALSE,
-    triggered_at TIMESTAMPTZ,
-    triggered_in TEXT
-);
-```
-
-Key fields:
-- `type` — token category (e.g. `api_key`, `credential`, `document`)
-- `value` — the unique token string; UNIQUE constraint prevents duplicate plants
-- `planted_in` — description of where the token was seeded
-- `triggered_in` — context or platform where the token was observed
-
-Index: `value` (fast lookup during content scanning)
-
----
-
-### `actor_profiles`
-
-Threat actor profiling records. Aggregates signals across multiple findings to build a behavioral fingerprint.
-
-```sql
-CREATE TABLE IF NOT EXISTS actor_profiles (
-    id TEXT PRIMARY KEY,
-    known_handles JSONB NOT NULL DEFAULT '[]',
-    platforms JSONB NOT NULL DEFAULT '[]',
-    style_embedding JSONB,
-    posting_cadence JSONB,
-    first_seen TIMESTAMPTZ NOT NULL,
-    last_seen TIMESTAMPTZ NOT NULL,
-    threat_level TEXT DEFAULT 'info',
-    linked_findings JSONB NOT NULL DEFAULT '[]'
-);
-```
-
-Key fields:
-- `known_handles` — JSONB array of observed usernames/aliases
-- `platforms` — JSONB array of platforms the actor was active on
-- `style_embedding` — vector representation of writing style (for similarity matching)
-- `posting_cadence` — JSONB object describing temporal activity patterns
-- `threat_level` — `info`, `low`, `medium`, `high`, `critical`
-- `linked_findings` — JSONB array of `findings.id` references
-
----
-
-## Migration 002_graph.sql — Entity Graph
-
-A lightweight property graph stored in two tables: nodes (`entities`) and directed edges (`edges`). Used for relationship mapping between actors, infrastructure, malware families, and other extracted objects.
-
-### `entities`
-
-Graph nodes. Each entity has a type and an arbitrary properties bag.
-
-```sql
-CREATE TABLE IF NOT EXISTS entities (
-    id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    properties JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-`type` examples: `ip`, `domain`, `actor`, `malware`, `wallet`, `cve`, `organization`
-
-Index: `type` (filter nodes by category)
-
----
-
-### `edges`
-
-Directed relationships between entities. Both FK columns cascade on delete — removing an entity automatically removes all edges that reference it.
-
-```sql
-CREATE TABLE IF NOT EXISTS edges (
-    id TEXT PRIMARY KEY,
-    source_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-    target_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-    relationship TEXT NOT NULL,
-    properties JSONB DEFAULT '{}',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-`relationship` examples: `communicates_with`, `hosts`, `attributed_to`, `drops`, `resolves_to`
-
-Indexes: `source_id`, `target_id`, `relationship` (graph traversal and relationship filtering)
-
----
-
-## Migration 003_pivot.sql — Archive-Everything
-
-The pivot migration introduces the primary intelligence archive. All collected content is stored in `raw_content` regardless of relevance; classification and entity extraction happen asynchronously. This migration is additive — tables from 001 and 002 are untouched.
-
-### `raw_content`
-
-The central archive table. Every message, post, paste, or page collected by any collector lands here first.
-
-```sql
-CREATE TABLE IF NOT EXISTS raw_content (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    source_type TEXT NOT NULL,
-    source_id TEXT NOT NULL,
-    source_name TEXT NOT NULL,
-    content TEXT NOT NULL,
-    content_hash TEXT NOT NULL UNIQUE,
-    author TEXT,
-    author_id TEXT,
-    url TEXT,
-    language TEXT,
-    collected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    posted_at TIMESTAMPTZ,
-    metadata JSONB DEFAULT '{}',
-
-    -- AI classification (filled asynchronously after collection)
-    classified BOOLEAN DEFAULT FALSE,
-    category TEXT,
-    tags TEXT[] DEFAULT '{}',
-    severity TEXT,
-    summary TEXT,
-    entities_extracted BOOLEAN DEFAULT FALSE
-);
-```
-
-Key fields:
-- `source_type` — collector origin: `telegram`, `paste`, `forum`, `web`, `rss`
-- `content_hash` — SHA-256; UNIQUE constraint enforces deduplication at the DB level
-- `author_id` — platform-native author identifier (distinct from the human-readable `author`)
-- `posted_at` — original publication timestamp (may differ significantly from `collected_at`)
-- `metadata` — source-specific structured data (e.g. Telegram message attributes, forum thread metadata)
-- `classified` — FALSE until the background classifier processes this row
-- `category` — AI-assigned category: `credential_leak`, `malware`, `access_broker`, etc.
-- `tags` — TEXT array of AI-generated tags; searchable via GIN index
-- `severity` — `critical`, `high`, `medium`, `low`, `info`, `none`
-- `summary` — AI-generated one-line summary
-- `entities_extracted` — FALSE until the entity extraction worker processes this row
-
----
-
-### `iocs`
-
-Normalized indicator-of-compromise store. All indicators extracted from `raw_content` across all sources are deduplicated here by `(type, value)`.
-
-```sql
-CREATE TABLE IF NOT EXISTS iocs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    type TEXT NOT NULL,
-    value TEXT NOT NULL,
-    context TEXT,
-    source_content_id UUID REFERENCES raw_content(id),
-    first_seen TIMESTAMPTZ DEFAULT NOW(),
-    last_seen TIMESTAMPTZ DEFAULT NOW(),
-    sighting_count INTEGER DEFAULT 1,
-    confidence REAL DEFAULT 0.5,
-    UNIQUE(type, value)
-);
-```
-
-Key fields:
-- `type` — `ip`, `domain`, `hash_md5`, `hash_sha256`, `email`, `crypto_wallet`, `url`, `cve`
-- `context` — surrounding text snippet from source content
-- `source_content_id` — FK to `raw_content.id` (the first or most recent sighting)
-- `sighting_count` — incremented on each re-observation (upsert pattern)
-- `confidence` — extraction confidence score (0.0–1.0)
-
-Indexes: `type`, `value`
-
----
-
-### `artifacts`
-
-Downloaded binary files and attachments. Stored on an NFS volume; this table holds the metadata and analysis results.
-
-```sql
-CREATE TABLE IF NOT EXISTS artifacts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    source_content_id UUID REFERENCES raw_content(id),
-    filename TEXT,
-    mime_type TEXT,
-    size_bytes BIGINT,
-    sha256 TEXT NOT NULL UNIQUE,
-    storage_path TEXT NOT NULL,
-    tags TEXT[] DEFAULT '{}',
-    collected_at TIMESTAMPTZ DEFAULT NOW(),
-    analyzed BOOLEAN DEFAULT FALSE,
-    analysis JSONB DEFAULT '{}'
-);
-```
-
-Key fields:
-- `sha256` — UNIQUE; prevents storing the same binary twice
-- `storage_path` — absolute path on the NFS volume mount
-- `analyzed` — FALSE until the artifact analysis worker processes this file
-- `analysis` — JSONB blob from AI/static analysis results
-
-Indexes: `sha256` (dedup lookup), `tags` GIN (tag-based filtering)
-
----
-
-### `sources`
-
-Registry of all known collection targets. Sources may be discovered automatically (e.g. a Telegram channel link found in collected content) and move through a lifecycle before active collection begins.
-
-```sql
-CREATE TABLE IF NOT EXISTS sources (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    type TEXT NOT NULL,
-    identifier TEXT NOT NULL UNIQUE,
-    name TEXT,
-    status TEXT DEFAULT 'discovered',
-    discovered_from UUID,
-    last_collected TIMESTAMPTZ,
-    collection_interval TEXT DEFAULT '60s',
-    error_count INTEGER DEFAULT 0,
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-Key fields:
-- `type` — `telegram_channel`, `telegram_group`, `forum`, `paste_site`, `web`, `rss`
-- `identifier` — canonical unique identifier (channel username, forum URL, RSS URL); UNIQUE
-- `status` — lifecycle state: `discovered` → `approved` → `active`; also `paused`, `dead`, `banned`
-- `discovered_from` — `raw_content.id` of the content that led to this source being found
-- `collection_interval` — Go duration string (default `60s`)
-- `error_count` — consecutive collection errors; used for automatic pausing
-
-Indexes: `status`, `type`
-
----
-
-## Index Strategy
-
-| Index | Table | Columns | Purpose |
-|---|---|---|---|
-| `idx_raw_content_hash` | `raw_content` | `content_hash` | Deduplication — fast existence check before insert |
-| `idx_raw_content_source` | `raw_content` | `(source_type, source_id)` | Filter all content from a specific channel or source |
-| `idx_raw_content_collected` | `raw_content` | `collected_at DESC` | Time-ordered queries; DESC puts most recent rows first |
-| `idx_raw_content_category` | `raw_content` | `category` | Filter classified content by threat category |
-| `idx_raw_content_tags` | `raw_content` | `tags` (GIN) | Array containment queries (`tags @> ARRAY['ransomware']`) |
-| `idx_raw_content_unclassified` | `raw_content` | `collected_at ASC` WHERE `classified = FALSE` | Partial index — background classifier worker queue |
-| `idx_raw_content_unextracted` | `raw_content` | `collected_at ASC` WHERE `classified = TRUE AND entities_extracted = FALSE` | Partial index — entity extraction worker queue |
-| `idx_iocs_type` | `iocs` | `type` | IOC lookup by indicator type |
-| `idx_iocs_value` | `iocs` | `value` | IOC lookup by indicator value |
-| `idx_sources_status` | `sources` | `status` | Source management — filter by lifecycle state |
-| `idx_sources_type` | `sources` | `type` | Source management — filter by collector type |
-| `idx_edges_source` | `edges` | `source_id` | Graph traversal — outbound edges from a node |
-| `idx_edges_target` | `edges` | `target_id` | Graph traversal — inbound edges to a node |
-| `idx_edges_relationship` | `edges` | `relationship` | Filter edges by relationship type |
-
-The two partial indexes on `raw_content` are the most important for operational performance: they give the classifier and entity extraction workers an efficient queue of pending rows without scanning the full table.
-
----
-
-## Common Analyst Queries
-
-```sql
--- Recent high-severity findings
-SELECT category, severity, source_name, LEFT(summary, 150)
-FROM raw_content WHERE severity IN ('high', 'critical')
-ORDER BY collected_at DESC LIMIT 20;
-
--- IOCs by type
-SELECT type, count(*) FROM iocs GROUP BY type ORDER BY count DESC;
-
--- Search by content
-SELECT source_name, category, LEFT(content, 200)
-FROM raw_content WHERE content ILIKE '%ransomware%'
-ORDER BY collected_at DESC;
-
--- Discovered sources pending approval
-SELECT type, identifier, created_at FROM sources
-WHERE status = 'discovered' ORDER BY created_at DESC;
-
--- Classification progress
-SELECT classified, count(*) FROM raw_content GROUP BY classified;
-
--- Sources by collection volume
-SELECT source_name, count(*) FROM raw_content GROUP BY source_name ORDER BY count DESC;
-
--- IOCs with multiple sightings
-SELECT type, value, sighting_count, first_seen, last_seen
-FROM iocs WHERE sighting_count > 1 ORDER BY sighting_count DESC;
-```
-
----
-
-## Graph Traversal
-
-The entity graph supports recursive CTE queries for multi-hop traversal. The example below finds all entities reachable within 3 hops from a given starting node:
-
-```sql
--- Find all entities connected to a given entity (up to 3 hops)
-WITH RECURSIVE connected AS (
-    SELECT target_id AS id, relationship, 1 AS depth
-    FROM edges WHERE source_id = '<entity-id>'
-    UNION ALL
-    SELECT e.target_id, e.relationship, c.depth + 1
-    FROM edges e JOIN connected c ON e.source_id = c.id
-    WHERE c.depth < 3
+UPDATE iocs
+SET threat_score = base_score * exp(
+    -0.3 * (EXTRACT(EPOCH FROM (NOW() - last_seen)) / 86400.0)
+    / COALESCE(NULLIF(lifetime_days, 0), CASE type
+        WHEN 'ip'           THEN 30
+        WHEN 'domain'       THEN 90
+        WHEN 'url'          THEN 14
+        WHEN 'hash_md5'     THEN 365
+        WHEN 'hash_sha256'  THEN 365
+        WHEN 'email'        THEN 180
+        WHEN 'cve'          THEN 180
+        WHEN 'crypto_wallet' THEN 365
+        ELSE 90
+    END)
 )
-SELECT DISTINCT e.id, e.type, e.properties, c.relationship, c.depth
-FROM connected c JOIN entities e ON e.id = c.id;
+WHERE active = TRUE
 ```
 
-Adjust the depth limit (`< 3`) and starting `source_id` as needed. For large graphs, consider adding a `visited` set via array accumulation to avoid cycles.
+Formula: `threat_score = base_score × e^(-0.3 × days_since_last_seen / lifetime_days)`
+
+The decay constant `0.3` means an IOC reaches approximately 74% of its base score at one lifetime, 55% at two lifetimes, and drops below the default deactivation threshold of `0.1` at roughly 7.7 lifetimes. The `lifetime_days` column can be set per-IOC; if null, the type-based default applies.
+
+**Pass 2 — Deactivate IOCs below threshold:**
+
+```sql
+UPDATE iocs
+SET active = FALSE, deactivated_at = NOW()
+WHERE active = TRUE AND threat_score < $1
+```
+
+The threshold defaults to `0.1` if not configured. Deactivated IOCs are excluded from `GET /api/iocs` (default `active=true`) but remain in the database for historical queries.
+
+---
+
+### Correlation Rules
+
+The correlation engine runs four rules per cycle. All rules use a `MinEvidenceThreshold` (default 3) to split results into confirmed correlations or weak candidates. Confidence is clamped to `[0.0, 1.0]`.
+
+**Rule 1 — shared_ioc**
+
+Finds IOC values appearing across at least 2 distinct sources. Signal count = number of sources. Confidence formula:
+
+```
+confidence = clamp(signal_count × 0.15 + 0.5)
+```
+
+Cluster ID: `corr:shared_ioc:sha256(ioc_type:ioc_value)`. Entity IDs include the IOC entity and all source entities.
+
+**Rule 2 — handle_reuse**
+
+Finds author handles appearing in content from at least 2 distinct sources. Creates or updates a `threat_actor` entity in the graph. Confidence formula:
+
+```
+confidence = clamp(signal_count × 0.20 + 0.4)
+```
+
+Cluster ID: `corr:handle_reuse:sha256(author:author_id)`.
+
+**Rule 3 — temporal_ioc_overlap**
+
+Finds pairs of findings (from different sources) that share at least 2 IOCs within a configurable time window (default 48 hours). Signal count = number of shared IOCs. Confidence formula:
+
+```
+confidence = clamp(signal_count × 0.20 + 0.3)
+```
+
+Cluster ID: `corr:temporal:sha256(finding_a:finding_b)` (finding IDs sorted for determinism).
+
+**Rule 4 — campaign_cluster**
+
+Finds pairs of `threat_actor` or `malware` entities sharing downstream graph connections (infrastructure, tools, malware families) with at least 2 shared connections. Filters out clusters where all shared entities are whitelisted common tools (Mimikatz, Metasploit, Nmap, etc.). Confidence formula:
+
+```
+confidence = clamp(signal_count × 0.15 + 0.4)
+```
+
+Cluster ID: `corr:campaign:sha256(entity_a:entity_b)` (entity IDs sorted). Candidates below threshold are queued for LLM evaluation by the Analyst module.
+
+---
+
+### ComputePriority (Vulnerability Priority Score)
+
+Computed by `internal/vuln/priority.go` and written to `vulnerabilities.priority_score` and `priority_label` after each enrichment pass.
+
+**Formula:**
+
+```
+if kev_listed:
+    score = 1.0   →  label = "critical"
+else:
+    score = (epss_score × 0.4)
+          + ((cvss_v31_score / 10.0) × 0.3)
+          + (min(dark_web_mentions / 10.0, 1.0) × 0.2)
+          + (exploit_available ? 0.1 : 0.0)
+```
+
+**Label thresholds:**
+
+| Score range | Label |
+|-------------|-------|
+| 1.0 (KEV) | critical |
+| ≥ 0.8 | critical |
+| ≥ 0.6 | high |
+| ≥ 0.3 | medium |
+| ≥ 0.1 | low |
+| < 0.1 | info |
+
+The KEV override is absolute: any KEV-listed CVE is automatically `critical` regardless of EPSS or CVSS values, reflecting confirmed active exploitation in the wild.

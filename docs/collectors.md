@@ -1,6 +1,6 @@
 # Collectors
 
-Noctis collects threat intelligence through a set of pluggable collectors. Each collector runs as a long-lived goroutine, sends findings into a buffered channel, and shuts down cleanly on context cancellation.
+Noctis collects threat intelligence through a set of pluggable collectors managed by the `CollectorManager` (`internal/collector/manager.go`). Each collector runs as a pair of goroutines (producer + consumer) with per-collector status tracking via the modules registry. The manager handles channel allocation, lifecycle, and finding fan-in to the ingest pipeline.
 
 ---
 
@@ -19,7 +19,7 @@ type Collector interface {
 
 - `Name()` returns a human-readable identifier used in logs and metrics.
 - `Start()` blocks until `ctx` is cancelled. It **must** close `out` before returning.
-- The channel `out` is buffered (size 50, allocated in `cmd/noctis/serve.go`). Collectors should respect `ctx.Done()` when the channel is full to avoid blocking indefinitely.
+- The channel `out` is buffered (size 50, allocated by `CollectorManager`). Collectors should respect `ctx.Done()` when the channel is full to avoid blocking indefinitely.
 - Context cancellation is the graceful shutdown signal. Collectors must not leak goroutines after `Start()` returns.
 
 ---
@@ -276,6 +276,7 @@ Each entry under `feeds`:
        slog.Info("mytype collector enabled")
    }
    ```
+   The `CollectorManager` automatically registers a `StatusTracker` for each collector and maps its `Name()` to the appropriate `ModuleID`. No manual registration needed.
 
 4. **Add config section.** Add the corresponding YAML block to `deploy/configmap.yaml`.
 

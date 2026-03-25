@@ -1,7 +1,7 @@
 # Noctis Configuration Reference
 
 Every configuration file must be wrapped in a top-level `noctis:` key. The
-loader unwraps that key before parsing the rest of the structure, so any YAML
+loader unwraps that key before parsing the rest of the structure; any YAML
 without it will fail to load.
 
 ```yaml
@@ -10,11 +10,14 @@ noctis:
   # ... all other fields nested here
 ```
 
+---
+
 ## Environment Variable Substitution
 
-Any value in the YAML file may reference an environment variable using the
-`${VAR_NAME}` syntax. The pattern is replaced before YAML parsing, so it works
-inside quoted strings, bare scalars, and multi-line blocks.
+Any scalar value in the YAML file may reference an environment variable using
+the `${VAR_NAME}` syntax. Substitution is applied to the raw file bytes before
+YAML parsing, so it works inside quoted strings, bare scalars, and multi-line
+blocks. The pattern matches `${[A-Za-z_][A-Za-z0-9_]*}`.
 
 ```yaml
 noctis:
@@ -24,10 +27,32 @@ noctis:
     apiKey: ${NOCTIS_LLM_API_KEY}
 ```
 
-If the referenced variable is not set the token is replaced with an empty
-string. In Kubernetes, inject secrets via `envFrom` pointing at a Secret
-object; those environment variables are then available for substitution in the
-config map that holds the YAML.
+If the referenced variable is not set in the process environment the token is
+replaced with an empty string. In Kubernetes, inject secrets via `envFrom`
+referencing a Secret object; those environment variables are then available for
+substitution in the ConfigMap that holds the YAML.
+
+### Required environment variables
+
+| Variable | Used by |
+|----------|---------|
+| `NOCTIS_DB_DSN` | `database.dsn` |
+| `NOCTIS_LLM_API_KEY` | `llm.apiKey` (GLM-5 full analyzer) |
+| `NOCTIS_GROQ_API_KEY` | `llmFast.apiKey` (Groq classification) |
+| `NOCTIS_GEMINI_API_KEY` | `llmBrain.apiKey` (Gemini analytical reasoning) |
+| `NOCTIS_DASHBOARD_API_KEY` | `dashboard.apiKey` |
+
+### Optional environment variables
+
+| Variable | Used by |
+|----------|---------|
+| `NOCTIS_NVD_API_KEY` | `vuln.nvdApiKey` — unauthenticated NVD access is rate-limited to 5 req/30 s |
+| `NOCTIS_ABUSEIPDB_KEY` | `enrichment.abuseipdbKey` |
+| `NOCTIS_VT_KEY` | `enrichment.virusTotalKey` |
+| `NOCTIS_TG_API_ID` | `sources.telegram.apiId` |
+| `NOCTIS_TG_API_HASH` | `sources.telegram.apiHash` |
+| `NOCTIS_TG_PHONE` | `sources.telegram.phone` |
+| `NOCTIS_PROMPTS_DIR` | Override the default `/prompts` directory at runtime |
 
 ---
 
@@ -38,6 +63,208 @@ config map that holds the YAML.
 | `logLevel` | string | `"info"` | Log verbosity. Accepted values: `debug`, `info`, `warn`, `error`. |
 | `metricsPort` | int | `9090` | Port on which the Prometheus `/metrics` endpoint is served. |
 | `healthPort` | int | `8080` | Port on which `/healthz`, `/readyz`, and internal auth endpoints are served. |
+
+---
+
+## `llm`
+
+Primary LLM client — GLM-5. Used for summarization, IOC extraction, entity
+extraction, and sub-classification (Librarian). Falls back as the brain
+analyzer when `llmBrain` is not configured.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `provider` | string | — | Provider label, e.g. `glm`. Informational; shown in the dashboard status view. |
+| `baseURL` | string | — | API base URL without trailing path, e.g. `https://open.bigmodel.cn/api/coding/paas/v4`. |
+| `model` | string | — | Model identifier forwarded in each request body, e.g. `glm-4-flash`. |
+| `apiKey` | string | — | API key for Bearer authentication. Use `${NOCTIS_LLM_API_KEY}`. |
+| `maxTokens` | int | — | Maximum tokens per completion request. |
+| `temperature` | float64 | — | Sampling temperature (0.0–2.0). |
+| `timeout` | duration | — | Per-request HTTP timeout, e.g. `60s`. |
+| `retries` | int | — | Retry attempts on transient errors. |
+| `maxConcurrent` | int | `2` | Maximum simultaneous in-flight LLM requests. Used as the extraction concurrency cap and as the fallback for `llmFast.maxConcurrency` when that field is unset. |
+| `requestsPerMinute` | int | — | Rate limit cap for outbound requests. |
+
+---
+
+## `llmFast`
+
+Fast LLM client — Groq. Used exclusively for the Classifier stage (initial
+category, confidence, severity, provenance). When `llmFast.model` is empty the
+system falls back to `llm` for classification (single-LLM mode).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `provider` | string | — | Provider label, e.g. `groq`. |
+| `baseURL` | string | — | API base URL, e.g. `https://api.groq.com/openai/v1`. |
+| `model` | string | — | Model identifier, e.g. `llama-4-scout-17b-16e-instruct`. |
+| `apiKey` | string | — | API key. Use `${NOCTIS_GROQ_API_KEY}`. |
+| `maxConcurrency` | int | — | Maximum concurrent in-flight classification requests. Falls back to `llm.maxConcurrent` when unset. |
+
+---
+
+## `llmBrain`
+
+Brain LLM client — Gemini. Used for correlation evaluation (`evaluate_correlation`),
+analytical note generation (`Analyst`), brief generation (`daily_brief`), and
+natural language SQL queries. When `llmBrain.baseURL` is empty the system
+reuses the `llm` client for brain operations.
+
+Uses the same fields as `llm`:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `provider` | string | — | Provider label, e.g. `gemini`. |
+| `baseURL` | string | — | API base URL for the Gemini OpenAI-compatible endpoint. |
+| `model` | string | — | Model identifier, e.g. `gemini-2.5-pro-exp-03-25`. |
+| `apiKey` | string | — | API key. Use `${NOCTIS_GEMINI_API_KEY}`. |
+| `maxTokens` | int | — | Maximum tokens per completion. |
+| `temperature` | float64 | — | Sampling temperature. |
+| `timeout` | duration | — | Per-request HTTP timeout. |
+| `retries` | int | — | Retry attempts. |
+| `maxConcurrent` | int | `1` | Concurrency cap for brain operations. Defaults to 1 when unset. |
+| `requestsPerMinute` | int | — | Rate limit cap. |
+
+---
+
+## `collection`
+
+Controls archive-everything behavior and processing pipeline worker counts.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `archiveAll` | bool | `false` | When `true`, store every ingested item regardless of rule matches. |
+| `classificationWorkers` | int | `8` | Goroutines running the Classifier → Summarizer pipeline. |
+| `entityExtractionWorkers` | int | `2` | Goroutines running the IOC Extractor → Entity Extractor → Graph Bridge pipeline. |
+| `librarianWorkers` | int | `1` | Goroutines running the Librarian (sub-classification) pipeline. |
+| `classificationBatchSize` | int | `10` | Maximum items fetched per poll by classification workers. |
+| `maxContentLength` | int | `0` | Truncate ingested content to this byte length before storage and LLM calls. `0` means no limit. |
+
+---
+
+## `correlation`
+
+Controls the rule-based correlation engine (Correlator sub-module). Runs on a
+periodic interval, detecting shared IOCs, handle reuse, temporal overlaps, and
+entity clusters. Results are stored as `correlation_candidates`.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the correlation engine. |
+| `intervalMinutes` | int | `15` | How often the correlation engine runs (in minutes). |
+| `minEvidenceThreshold` | int | `3` | Minimum number of signals required to emit a candidate correlation. |
+| `temporalWindowHours` | int | `48` | Look-back window (in hours) used for temporal overlap detection. |
+
+---
+
+## `analyst`
+
+Controls the LLM-powered Analyst sub-module (brain). The Analyst polls pending
+`correlation_candidates` and uses the brain LLM to promote, reject, or defer
+each one. Decisions are logged to `correlation_decisions`.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the Analyst. |
+| `intervalMinutes` | int | `60` | How often the Analyst processes pending candidates (in minutes). |
+| `batchSize` | int | `10` | Maximum candidates processed per cycle. |
+| `minSignalCount` | int | `2` | Candidates below this signal count are skipped by the Analyst. |
+| `promoteThreshold` | float64 | `0.7` | Minimum LLM confidence score required to promote a candidate to a confirmed correlation. |
+
+---
+
+## `iocLifecycle`
+
+Controls periodic IOC decay and deactivation. The IOCLifecycleManager runs on
+a periodic interval, reducing threat scores and deactivating stale IOCs.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the IOC lifecycle manager. |
+| `intervalMinutes` | int | `60` | How often the lifecycle manager runs (in minutes). |
+| `deactivateThreshold` | float64 | `0.1` | IOCs with a threat score at or below this value are marked inactive. |
+
+---
+
+## `briefGenerator`
+
+Controls the daily intelligence brief generator (brain). Runs on a schedule
+tied to a UTC hour, gathering 24-hour metrics and synthesizing them via the
+brain LLM into a structured brief stored in `intelligence_briefs`.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the brief generator. |
+| `scheduleHour` | int | `6` | UTC hour (0–23) at which the daily brief is generated. Default is 06:00 UTC. |
+
+---
+
+## `vuln`
+
+Controls the vulnerability intelligence pipeline. Fetches CVE data from NVD,
+EPSS scores, and CISA KEV status on a periodic interval.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the vulnerability ingestor. |
+| `intervalHours` | int | `6` | How often to refresh vulnerability data (in hours). |
+| `nvdApiKey` | string | — | NVD API key for higher rate limits. Use `${NOCTIS_NVD_API_KEY}`. Optional but recommended. |
+
+---
+
+## `enrichment`
+
+Controls the IOC enrichment pipeline. Enriches IOCs with reputation data from
+external APIs (AbuseIPDB, VirusTotal, crt.sh) on a periodic interval.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the enrichment pipeline. |
+| `intervalMinutes` | int | `30` | How often the enricher runs (in minutes). |
+| `batchSize` | int | `20` | Maximum IOCs enriched per cycle. |
+| `abuseipdbKey` | string | — | AbuseIPDB API key. Use `${NOCTIS_ABUSEIPDB_KEY}`. Enables IP reputation enrichment. |
+| `virusTotalKey` | string | — | VirusTotal API key. Use `${NOCTIS_VT_KEY}`. Enables hash and URL reputation enrichment. |
+
+crt.sh (certificate transparency) is always active when enrichment is enabled;
+it requires no API key.
+
+---
+
+## `discovery`
+
+Controls the automatic source discovery engine. Extracts URLs and channel
+references from ingested content and proposes new monitoring sources.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the discovery engine. |
+| `autoApprove` | bool | `false` | Automatically add discovered sources without manual review. When `false`, sources enter `discovered` status and require approval via `noctis source approve`. |
+| `domainBlacklist` | []string | — | Domains that the discovery engine will never propose as sources, e.g. `google.com`, `youtube.com`. |
+
+---
+
+## `dashboard`
+
+Configures the web dashboard server. When enabled, Noctis serves a React SPA
+and JSON API on a dedicated port, separate from the health/metrics server.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the web dashboard. |
+| `port` | int | `3000` | Port on which the dashboard server listens. |
+| `apiKey` | string | — | Bearer token required for all `/api/*` endpoints. Use `${NOCTIS_DASHBOARD_API_KEY}`. |
+
+When `enabled` is `false`, no dashboard server is started and no port is bound.
+
+---
+
+## `database`
+
+Configures the PostgreSQL persistence layer.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `dsn` | string | — | PostgreSQL connection string. Use `${NOCTIS_DB_DSN}`. Example: `postgres://noctis:secret@localhost:5432/noctis?sslmode=require`. |
 
 ---
 
@@ -52,9 +279,9 @@ Configures the Telegram MTProto source (via `gotd/td`).
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | bool | — | Enable or disable this source. |
-| `apiId` | int | — | Application ID from [my.telegram.org](https://my.telegram.org). |
-| `apiHash` | string | — | Application hash from [my.telegram.org](https://my.telegram.org). |
-| `phone` | string | — | Account phone number in international format, e.g. `+14155552671`. |
+| `apiId` | int | — | Application ID from [my.telegram.org](https://my.telegram.org). Use `${NOCTIS_TG_API_ID}`. |
+| `apiHash` | string | — | Application hash from [my.telegram.org](https://my.telegram.org). Use `${NOCTIS_TG_API_HASH}`. |
+| `phone` | string | — | Account phone number in international format, e.g. `+14155552671`. Use `${NOCTIS_TG_PHONE}`. |
 | `password` | string | — | Two-factor authentication password, if enabled on the account. |
 | `channels` | []ChannelConfig | — | List of channels to monitor. See below. |
 | `catchupMessages` | int | — | Number of most-recent messages to fetch per channel on startup. |
@@ -62,13 +289,12 @@ Configures the Telegram MTProto source (via `gotd/td`).
 
 #### `sources.telegram.channels[]`
 
-Each entry in the `channels` list may specify a username, a numeric ID, or
-both. At least one must be provided.
-
 | Field | Type | Description |
 |-------|------|-------------|
 | `username` | string | Public channel username, without the leading `@`. |
 | `id` | int64 | Numeric channel ID. |
+
+At least one of `username` or `id` must be provided.
 
 ---
 
@@ -97,7 +323,7 @@ Configures paste-site scraping.
 | `name` | string | — | Human-readable label for logging and metrics. |
 | `url` | string | — | Target URL to fetch. |
 | `interval` | duration | — | How often to re-fetch this URL. |
-| `tor` | bool | — | Route requests through the Tor SOCKS proxy (`sources.tor.socksProxy`). |
+| `tor` | bool | `false` | Route requests through the Tor SOCKS proxy (`sources.tor.socksProxy`). |
 
 ---
 
@@ -116,12 +342,12 @@ Configures forum-based threat intelligence collection.
 |-------|------|---------|-------------|
 | `name` | string | — | Human-readable label. |
 | `url` | string | — | Base URL of the forum. |
-| `tor` | bool | — | Route requests through Tor. |
+| `tor` | bool | `false` | Route requests through Tor. |
 | `auth` | ForumAuthConfig | — | Login credentials. See below. |
 | `scraper` | ForumScraperConfig | — | CSS selectors for extracting content. See below. |
 | `interval` | duration | — | Crawl frequency. |
 | `maxPagesPerCrawl` | int | — | Maximum pages to visit in a single crawl run. |
-| `requestDelay` | duration | — | Delay between individual HTTP requests to reduce fingerprinting. |
+| `requestDelay` | duration | — | Delay between individual HTTP requests. |
 
 ##### `sources.forums.sites[].auth`
 
@@ -137,7 +363,7 @@ Configures forum-based threat intelligence collection.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `threadListSelector` | string | CSS selector that matches thread links on a listing page. |
+| `threadListSelector` | string | CSS selector matching thread links on a listing page. |
 | `threadContentSelector` | string | CSS selector for the main post body within a thread page. |
 | `authorSelector` | string | CSS selector for the post author field. |
 | `paginationSelector` | string | CSS selector for the "next page" link. |
@@ -163,7 +389,7 @@ Configures web/RSS-based threat intelligence collection.
 | `contentSelector` | string | — | CSS selector used when `type` is `scrape`. |
 | `queries` | []string | — | Search queries used when `type` is `search`. |
 | `interval` | duration | — | How often to fetch this feed. |
-| `tor` | bool | — | Route requests through Tor. |
+| `tor` | bool | `false` | Route requests through Tor. |
 
 ---
 
@@ -182,174 +408,15 @@ Configures the Tor SOCKS5 proxy used by any source with `tor: true`.
 
 ### `matching.rules[]`
 
-Pattern-matching rules applied to all ingested content.
+Pattern-matching rules applied to all ingested content in real time. A finding
+that matches at least one rule triggers the alert callback and is persisted.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `name` | string | — | Rule identifier used in alert metadata. |
-| `type` | string | — | Match type: `keyword` or `regex`. |
-| `patterns` | []string | — | List of keywords or regular expression patterns. |
-| `severity` | string | — | Severity label attached to matches, e.g. `low`, `medium`, `high`, `critical`. |
-
----
-
-## `llm`
-
-Configures the language model client used for classification and entity extraction.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `provider` | string | — | LLM provider identifier, e.g. `openai`, `ollama`. |
-| `baseURL` | string | — | API base URL. Required for self-hosted or OpenAI-compatible endpoints. |
-| `model` | string | — | Model name, e.g. `gpt-4o`, `llama3`. |
-| `apiKey` | string | — | API key. Use `${VAR}` to inject from an environment variable. |
-| `maxTokens` | int | — | Maximum tokens per completion request. |
-| `temperature` | float64 | — | Sampling temperature (0.0–2.0). |
-| `timeout` | duration | — | Per-request timeout. |
-| `retries` | int | — | Number of retry attempts on transient errors. |
-| `maxConcurrent` | int | — | Maximum number of simultaneous in-flight LLM requests. |
-| `requestsPerMinute` | int | — | Rate limit cap for outbound LLM requests. |
-
----
-
-## `collection`
-
-Controls archive-everything behavior and background worker concurrency.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `archiveAll` | bool | — | When `true`, store every ingested item regardless of rule matches. |
-| `classificationWorkers` | int | `2` | Number of goroutines running LLM classification. |
-| `entityExtractionWorkers` | int | `1` | Number of goroutines running LLM entity extraction. |
-| `classificationBatchSize` | int | `10` | Maximum items bundled into a single classification request. |
-| `maxContentLength` | int | — | Truncate ingested content to this byte length before storage and LLM calls. `0` means no limit. |
-
----
-
-## `discovery`
-
-Controls the automatic source discovery engine.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | — | Enable the discovery engine. |
-| `autoApprove` | bool | — | Automatically add discovered sources without manual review. |
-| `domainBlacklist` | []string | — | Domains that the discovery engine will never propose as sources. |
-
----
-
-## `dashboard`
-
-Configures the web dashboard server. When enabled, Noctis serves a React SPA and JSON API on a dedicated port, separate from the health/metrics server.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | `false` | Enable the web dashboard. |
-| `port` | int | `3000` | Port on which the dashboard server listens. |
-| `apiKey` | string | — | Bearer token required for all `/api/*` endpoints. Use `${VAR}` to inject from an environment variable. |
-
-When `enabled` is `false`, no dashboard server is started and no port is bound. The dashboard serves a public landing page at `/` and requires the API key for all data endpoints.
-
----
-
-## `database`
-
-Configures the persistence layer.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `driver` | string | — | Database driver name, e.g. `sqlite3`, `postgres`. |
-| `dsn` | string | — | Data source name / connection string. Use `${VAR}` to inject credentials. |
-
----
-
-## `graph`
-
-Configures the relationship graph store.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | — | Enable graph persistence for entity relationships. |
-
----
-
-## `dispatch`
-
-Configures all alert dispatch backends.
-
-### `dispatch.wazuh`
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | — | Enable the Wazuh dispatch backend. |
-| `endpoint` | string | — | Wazuh manager endpoint URL or address. |
-| `format` | string | — | Alert format sent to Wazuh, e.g. `json`. |
-
-### `dispatch.webhooks[]`
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | string | — | Human-readable label for this webhook. |
-| `url` | string | — | Outbound POST target URL. |
-| `minSeverity` | string | — | Minimum severity that triggers this webhook. Alerts below this level are dropped. |
-
-### `dispatch.crds`
-
-Configures Kubernetes CRD persistence for alerts.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | — | Enable CRD dispatch. |
-| `namespace` | string | — | Kubernetes namespace where alert CRD objects are written. |
-| `gcStaleAfterDays` | int | — | Delete alert CRDs older than this many days. |
-
-### `dispatch.networkPolicy`
-
-Configures automatic Kubernetes NetworkPolicy generation from threat intelligence.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | — | Enable NetworkPolicy generation. |
-| `dryRun` | bool | — | Log policies that would be created without applying them to the cluster. |
-| `namespace` | string | — | Namespace in which generated NetworkPolicies are applied. |
-| `whitelistCIDRs` | []string | — | CIDRs that are never blocked, regardless of threat intelligence. |
-| `maxPolicies` | int | — | Maximum number of active NetworkPolicies managed by Noctis. |
-| `ttlHours` | int | — | Hours after which a generated policy is automatically deleted. |
-
----
-
-## `storage`
-
-Controls artifact storage (raw downloaded files, screenshots, etc.).
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `artifactPath` | string | — | Directory path for artifact storage. Mount an NFS PVC here in Kubernetes. |
-| `maxArtifactSizeMB` | int | — | Artifacts larger than this size (in MiB) are discarded. `0` means no limit. |
-
----
-
-## `profiling`
-
-Configures actor profiling behaviour.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | — | Enable actor profiling. |
-| `activityThreshold` | int | — | Minimum number of observed events before a profile is created for an actor. |
-| `similarityThreshold` | float64 | — | Cosine similarity threshold (0.0–1.0) for linking activity to an existing profile. |
-| `storage` | string | — | Backend used to persist profiles, e.g. a file path or connection string. |
-
----
-
-## `canary`
-
-Configures canary token monitoring.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | — | Enable canary token tracking. |
-| `storage` | string | — | Backend used to persist canary token state. |
+| `name` | string | — | Rule identifier used in alert metadata and Prometheus labels. |
+| `type` | string | — | Match type: `keyword`, `regex`, or `ioc`. |
+| `patterns` | []string | — | Keywords or regular expression patterns. |
+| `severity` | string | — | Severity label attached to matches: `low`, `medium`, `high`, `critical`. |
 
 ---
 
@@ -361,13 +428,99 @@ noctis:
   metricsPort: 9090
   healthPort: 8080
 
+  llm:
+    provider: glm
+    baseURL: https://open.bigmodel.cn/api/coding/paas/v4
+    model: glm-4-flash
+    apiKey: ${NOCTIS_LLM_API_KEY}
+    maxTokens: 2048
+    temperature: 0.1
+    timeout: 60s
+    retries: 2
+    maxConcurrent: 4
+    requestsPerMinute: 60
+
+  llmFast:
+    provider: groq
+    baseURL: https://api.groq.com/openai/v1
+    model: llama-4-scout-17b-16e-instruct
+    apiKey: ${NOCTIS_GROQ_API_KEY}
+    maxConcurrency: 8
+
+  llmBrain:
+    provider: gemini
+    baseURL: https://generativelanguage.googleapis.com/v1beta/openai
+    model: gemini-2.5-pro-exp-03-25
+    apiKey: ${NOCTIS_GEMINI_API_KEY}
+    maxTokens: 8192
+    temperature: 0.3
+    timeout: 120s
+    retries: 2
+    maxConcurrent: 1
+
+  collection:
+    archiveAll: true
+    classificationWorkers: 8
+    entityExtractionWorkers: 2
+    librarianWorkers: 1
+    classificationBatchSize: 10
+    maxContentLength: 65536
+
+  correlation:
+    enabled: true
+    intervalMinutes: 15
+    minEvidenceThreshold: 3
+    temporalWindowHours: 48
+
+  analyst:
+    enabled: true
+    intervalMinutes: 60
+    batchSize: 10
+    minSignalCount: 2
+    promoteThreshold: 0.7
+
+  iocLifecycle:
+    enabled: true
+    intervalMinutes: 60
+    deactivateThreshold: 0.1
+
+  briefGenerator:
+    enabled: true
+    scheduleHour: 6
+
+  vuln:
+    enabled: true
+    intervalHours: 6
+    nvdApiKey: ${NOCTIS_NVD_API_KEY}
+
+  enrichment:
+    enabled: true
+    intervalMinutes: 30
+    batchSize: 20
+    abuseipdbKey: ${NOCTIS_ABUSEIPDB_KEY}
+    virusTotalKey: ${NOCTIS_VT_KEY}
+
+  discovery:
+    enabled: true
+    autoApprove: false
+    domainBlacklist:
+      - google.com
+      - youtube.com
+
+  dashboard:
+    enabled: true
+    port: 3000
+    apiKey: ${NOCTIS_DASHBOARD_API_KEY}
+
+  database:
+    dsn: ${NOCTIS_DB_DSN}
+
   sources:
     telegram:
       enabled: true
       apiId: ${NOCTIS_TG_API_ID}
       apiHash: ${NOCTIS_TG_API_HASH}
       phone: ${NOCTIS_TG_PHONE}
-      password: ${NOCTIS_TG_PASSWORD}
       catchupMessages: 100
       sessionFile: /data/noctis-session.json
       channels:
@@ -414,7 +567,6 @@ noctis:
           url: https://example.com/feed.xml
           type: rss
           interval: 1h
-          tor: false
         - name: darkweb-scrape
           url: https://example.onion/posts
           type: scrape
@@ -428,7 +580,6 @@ noctis:
             - "credential dump site:paste.example"
             - "leaked database"
           interval: 6h
-          tor: false
 
     tor:
       socksProxy: socks5://127.0.0.1:9050
@@ -447,89 +598,14 @@ noctis:
         patterns:
           - '203\.0\.113\.\d+'
         severity: medium
-
-  dashboard:
-    enabled: true
-    port: 3000
-    apiKey: ${NOCTIS_DASHBOARD_API_KEY}
-
-  llm:
-    provider: openai
-    baseURL: https://api.openai.com/v1
-    model: gpt-4o-mini
-    apiKey: ${NOCTIS_LLM_API_KEY}
-    maxTokens: 1024
-    temperature: 0.2
-    timeout: 60s
-    retries: 3
-    maxConcurrent: 4
-    requestsPerMinute: 60
-
-  collection:
-    archiveAll: false
-    classificationWorkers: 2
-    entityExtractionWorkers: 1
-    classificationBatchSize: 10
-    maxContentLength: 65536
-
-  discovery:
-    enabled: true
-    autoApprove: false
-    domainBlacklist:
-      - google.com
-      - youtube.com
-
-  database:
-    driver: postgres
-    dsn: ${NOCTIS_DB_DSN}
-
-  graph:
-    enabled: true
-
-  dispatch:
-    wazuh:
-      enabled: false
-      endpoint: https://wazuh.internal:55000
-      format: json
-    webhooks:
-      - name: slack-soc
-        url: ${NOCTIS_SLACK_WEBHOOK}
-        minSeverity: high
-    crds:
-      enabled: true
-      namespace: noctis
-      gcStaleAfterDays: 30
-    networkPolicy:
-      enabled: true
-      dryRun: false
-      namespace: noctis
-      whitelistCIDRs:
-        - 10.0.0.0/8
-        - 172.16.0.0/12
-      maxPolicies: 100
-      ttlHours: 72
-
-  storage:
-    artifactPath: /artifacts
-    maxArtifactSizeMB: 50
-
-  profiling:
-    enabled: true
-    activityThreshold: 5
-    similarityThreshold: 0.75
-    storage: /data/profiles
-
-  canary:
-    enabled: true
-    storage: /data/canaries
 ```
 
 ---
 
 ## Kubernetes Integration
 
-Noctis is designed to run as a Kubernetes workload. Secrets (API keys, DSNs,
-passwords) should never be embedded in ConfigMaps. The recommended pattern is:
+Secrets (API keys, DSNs, passwords) must never be embedded in ConfigMaps.
+Recommended pattern:
 
 1. Create a `Secret` containing each sensitive value.
 2. Reference the `Secret` in the Pod spec via `envFrom`.
@@ -544,10 +620,10 @@ metadata:
   namespace: noctis
 stringData:
   NOCTIS_DB_DSN: "postgres://noctis:hunter2@postgres.noctis.svc/noctis?sslmode=require"
-  NOCTIS_LLM_API_KEY: "sk-..."
-  NOCTIS_TG_API_ID: "12345678"
-  NOCTIS_TG_API_HASH: "abcdef1234567890abcdef1234567890"
-  NOCTIS_TG_PHONE: "+14155552671"
+  NOCTIS_LLM_API_KEY: "..."
+  NOCTIS_GROQ_API_KEY: "..."
+  NOCTIS_GEMINI_API_KEY: "..."
+  NOCTIS_DASHBOARD_API_KEY: "..."
 ```
 
 ```yaml
@@ -568,5 +644,5 @@ spec:
         name: noctis-config
 ```
 
-The config file mounted from the ConfigMap then uses `${NOCTIS_DB_DSN}` etc.,
-which are expanded at startup before YAML parsing begins.
+The config file mounted from the ConfigMap uses `${NOCTIS_DB_DSN}` etc., which
+are expanded at startup before YAML parsing begins.
