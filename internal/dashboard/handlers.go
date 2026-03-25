@@ -356,6 +356,16 @@ func (s *Server) handlePublicRecent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, findings)
 }
 
+func (s *Server) handleIntelligenceOverview(w http.ResponseWriter, r *http.Request) {
+	overview, err := queryIntelligenceOverview(r.Context(), s.pool)
+	if err != nil {
+		slog.Error("dashboard: intelligence overview", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch overview"})
+		return
+	}
+	writeJSON(w, http.StatusOK, overview)
+}
+
 // --- helpers ---
 
 func parseIntParam(s string, defaultVal int) int {

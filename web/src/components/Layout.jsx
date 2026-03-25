@@ -1,11 +1,12 @@
 import React from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
-  LayoutDashboard, Search, Shield, Globe, Network, LogOut, Activity, Menu, X, MonitorCheck, FileText, GitBranch, BookOpen, Bug, MessageSquare
+  LayoutDashboard, Search, Shield, Globe, Network, LogOut, Activity, Menu, X, MonitorCheck, FileText, GitBranch, BookOpen, Bug, MessageSquare, Radar
 } from 'lucide-react'
 
 const navItems = [
   { path: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+  { path: '/dashboard/intelligence', label: 'Intelligence', icon: Radar },
   { path: '/dashboard/findings', label: 'Findings', icon: Search },
   { path: '/dashboard/iocs', label: 'IOC Explorer', icon: Shield },
   { path: '/dashboard/sources', label: 'Sources', icon: Globe },
@@ -20,6 +21,7 @@ const navItems = [
 
 const bottomNavItems = [
   { path: '/dashboard', label: 'Overview', shortLabel: 'Home', icon: LayoutDashboard },
+  { path: '/dashboard/intelligence', label: 'Intelligence', shortLabel: 'Intel', icon: Radar },
   { path: '/dashboard/findings', label: 'Findings', shortLabel: 'Findings', icon: Search },
   { path: '/dashboard/iocs', label: 'IOCs', shortLabel: 'IOCs', icon: Shield },
   { path: '/dashboard/sources', label: 'Sources', shortLabel: 'Sources', icon: Globe },

@@ -1932,3 +1932,293 @@ func queryVulnerabilityDetail(ctx context.Context, pool *pgxpool.Pool, cveID str
 
 	return &v, nil
 }
+
+// --- Intelligence Overview ---
+
+// ActorSummary represents a threat actor with activity metrics.
+type ActorSummary struct {
+	EntityID       string    `json:"entityId"`
+	Name           string    `json:"name"`
+	ThreatLevel    string    `json:"threatLevel"`
+	RecentFindings int       `json:"recentFindings"`
+	LinkedMalware  []string  `json:"linkedMalware"`
+	LinkedInfra    int       `json:"linkedInfra"`
+	LastSeen       time.Time `json:"lastSeen"`
+	LatestNote     *string   `json:"latestNote,omitempty"`
+}
+
+// CampaignSummary represents an active correlation campaign.
+type CampaignSummary struct {
+	ClusterID       string    `json:"clusterId"`
+	CorrelationType string    `json:"correlationType"`
+	Confidence      float64   `json:"confidence"`
+	Method          string    `json:"method"`
+	EntityNames     []string  `json:"entityNames"`
+	FindingCount    int       `json:"findingCount"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// OverviewMetrics holds key counts for the intelligence overview.
+type OverviewMetrics struct {
+	TotalFindings         int64 `json:"totalFindings"`
+	ActiveIOCs            int64 `json:"activeIocs"`
+	ConfirmedCorrelations int64 `json:"confirmedCorrelations"`
+	AnalyticalNotes       int64 `json:"analyticalNotes"`
+	TrackedActors         int64 `json:"trackedActors"`
+	TrackedVulns          int64 `json:"trackedVulns"`
+	KEVCount              int64 `json:"kevCount"`
+}
+
+// BriefSummary is a compact latest brief for the overview.
+type BriefSummary struct {
+	ID               string    `json:"id"`
+	Title            string    `json:"title"`
+	ExecutiveSummary string    `json:"executiveSummary"`
+	GeneratedAt      time.Time `json:"generatedAt"`
+}
+
+// IntelligenceOverview is the full intelligence picture response.
+type IntelligenceOverview struct {
+	ActiveActors     []ActorSummary    `json:"activeActors"`
+	ActiveCampaigns  []CampaignSummary `json:"activeCampaigns"`
+	RecentNotes      []NoteListItem    `json:"recentNotes"`
+	TrendingEntities []TrendingItem    `json:"trendingEntities"`
+	TopVulns         []VulnListItem    `json:"topVulnerabilities"`
+	LatestBrief      *BriefSummary     `json:"latestBrief,omitempty"`
+	Metrics          OverviewMetrics   `json:"metrics"`
+}
+
+// TrendingItem is a compact trending entity for the overview.
+type TrendingItem struct {
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+	MentionCount int64  `json:"mentionCount"`
+	PrevCount    int64  `json:"prevCount"`
+}
+
+func queryIntelligenceOverview(ctx context.Context, pool *pgxpool.Pool) (*IntelligenceOverview, error) {
+	overview := &IntelligenceOverview{}
+
+	// 1. Metrics
+	pool.QueryRow(ctx, `SELECT COUNT(*) FROM raw_content WHERE classified = TRUE`).Scan(&overview.Metrics.TotalFindings)
+	pool.QueryRow(ctx, `SELECT COUNT(*) FROM iocs WHERE active = TRUE`).Scan(&overview.Metrics.ActiveIOCs)
+	pool.QueryRow(ctx, `SELECT COUNT(*) FROM correlations`).Scan(&overview.Metrics.ConfirmedCorrelations)
+	pool.QueryRow(ctx, `SELECT COUNT(*) FROM analytical_notes WHERE status = 'active'`).Scan(&overview.Metrics.AnalyticalNotes)
+	pool.QueryRow(ctx, `SELECT COUNT(*) FROM entities WHERE type = 'threat_actor'`).Scan(&overview.Metrics.TrackedActors)
+	pool.QueryRow(ctx, `SELECT COUNT(*) FROM vulnerabilities`).Scan(&overview.Metrics.TrackedVulns)
+	pool.QueryRow(ctx, `SELECT COUNT(*) FROM vulnerabilities WHERE kev_listed = TRUE`).Scan(&overview.Metrics.KEVCount)
+
+	// 2. Active threat actors
+	actorRows, err := pool.Query(ctx, `
+		SELECT e.id, COALESCE(e.properties->>'name', e.id),
+		       COALESCE(e.properties->>'threat_level', 'unknown'),
+		       COALESCE(e.updated_at, e.created_at)
+		FROM entities e
+		WHERE e.type = 'threat_actor'
+		ORDER BY COALESCE(e.updated_at, e.created_at) DESC
+		LIMIT 10`)
+	if err == nil {
+		defer actorRows.Close()
+		for actorRows.Next() {
+			var a ActorSummary
+			if err := actorRows.Scan(&a.EntityID, &a.Name, &a.ThreatLevel, &a.LastSeen); err != nil {
+				continue
+			}
+
+			// Count recent findings via edges
+			pool.QueryRow(ctx, `
+				SELECT COUNT(DISTINCT ed.target_id)
+				FROM edges ed
+				WHERE ed.source_id = $1
+				AND ed.created_at > NOW() - INTERVAL '7 days'`, a.EntityID).Scan(&a.RecentFindings)
+
+			// Linked malware
+			malwareRows, _ := pool.Query(ctx, `
+				SELECT COALESCE(e2.properties->>'name', e2.id)
+				FROM edges ed
+				JOIN entities e2 ON e2.id = ed.target_id
+				WHERE ed.source_id = $1 AND e2.type = 'malware'
+				LIMIT 5`, a.EntityID)
+			if malwareRows != nil {
+				for malwareRows.Next() {
+					var name string
+					if malwareRows.Scan(&name) == nil {
+						a.LinkedMalware = append(a.LinkedMalware, name)
+					}
+				}
+				malwareRows.Close()
+			}
+			if a.LinkedMalware == nil {
+				a.LinkedMalware = []string{}
+			}
+
+			// Linked infra count
+			pool.QueryRow(ctx, `
+				SELECT COUNT(*)
+				FROM edges ed
+				JOIN entities e2 ON e2.id = ed.target_id
+				WHERE ed.source_id = $1 AND e2.type IN ('ip', 'domain')`, a.EntityID).Scan(&a.LinkedInfra)
+
+			// Latest note
+			var noteContent string
+			err := pool.QueryRow(ctx, `
+				SELECT content FROM analytical_notes
+				WHERE entity_id = $1 AND status = 'active'
+				ORDER BY created_at DESC LIMIT 1`, a.EntityID).Scan(&noteContent)
+			if err == nil {
+				if len(noteContent) > 200 {
+					noteContent = noteContent[:200] + "..."
+				}
+				a.LatestNote = &noteContent
+			}
+
+			overview.ActiveActors = append(overview.ActiveActors, a)
+		}
+	}
+	if overview.ActiveActors == nil {
+		overview.ActiveActors = []ActorSummary{}
+	}
+
+	// 3. Active campaigns (recent correlations)
+	campaignRows, err := pool.Query(ctx, `
+		SELECT cluster_id, correlation_type, confidence, method,
+		       entity_ids, finding_ids, created_at
+		FROM correlations
+		WHERE confidence > 0.5
+		ORDER BY created_at DESC
+		LIMIT 10`)
+	if err == nil {
+		defer campaignRows.Close()
+		for campaignRows.Next() {
+			var c CampaignSummary
+			var entityIDs, findingIDs []string
+			if err := campaignRows.Scan(&c.ClusterID, &c.CorrelationType, &c.Confidence,
+				&c.Method, &entityIDs, &findingIDs, &c.CreatedAt); err != nil {
+				continue
+			}
+			c.FindingCount = len(findingIDs)
+
+			// Resolve entity names
+			for _, eid := range entityIDs {
+				var name string
+				err := pool.QueryRow(ctx, `SELECT COALESCE(properties->>'name', id) FROM entities WHERE id = $1`, eid).Scan(&name)
+				if err == nil {
+					c.EntityNames = append(c.EntityNames, name)
+				}
+			}
+			if c.EntityNames == nil {
+				c.EntityNames = []string{}
+			}
+
+			overview.ActiveCampaigns = append(overview.ActiveCampaigns, c)
+		}
+	}
+	if overview.ActiveCampaigns == nil {
+		overview.ActiveCampaigns = []CampaignSummary{}
+	}
+
+	// 4. Recent analytical notes
+	noteRows, err := pool.Query(ctx, `
+		SELECT id, finding_id, entity_id, correlation_id, note_type, title,
+		       content, confidence, created_by, model_used, status, created_at
+		FROM analytical_notes
+		WHERE status = 'active'
+		ORDER BY created_at DESC
+		LIMIT 10`)
+	if err == nil {
+		defer noteRows.Close()
+		for noteRows.Next() {
+			var n NoteListItem
+			if err := noteRows.Scan(&n.ID, &n.FindingID, &n.EntityID, &n.CorrelationID,
+				&n.NoteType, &n.Title, &n.Content, &n.Confidence,
+				&n.CreatedBy, &n.ModelUsed, &n.Status, &n.CreatedAt); err != nil {
+				continue
+			}
+			overview.RecentNotes = append(overview.RecentNotes, n)
+		}
+	}
+	if overview.RecentNotes == nil {
+		overview.RecentNotes = []NoteListItem{}
+	}
+
+	// 5. Trending entities (last 7d vs previous 7d by edge activity)
+	trendRows, err := pool.Query(ctx, `
+		WITH current AS (
+			SELECT e.id, e.type, COUNT(DISTINCT ed.source_id || ed.target_id) AS cnt
+			FROM entities e
+			JOIN edges ed ON ed.source_id = e.id OR ed.target_id = e.id
+			WHERE ed.created_at > NOW() - INTERVAL '7 days'
+			GROUP BY e.id, e.type
+		),
+		previous AS (
+			SELECT e.id, COUNT(DISTINCT ed.source_id || ed.target_id) AS cnt
+			FROM entities e
+			JOIN edges ed ON ed.source_id = e.id OR ed.target_id = e.id
+			WHERE ed.created_at BETWEEN NOW() - INTERVAL '14 days' AND NOW() - INTERVAL '7 days'
+			GROUP BY e.id
+		)
+		SELECT c.id, c.type, c.cnt, COALESCE(p.cnt, 0)
+		FROM current c
+		LEFT JOIN previous p ON p.id = c.id
+		ORDER BY c.cnt DESC
+		LIMIT 10`)
+	if err == nil {
+		defer trendRows.Close()
+		for trendRows.Next() {
+			var t TrendingItem
+			if err := trendRows.Scan(&t.ID, &t.Type, &t.MentionCount, &t.PrevCount); err != nil {
+				continue
+			}
+			overview.TrendingEntities = append(overview.TrendingEntities, t)
+		}
+	}
+	if overview.TrendingEntities == nil {
+		overview.TrendingEntities = []TrendingItem{}
+	}
+
+	// 6. Top priority vulnerabilities
+	vulnRows, err := pool.Query(ctx, `
+		SELECT id, cve_id, description, cvss_v31_score, cvss_severity,
+		       epss_score, epss_percentile,
+		       kev_listed, kev_ransomware_use,
+		       exploit_available, dark_web_mentions,
+		       priority_score, priority_label,
+		       published_at, updated_at
+		FROM vulnerabilities
+		ORDER BY priority_score DESC NULLS LAST
+		LIMIT 10`)
+	if err == nil {
+		defer vulnRows.Close()
+		for vulnRows.Next() {
+			var v VulnListItem
+			if err := vulnRows.Scan(
+				&v.ID, &v.CVEID, &v.Description, &v.CVSSV31Score, &v.CVSSSeverity,
+				&v.EPSSScore, &v.EPSSPercentile,
+				&v.KEVListed, &v.KEVRansomwareUse,
+				&v.ExploitAvailable, &v.DarkWebMentions,
+				&v.PriorityScore, &v.PriorityLabel,
+				&v.PublishedAt, &v.UpdatedAt,
+			); err != nil {
+				continue
+			}
+			overview.TopVulns = append(overview.TopVulns, v)
+		}
+	}
+	if overview.TopVulns == nil {
+		overview.TopVulns = []VulnListItem{}
+	}
+
+	// 7. Latest brief
+	var brief BriefSummary
+	err = pool.QueryRow(ctx, `
+		SELECT id, title, executive_summary, generated_at
+		FROM intelligence_briefs
+		WHERE brief_type = 'daily'
+		ORDER BY period_end DESC
+		LIMIT 1`).Scan(&brief.ID, &brief.Title, &brief.ExecutiveSummary, &brief.GeneratedAt)
+	if err == nil {
+		overview.LatestBrief = &brief
+	}
+
+	return overview, nil
+}

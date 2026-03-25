@@ -14,6 +14,7 @@ import Briefs from './pages/Briefs.jsx'
 import SystemStatus from './pages/SystemStatus.jsx'
 import Vulnerabilities from './pages/Vulnerabilities.jsx'
 import Query from './pages/Query.jsx'
+import Intelligence from './pages/Intelligence.jsx'
 
 // Simple client-side router (avoids react-router CDN version issues)
 function useRouter() {
@@ -61,6 +62,7 @@ function AppRoutes() {
   // Protected dashboard routes
   const dashboardPages = {
     '/dashboard': Overview,
+    '/dashboard/intelligence': Intelligence,
     '/dashboard/findings': Findings,
     '/dashboard/iocs': IOCs,
     '/dashboard/sources': Sources,

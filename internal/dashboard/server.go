@@ -100,6 +100,7 @@ func (s *Server) registerRoutes() {
 	s.mux.Handle("GET /api/actors/{id}/profile", s.authMiddleware(http.HandlerFunc(s.handleActorProfile)))
 	s.mux.Handle("GET /api/sources/value", s.authMiddleware(http.HandlerFunc(s.handleSourceValues)))
 	s.mux.Handle("GET /api/system/status", s.authMiddleware(http.HandlerFunc(s.handleSystemStatus)))
+	s.mux.Handle("GET /api/intelligence/overview", s.authMiddleware(http.HandlerFunc(s.handleIntelligenceOverview)))
 	s.mux.Handle("GET /api/briefs", s.authMiddleware(http.HandlerFunc(s.handleBriefs)))
 	s.mux.Handle("GET /api/briefs/latest", s.authMiddleware(http.HandlerFunc(s.handleLatestBrief)))
 	s.mux.Handle("GET /api/vulnerabilities", s.authMiddleware(http.HandlerFunc(s.handleVulnerabilities)))
