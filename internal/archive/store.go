@@ -1478,3 +1478,6 @@ LIMIT 30`
 	}
 	return neighbors, nil
 }
+
+// Pool returns the underlying connection pool for transaction use.
+func (s *Store) Pool() *pgxpool.Pool { return s.pool }

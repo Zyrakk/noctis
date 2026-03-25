@@ -82,6 +82,7 @@ func (s *Server) registerRoutes() {
 	s.mux.Handle("GET /api/briefs", s.authMiddleware(http.HandlerFunc(s.handleBriefs)))
 	s.mux.Handle("GET /api/briefs/latest", s.authMiddleware(http.HandlerFunc(s.handleLatestBrief)))
 	s.mux.Handle("GET /api/vulnerabilities", s.authMiddleware(http.HandlerFunc(s.handleVulnerabilities)))
+	s.mux.Handle("GET /api/vulnerabilities/{cve}", s.authMiddleware(http.HandlerFunc(s.handleVulnerabilityDetail)))
 
 	// Auth validation endpoint
 	s.mux.Handle("POST /api/auth/check", s.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -213,6 +213,11 @@ data:
         enabled: true
         scheduleHour: 6
 
+      vuln:
+        enabled: true
+        intervalHours: 6
+        nvdApiKey: "${NOCTIS_NVD_API_KEY}"
+
       dashboard:
         enabled: true
         port: 3000

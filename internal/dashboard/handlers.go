@@ -466,3 +466,19 @@ func (s *Server) handleVulnerabilities(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
+
+func (s *Server) handleVulnerabilityDetail(w http.ResponseWriter, r *http.Request) {
+	cveID := r.PathValue("cve")
+	if cveID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing CVE ID"})
+		return
+	}
+
+	detail, err := queryVulnerabilityDetail(r.Context(), s.pool, cveID)
+	if err != nil {
+		slog.Error("dashboard: vuln detail", "cve", cveID, "err", err)
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "vulnerability not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, detail)
+}

@@ -12,6 +12,7 @@ import Correlations from './pages/Correlations.jsx'
 import AnalyticalNotes from './pages/AnalyticalNotes.jsx'
 import Briefs from './pages/Briefs.jsx'
 import SystemStatus from './pages/SystemStatus.jsx'
+import Vulnerabilities from './pages/Vulnerabilities.jsx'
 
 // Simple client-side router (avoids react-router CDN version issues)
 function useRouter() {
@@ -65,6 +66,7 @@ function AppRoutes() {
     '/dashboard/graph': Graph,
     '/dashboard/correlations': Correlations,
     '/dashboard/notes': AnalyticalNotes,
+    '/dashboard/vulns': Vulnerabilities,
     '/dashboard/briefs': Briefs,
     '/dashboard/system': SystemStatus,
   }

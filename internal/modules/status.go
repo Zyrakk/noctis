@@ -39,6 +39,7 @@ const (
 	ModDashboard       ModuleID = "infra.dashboard"
 	ModDiscovery       ModuleID = "infra.discovery"
 	ModSourceAnalyzer  ModuleID = "infra.source_analyzer"
+	ModVulnIngestor    ModuleID = "infra.vuln_ingestor"
 )
 
 // ModuleStatus is the universal health report for any module or sub-module.

@@ -39,6 +39,7 @@ type Config struct {
 	Analyst      AnalystConfig      `yaml:"analyst"`
 	IOCLifecycle   IOCLifecycleConfig `yaml:"iocLifecycle"`
 	BriefGenerator BriefConfig        `yaml:"briefGenerator"`
+	Vuln           VulnConfig         `yaml:"vuln"`
 	LLMBrain       LLMConfig          `yaml:"llmBrain"`
 }
 
@@ -100,6 +101,13 @@ type IOCLifecycleConfig struct {
 type BriefConfig struct {
 	Enabled      bool `yaml:"enabled"`
 	ScheduleHour int  `yaml:"scheduleHour"`
+}
+
+// VulnConfig controls the vulnerability intelligence pipeline.
+type VulnConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	IntervalHours int    `yaml:"intervalHours"`
+	NVDAPIKey     string `yaml:"nvdApiKey"`
 }
 
 // SourcesConfig groups all ingest source configurations.

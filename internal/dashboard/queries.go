@@ -1865,3 +1865,55 @@ func queryVulnerabilities(ctx context.Context, pool *pgxpool.Pool, f vulnsFilter
 
 	return &VulnsResponse{Vulnerabilities: vulns, Total: total}, nil
 }
+
+// VulnDetail is the full vulnerability with all fields.
+type VulnDetail struct {
+	VulnListItem
+	CVSSV31Vector    *string    `json:"cvssVector,omitempty"`
+	CWEIDs           []string   `json:"cweIds"`
+	AffectedProducts []any      `json:"affectedProducts"`
+	ReferenceURLs    []any      `json:"referenceUrls"`
+	EPSSUpdatedAt    *time.Time `json:"epssUpdatedAt,omitempty"`
+	KEVDateAdded     *time.Time `json:"kevDateAdded,omitempty"`
+	KEVDueDate       *time.Time `json:"kevDueDate,omitempty"`
+	FirstSeenNoctis  *time.Time `json:"firstSeenNoctis,omitempty"`
+	LastSeenNoctis   *time.Time `json:"lastSeenNoctis,omitempty"`
+	CreatedAt        time.Time  `json:"createdAt"`
+}
+
+func queryVulnerabilityDetail(ctx context.Context, pool *pgxpool.Pool, cveID string) (*VulnDetail, error) {
+	var v VulnDetail
+	var affectedJSON, refsJSON []byte
+
+	err := pool.QueryRow(ctx, `
+		SELECT id, cve_id, description, cvss_v31_score, cvss_severity, cvss_v31_vector,
+		       epss_score, epss_percentile, epss_updated_at,
+		       kev_listed, kev_ransomware_use, kev_date_added, kev_due_date,
+		       exploit_available, dark_web_mentions,
+		       priority_score, priority_label,
+		       cwe_ids, affected_products, reference_urls,
+		       first_seen_noctis, last_seen_noctis,
+		       published_at, updated_at, created_at
+		FROM vulnerabilities WHERE cve_id = $1`, cveID).Scan(
+		&v.ID, &v.CVEID, &v.Description, &v.CVSSV31Score, &v.CVSSSeverity, &v.CVSSV31Vector,
+		&v.EPSSScore, &v.EPSSPercentile, &v.EPSSUpdatedAt,
+		&v.KEVListed, &v.KEVRansomwareUse, &v.KEVDateAdded, &v.KEVDueDate,
+		&v.ExploitAvailable, &v.DarkWebMentions,
+		&v.PriorityScore, &v.PriorityLabel,
+		&v.CWEIDs, &affectedJSON, &refsJSON,
+		&v.FirstSeenNoctis, &v.LastSeenNoctis,
+		&v.PublishedAt, &v.UpdatedAt, &v.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("vuln detail: %w", err)
+	}
+
+	if len(affectedJSON) > 0 {
+		json.Unmarshal(affectedJSON, &v.AffectedProducts)
+	}
+	if len(refsJSON) > 0 {
+		json.Unmarshal(refsJSON, &v.ReferenceURLs)
+	}
+
+	return &v, nil
+}

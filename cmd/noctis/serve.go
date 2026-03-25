@@ -28,6 +28,7 @@ import (
 	"github.com/Zyrakk/noctis/internal/models"
 	"github.com/Zyrakk/noctis/internal/modules"
 	"github.com/Zyrakk/noctis/internal/processor"
+	"github.com/Zyrakk/noctis/internal/vuln"
 )
 
 func newServeCmd() *cobra.Command {
@@ -304,6 +305,11 @@ func newServeCmd() *cobra.Command {
 			sourceAnalyzer := collector.NewSourceValueAnalyzer(pool)
 			registry.Register(sourceAnalyzer.Status())
 			go sourceAnalyzer.Run(pipelineCtx)
+
+			// Start vulnerability intelligence ingestor.
+			vulnIngestor := vuln.NewVulnIngestor(archiveStore, cfg.Vuln)
+			registry.Register(vulnIngestor.Status())
+			go vulnIngestor.Run(pipelineCtx)
 
 			// Build collector manager with status tracking.
 			collectorMgr := collector.NewCollectorManager(

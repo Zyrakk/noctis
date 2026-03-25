@@ -10,6 +10,7 @@ export function useApi(url, options = {}) {
 
   const fetchData = useCallback(async () => {
     if (!apiKey) return
+    if (!url) { setLoading(false); return }
 
     if (abortRef.current) abortRef.current.abort()
     const controller = new AbortController()
