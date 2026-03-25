@@ -38,7 +38,7 @@ data:
           enabled: false
 
         web:
-          enabled: false
+          enabled: true
           feeds:
             - name: "bleeping-computer"
               url: "https://www.bleepingcomputer.com/feed/"
@@ -230,6 +230,7 @@ data:
         port: 3000
         apiKey: "${NOCTIS_DASHBOARD_API_KEY}"
 
+      # Planned — not yet implemented
       dispatch:
         wazuh:
           enabled: false
