@@ -88,8 +88,8 @@ data:
 
       llm:
         provider: glm
-        baseURL: "https://open.bigmodel.cn/api/coding/paas/v4"
-        model: "glm-4.7"
+        baseURL: "https://api.z.ai/api/coding/paas/v4"
+        model: "glm-5-turbo"
         apiKey: "${NOCTIS_LLM_API_KEY}"
         maxTokens: 1024
         temperature: 0.1

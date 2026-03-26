@@ -184,6 +184,12 @@ func extractJSON(s string) (string, error) {
 				if json.Valid([]byte(inner)) {
 					return inner, nil
 				}
+				// JSON may be complete but trailing content was truncated — find last }.
+				if last := strings.LastIndex(inner, "}"); last >= 0 {
+					if candidate := strings.TrimSpace(inner[:last+1]); json.Valid([]byte(candidate)) {
+						return candidate, nil
+					}
+				}
 			}
 		}
 	}
