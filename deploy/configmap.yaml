@@ -147,7 +147,6 @@ data:
           - facebook.com
           - instagram.com
           - youtube.com
-          - t.me
           - olx.kz
           - m.olx.kz
           - 2gis.kz
@@ -190,6 +189,10 @@ data:
           - kali.org
           - voidstarsec.com
           - cipherlist.kz
+          - cve.org
+          - onion.as
+          - astanahub.com
+          - springer.com
 
       database:
         driver: postgres
