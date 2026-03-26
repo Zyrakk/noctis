@@ -207,14 +207,14 @@ function ModuleRow({ mod, isExpanded, onToggle }) {
 
   return React.createElement('div', null,
     React.createElement('div', {
-      className: `flex items-center gap-1.5 py-1.5 px-2 rounded ${hasDetail ? 'cursor-pointer hover:bg-white/[0.03]' : ''} transition-colors duration-150`,
+      className: `flex items-center gap-1.5 py-2 px-2 rounded ${hasDetail ? 'cursor-pointer hover:bg-white/[0.03]' : ''} transition-colors duration-150`,
       onClick: hasDetail ? onToggle : undefined,
     },
       React.createElement('span', {
         className: `inline-block w-[7px] h-[7px] rounded-full shrink-0 transition-colors duration-200 ${dot}`,
       }),
       React.createElement('span', {
-        className: 'text-[13px] font-medium text-noctis-text truncate',
+        className: 'text-[13px] font-medium text-noctis-text md:truncate',
       }, mod.name),
       badge && React.createElement('span', {
         className: `inline-flex items-center px-1 py-0 text-[9px] font-mono rounded border leading-4 shrink-0 ${badge}`,
@@ -317,7 +317,7 @@ function StageBox({ stage, expanded, onToggle, spending }) {
   if (!stage.modules.length) return null
 
   return React.createElement('div', {
-    className: 'border border-noctis-border/40 rounded-lg bg-noctis-surface/50 md:flex-1 md:min-w-0 w-full',
+    className: 'border border-noctis-border/40 rounded-lg bg-noctis-surface/50 md:flex-1 md:min-w-0 md:min-h-[280px] w-full',
   },
     React.createElement('div', {
       className: 'px-3 py-2 border-b border-noctis-border/20',
@@ -327,7 +327,7 @@ function StageBox({ stage, expanded, onToggle, spending }) {
       }, stage.label),
     ),
     React.createElement('div', {
-      className: 'p-1 grid grid-cols-2 md:grid-cols-1 gap-0',
+      className: 'p-1 grid grid-cols-2 md:grid-cols-1 gap-0.5 md:gap-0',
     },
       stage.modules.map(mod =>
         React.createElement(ModuleRow, {
@@ -406,7 +406,7 @@ export default function SystemStatus() {
     return els
   })
 
-  return React.createElement('div', { className: 'space-y-5' },
+  return React.createElement('div', { className: 'space-y-5 -mx-2 md:mx-0' },
     React.createElement('h1', {
       className: 'font-heading font-normal text-xl',
     }, 'System Status'),
@@ -429,7 +429,7 @@ export default function SystemStatus() {
     data?.available && React.createElement(HealthBanner, { modMap, lastUpdated }),
 
     data?.available && React.createElement('div', {
-      className: 'flex flex-col md:flex-row md:items-start gap-1 md:gap-0 overflow-x-auto',
+      className: 'flex flex-col md:flex-row md:items-stretch gap-1 md:gap-0 overflow-x-auto',
     }, pipeline),
   )
 }
