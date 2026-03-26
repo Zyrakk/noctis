@@ -1,209 +1,348 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
-import {
-  Activity, Radio, Cpu, Brain, GitBranch,
-  AlertTriangle, Loader, ChevronDown, ChevronRight, RefreshCw
-} from 'lucide-react'
+import { AlertTriangle, Loader, ChevronDown, ChevronRight } from 'lucide-react'
 
-const CATEGORY_META = {
-  collector: { title: 'Collectors', icon: Radio },
-  processor: { title: 'Processing Engine', icon: Cpu },
-  brain: { title: 'Intelligence Brain', icon: Brain },
-  infra: { title: 'Infrastructure', icon: GitBranch },
+// ── Pipeline stage mapping (module IDs from internal/modules/status.go) ──
+
+const PIPELINE_STAGES = [
+  {
+    key: 'collect',
+    label: 'Collect',
+    ids: new Set([
+      'collector.telegram', 'collector.rss', 'collector.paste',
+      'collector.forum', 'collector.leaksite', 'collector.specter',
+    ]),
+  },
+  {
+    key: 'classify',
+    label: 'Classify',
+    ids: new Set(['processor.classifier']),
+  },
+  {
+    key: 'process',
+    label: 'Process',
+    ids: new Set([
+      'processor.summarizer', 'processor.ioc_extractor',
+      'processor.entity_extractor', 'processor.graph_bridge',
+      'processor.librarian', 'processor.ioc_lifecycle',
+    ]),
+  },
+  {
+    key: 'analyze',
+    label: 'Analyze',
+    ids: new Set([
+      'brain.correlator', 'brain.analyst', 'brain.brief_generator',
+      'brain.query_engine', 'brain.attributor',
+    ]),
+  },
+  {
+    key: 'enrich',
+    label: 'Enrich',
+    ids: new Set([
+      'processor.enrichment', 'infra.vuln_ingestor', 'infra.source_analyzer',
+    ]),
+  },
+]
+
+const ON_DEMAND = new Set(['brain.query_engine'])
+const SCHEDULED = { 'brain.brief_generator': '06:00 UTC' }
+const HIDDEN = new Set(['infra.dashboard', 'infra.discovery'])
+
+const PROVIDER_BADGE = {
+  groq: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
+  glm: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400',
+  gemini: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
 }
 
-const CATEGORY_ORDER = ['collector', 'processor', 'brain', 'infra']
-
-function timeAgo(isoString) {
-  if (!isoString) return 'Never'
-  const t = new Date(isoString)
-  if (isNaN(t.getTime()) || t.getFullYear() < 2000) return 'Never'
-  const secs = Math.floor((Date.now() - t.getTime()) / 1000)
-  if (secs < 0) return 'Just now'
-  if (secs < 60) return `${secs}s ago`
-  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`
-  return `${Math.floor(secs / 86400)}d ago`
+const STATUS_DOT = {
+  running: 'bg-green-400',
+  degraded: 'bg-yellow-400',
+  down: 'bg-red-400',
+  idle: 'bg-noctis-dim',
+  disabled: 'bg-gray-600',
 }
 
-function formatNumber(n) {
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+function timeAgo(ts) {
+  if (!ts) return 'Never'
+  const d = new Date(ts)
+  if (isNaN(d.getTime()) || d.getFullYear() < 2000) return 'Never'
+  const s = Math.floor((Date.now() - d.getTime()) / 1000)
+  if (s < 0) return 'Just now'
+  if (s < 60) return `${s}s ago`
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
+}
+
+function fmtNum(n) {
   if (n == null) return '0'
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'
   return String(n)
 }
 
-// Determine module health: 'healthy', 'degraded', 'down', 'disabled'
-function moduleHealth(mod) {
-  if (!mod.enabled) return 'disabled'
-  if (!mod.running) return 'down'
-  if (mod.last_error) return 'degraded'
-  return 'healthy'
-}
+function modStatus(mod) {
+  if (!mod.enabled) return { s: 'disabled', label: 'Disabled' }
 
-const DOT_COLORS = {
-  healthy: 'bg-green-400',
-  degraded: 'bg-yellow-400',
-  down: 'bg-red-400',
-  disabled: 'bg-gray-500',
-}
-
-const STATUS_COLORS = {
-  healthy: 'text-noctis-muted',
-  degraded: 'text-yellow-400/80',
-  down: 'text-red-400/80',
-  disabled: 'text-noctis-dim',
-}
-
-const BORDER_ACCENT = {
-  down: 'border-l-2 border-l-red-400',
-  degraded: 'border-l-2 border-l-yellow-400',
-}
-
-function statusText(mod, health) {
-  switch (health) {
-    case 'disabled': return 'Disabled'
-    case 'down': return 'Down'
-    case 'degraded': {
-      const err = mod.last_error || 'unknown error'
-      return err.length > 60 ? 'Error: ' + err.slice(0, 57) + '\u2026' : 'Error: ' + err
-    }
-    case 'healthy':
-      return mod.total_processed > 0
-        ? `Running \u2014 ${formatNumber(mod.total_processed)} processed`
-        : 'Running'
-    default: return 'Unknown'
+  if (ON_DEMAND.has(mod.id)) {
+    if (mod.last_error) return { s: 'degraded', label: 'Error' }
+    if (!mod.total_processed && !mod.total_errors) return { s: 'idle', label: 'Ready' }
+    return { s: 'running', label: fmtNum(mod.total_processed) }
   }
+
+  if (SCHEDULED[mod.id]) {
+    if (mod.last_error) return { s: 'degraded', label: 'Error' }
+    if (mod.running || !mod.total_errors) {
+      const label = mod.total_processed > 0
+        ? `${fmtNum(mod.total_processed)} \u00b7 next ${SCHEDULED[mod.id]}`
+        : `Next ${SCHEDULED[mod.id]}`
+      return { s: 'running', label }
+    }
+  }
+
+  if (!mod.running) return { s: 'down', label: 'Down' }
+  if (mod.last_error) return { s: 'degraded', label: 'Error' }
+  return { s: 'running', label: fmtNum(mod.total_processed) }
 }
 
-// Small component that re-renders independently for the "Updated Xs ago" text
-function UpdatedAgo({ timestamp }) {
+function flattenMods(byCategory) {
+  const m = {}
+  for (const list of Object.values(byCategory))
+    for (const mod of list)
+      if (!HIDDEN.has(mod.id)) m[mod.id] = mod
+  return m
+}
+
+function buildStages(modMap) {
+  return PIPELINE_STAGES.map(st => ({
+    ...st,
+    modules: [...st.ids].filter(id => modMap[id]).map(id => modMap[id]),
+  }))
+}
+
+// ── Arrow connector ──────────────────────────────────────────────────────
+
+function Arrow() {
+  return React.createElement('div', {
+    className: 'flex items-center justify-center shrink-0 px-0 py-1 md:py-0 md:px-1.5',
+  },
+    React.createElement('svg', {
+      className: 'w-5 h-5 text-noctis-dim/40 rotate-90 md:rotate-0',
+      viewBox: '0 0 20 20',
+      fill: 'none',
+    },
+      React.createElement('path', {
+        d: 'M4 10h12M12 6l4 4-4 4',
+        stroke: 'currentColor',
+        strokeWidth: 1.5,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+      }),
+    ),
+  )
+}
+
+// ── Health banner ────────────────────────────────────────────────────────
+
+function HealthBanner({ modMap, lastUpdated }) {
   const [, tick] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => tick(n => n + 1), 5000)
+    const t = setInterval(() => tick(n => n + 1), 1000)
     return () => clearInterval(t)
   }, [])
-  if (!timestamp) return null
-  return React.createElement('div', {
-    className: 'flex items-center gap-1.5 text-[11px] text-noctis-dim'
-  },
-    React.createElement(RefreshCw, { className: 'w-3 h-3' }),
-    `Updated ${timeAgo(new Date(timestamp).toISOString())}`,
-  )
-}
 
-function healthBanner(modules) {
-  const allMods = Object.values(modules).flat()
-  const enabled = allMods.filter(m => m.enabled)
-  const down = enabled.filter(m => !m.running)
-  const degraded = enabled.filter(m => m.running && m.last_error)
-
-  let dotColor, text
-  if (down.length > 0) {
-    dotColor = 'bg-red-400'
-    text = down.length === 1
-      ? `${down[0].name} is down`
-      : `${down.length} modules are down`
-  } else if (degraded.length > 0) {
-    dotColor = 'bg-yellow-400'
-    text = `${degraded.length} of ${enabled.length} modules have issues`
-  } else {
-    dotColor = 'bg-green-400'
-    text = 'All systems operational'
+  const all = Object.values(modMap)
+  const enabled = all.filter(m => m.enabled)
+  const down = [], degraded = []
+  for (const m of enabled) {
+    const { s } = modStatus(m)
+    if (s === 'down') down.push(m)
+    else if (s === 'degraded') degraded.push(m)
   }
 
+  let dotCls, text, bgCls
+  if (down.length) {
+    dotCls = 'bg-red-400'
+    text = down.length === 1 ? `${down[0].name} is down` : `${down.length} modules are down`
+    bgCls = 'bg-red-500/5 border-red-500/20'
+  } else if (degraded.length) {
+    dotCls = 'bg-yellow-400'
+    text = `${degraded.length} of ${enabled.length} modules have issues`
+    bgCls = 'bg-yellow-500/5 border-yellow-500/20'
+  } else {
+    dotCls = 'bg-green-400'
+    text = 'All systems operational'
+    bgCls = 'bg-green-500/5 border-green-500/20'
+  }
+
+  const ago = lastUpdated
+    ? `Updated ${Math.floor((Date.now() - lastUpdated) / 1000)}s ago`
+    : null
+
   return React.createElement('div', {
-    className: 'flex items-center gap-3 px-4 py-3 rounded border border-noctis-border/50 bg-noctis-surface'
+    className: `flex items-center justify-between px-4 py-2.5 rounded-lg border ${bgCls}`,
   },
-    React.createElement('span', { className: `inline-block w-2.5 h-2.5 rounded-full ${dotColor}` }),
-    React.createElement('span', { className: 'text-sm text-noctis-text' }, text),
+    React.createElement('div', { className: 'flex items-center gap-2.5' },
+      React.createElement('span', {
+        className: `inline-block w-2 h-2 rounded-full ${dotCls}`,
+      }),
+      React.createElement('span', { className: 'text-sm text-noctis-text' }, text),
+    ),
+    ago && React.createElement('span', {
+      className: 'text-[11px] text-noctis-dim font-mono',
+    }, ago),
   )
 }
 
-function ModuleCard({ mod, expanded, onToggle }) {
-  const health = moduleHealth(mod)
-  const extraEntries = mod.extra ? Object.entries(mod.extra) : []
-  const hasDetails = mod.worker_count > 0 || mod.queue_depth > 0 || mod.last_error || extraEntries.length > 0
+// ── Module row ───────────────────────────────────────────────────────────
 
-  const borderClass = BORDER_ACCENT[health] || ''
+function ModuleRow({ mod, isExpanded, onToggle }) {
+  const { s, label } = modStatus(mod)
+  const dot = STATUS_DOT[s]
+  const badge = mod.ai_provider ? PROVIDER_BADGE[mod.ai_provider] : null
+  const extras = mod.extra ? Object.entries(mod.extra) : []
+  const hasDetail = mod.worker_count > 0 || mod.last_error || extras.length > 0 || mod.last_activity_at
 
-  return React.createElement('div', {
-    className: `border border-noctis-border/50 rounded p-4 hover:border-noctis-border transition-colors duration-200 ${borderClass}`,
-  },
-    // Row 1: dot + name + chevron
+  return React.createElement('div', null,
     React.createElement('div', {
-      className: `flex items-center gap-2.5 ${hasDetails ? 'cursor-pointer select-none' : ''}`,
-      onClick: hasDetails ? onToggle : undefined,
+      className: `flex items-center gap-1.5 py-1.5 px-2 rounded ${hasDetail ? 'cursor-pointer hover:bg-white/[0.03]' : ''} transition-colors duration-150`,
+      onClick: hasDetail ? onToggle : undefined,
     },
-      React.createElement('span', { className: `inline-block w-2 h-2 rounded-full ${DOT_COLORS[health]}` }),
-      React.createElement('span', { className: 'text-sm font-medium text-noctis-text flex-1' }, mod.name),
-      hasDetails && React.createElement(
-        expanded ? ChevronDown : ChevronRight,
-        { className: 'w-3.5 h-3.5 text-noctis-dim' }
-      ),
-    ),
-
-    // Row 2: status one-liner
-    React.createElement('div', {
-      className: `text-xs mt-1.5 ml-[18px] ${STATUS_COLORS[health]}`,
-      title: health === 'degraded' ? mod.last_error : undefined,
-    }, statusText(mod, health)),
-
-    // Row 3: AI badge + last active
-    React.createElement('div', { className: 'flex items-center gap-3 mt-2 ml-[18px]' },
-      mod.ai_provider && React.createElement('span', {
-        className: 'inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono rounded bg-noctis-purple/10 border border-noctis-purple/30 text-noctis-purple-light'
+      React.createElement('span', {
+        className: `inline-block w-[7px] h-[7px] rounded-full shrink-0 transition-colors duration-200 ${dot}`,
+      }),
+      React.createElement('span', {
+        className: 'text-[13px] font-medium text-noctis-text truncate',
+      }, mod.name),
+      badge && React.createElement('span', {
+        className: `inline-flex items-center px-1 py-0 text-[9px] font-mono rounded border leading-4 shrink-0 ${badge}`,
       }, mod.ai_provider),
-      React.createElement('span', { className: 'text-[11px] text-noctis-dim' },
-        timeAgo(mod.last_activity_at),
+      React.createElement('span', { className: 'flex-1 min-w-0' }),
+      React.createElement('span', {
+        className: 'text-[11px] font-mono text-noctis-dim shrink-0 whitespace-nowrap',
+      }, label),
+      hasDetail && React.createElement(
+        isExpanded ? ChevronDown : ChevronRight,
+        { className: 'w-3 h-3 text-noctis-dim/60 shrink-0 ml-0.5' },
       ),
     ),
 
-    // Expanded details (slide-down)
-    expanded && React.createElement('div', {
-      className: 'mt-3 ml-[18px] pt-3 border-t border-noctis-border/30 space-y-1.5 animate-expand-down'
+    isExpanded && React.createElement('div', {
+      className: 'ml-[15px] pl-2 py-1.5 border-l border-noctis-border/30 space-y-1 animate-expand-down text-[11px]',
     },
-      mod.total_processed > 0 && React.createElement('div', {
-        className: 'text-[11px] text-noctis-dim flex justify-between'
-      },
-        React.createElement('span', null, 'Processed'),
-        React.createElement('span', { className: 'font-mono text-noctis-muted' }, formatNumber(mod.total_processed)),
-      ),
-      mod.total_errors > 0 && React.createElement('div', {
-        className: 'text-[11px] text-noctis-dim flex justify-between'
-      },
-        React.createElement('span', null, 'Errors'),
-        React.createElement('span', { className: 'font-mono text-red-400' }, formatNumber(mod.total_errors)),
-      ),
       mod.worker_count > 0 && React.createElement('div', {
-        className: 'text-[11px] text-noctis-dim flex justify-between'
+        className: 'flex justify-between text-noctis-dim',
       },
         React.createElement('span', null, 'Workers'),
         React.createElement('span', { className: 'font-mono text-noctis-muted' }, mod.worker_count),
       ),
-      mod.queue_depth > 0 && React.createElement('div', {
-        className: 'text-[11px] text-noctis-dim flex justify-between'
+      mod.last_activity_at && React.createElement('div', {
+        className: 'flex justify-between text-noctis-dim',
       },
-        React.createElement('span', null, 'Queue'),
-        React.createElement('span', { className: 'font-mono text-noctis-muted' }, `${mod.queue_depth} items`),
+        React.createElement('span', null, 'Last active'),
+        React.createElement('span', { className: 'font-mono text-noctis-muted' }, timeAgo(mod.last_activity_at)),
+      ),
+      mod.total_errors > 0 && React.createElement('div', {
+        className: 'flex justify-between text-noctis-dim',
+      },
+        React.createElement('span', null, 'Errors'),
+        React.createElement('span', {
+          className: `font-mono ${mod.total_errors > 10 ? 'text-red-400' : 'text-yellow-400'}`,
+        }, fmtNum(mod.total_errors)),
       ),
       mod.last_error && React.createElement('div', {
-        className: 'mt-1.5 text-[11px] text-red-400/80 break-words'
+        className: 'text-red-400/80 break-words mt-0.5',
       },
         React.createElement(AlertTriangle, { className: 'w-3 h-3 inline mr-1 align-text-bottom' }),
-        mod.last_error,
+        mod.last_error.length > 120 ? mod.last_error.slice(0, 117) + '\u2026' : mod.last_error,
       ),
-      extraEntries.length > 0 && extraEntries.map(([k, v]) =>
+      extras.map(([k, v]) =>
         React.createElement('div', {
-          key: k, className: 'text-[11px] text-noctis-dim flex justify-between'
+          key: k, className: 'flex justify-between text-noctis-dim',
         },
           React.createElement('span', null, k.replace(/_/g, ' ')),
           React.createElement('span', { className: 'font-mono text-noctis-muted' }, String(v)),
-        )
+        ),
       ),
     ),
   )
 }
+
+// ── Spending bar (Gemini budget) ─────────────────────────────────────────
+
+function SpendingBar({ spending }) {
+  if (!spending) return null
+  const cost = spending.estimated_cost_usd || 0
+  const limit = spending.budget_limit_usd || 0
+
+  if (limit <= 0) {
+    return React.createElement('div', {
+      className: 'px-3 py-2 border-t border-noctis-border/20 flex justify-between text-[11px] text-noctis-dim',
+    },
+      React.createElement('span', null, 'Gemini'),
+      React.createElement('span', { className: 'font-mono' }, `$${cost.toFixed(2)}`),
+    )
+  }
+
+  const pct = (cost / limit) * 100
+  const bar = pct > 80 ? 'bg-red-400' : pct > 60 ? 'bg-yellow-400' : 'bg-green-400'
+
+  return React.createElement('div', {
+    className: 'px-3 py-2 border-t border-noctis-border/20',
+  },
+    React.createElement('div', {
+      className: 'flex justify-between text-[11px] text-noctis-dim mb-1',
+    },
+      React.createElement('span', null, 'Gemini'),
+      React.createElement('span', { className: 'font-mono' },
+        `$${cost.toFixed(2)} / $${limit.toFixed(2)}`,
+      ),
+    ),
+    React.createElement('div', {
+      className: 'w-full h-[3px] rounded-full bg-noctis-border/30',
+    },
+      React.createElement('div', {
+        className: `h-full rounded-full transition-all duration-500 ${bar}`,
+        style: { width: `${Math.min(100, pct)}%` },
+      }),
+    ),
+  )
+}
+
+// ── Stage box ────────────────────────────────────────────────────────────
+
+function StageBox({ stage, expanded, onToggle, spending }) {
+  if (!stage.modules.length) return null
+
+  return React.createElement('div', {
+    className: 'border border-noctis-border/40 rounded-lg bg-noctis-surface/50 md:flex-1 md:min-w-0 w-full',
+  },
+    React.createElement('div', {
+      className: 'px-3 py-2 border-b border-noctis-border/20',
+    },
+      React.createElement('span', {
+        className: 'text-[11px] font-semibold uppercase tracking-[0.1em] text-noctis-dim',
+      }, stage.label),
+    ),
+    React.createElement('div', {
+      className: 'p-1 grid grid-cols-2 md:grid-cols-1 gap-0',
+    },
+      stage.modules.map(mod =>
+        React.createElement(ModuleRow, {
+          key: mod.id,
+          mod,
+          isExpanded: expanded.has(mod.id),
+          onToggle: () => onToggle(mod.id),
+        }),
+      ),
+    ),
+    spending && React.createElement(SpendingBar, { spending }),
+  )
+}
+
+// ── Main component ───────────────────────────────────────────────────────
 
 export default function SystemStatus() {
   const { apiKey, logout } = useAuth()
@@ -225,101 +364,72 @@ export default function SystemStatus() {
   const fetchData = useCallback(async () => {
     if (!apiKey) return
     if (abortRef.current) abortRef.current.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
-
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
     try {
       const res = await fetch('/api/system/status', {
-        signal: controller.signal,
-        headers: { 'Authorization': `Bearer ${apiKey}` },
+        signal: ctrl.signal,
+        headers: { Authorization: `Bearer ${apiKey}` },
       })
       if (res.status === 401) { logout(); return }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      setData(json)
+      setData(await res.json())
       setError(null)
       setLastUpdated(Date.now())
-    } catch (err) {
-      if (err.name !== 'AbortError') setError(err.message)
+    } catch (e) {
+      if (e.name !== 'AbortError') setError(e.message)
     } finally {
       setLoading(false)
     }
   }, [apiKey, logout])
 
-  // Initial fetch + 10s polling
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 10000)
-    return () => {
-      clearInterval(interval)
-      if (abortRef.current) abortRef.current.abort()
-    }
+    const iv = setInterval(fetchData, 10000)
+    return () => { clearInterval(iv); abortRef.current?.abort() }
   }, [fetchData])
 
-  const mods = data?.modules || {}
+  const modMap = data?.modules ? flattenMods(data.modules) : {}
+  const stages = buildStages(modMap)
+  const visible = stages.filter(st => st.modules.length > 0)
 
-  return React.createElement('div', { className: 'space-y-6' },
-    // Header row with refresh indicator
-    React.createElement('div', { className: 'flex items-center justify-between' },
-      React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'System Status'),
-      React.createElement(UpdatedAgo, { timestamp: lastUpdated }),
-    ),
+  const pipeline = visible.flatMap((st, i) => {
+    const els = []
+    if (i > 0) els.push(React.createElement(Arrow, { key: `arrow-${i}` }))
+    els.push(React.createElement(StageBox, {
+      key: st.key,
+      stage: st,
+      expanded,
+      onToggle: toggleExpand,
+      spending: st.key === 'analyze' ? data?.gemini_spending : null,
+    }))
+    return els
+  })
 
-    // Loading
-    loading && React.createElement('div', { className: 'flex items-center justify-center py-20 text-noctis-dim' },
+  return React.createElement('div', { className: 'space-y-5' },
+    React.createElement('h1', {
+      className: 'font-heading font-normal text-xl',
+    }, 'System Status'),
+
+    loading && !data && React.createElement('div', {
+      className: 'flex items-center justify-center py-20 text-noctis-dim',
+    },
       React.createElement(Loader, { className: 'w-5 h-5 animate-spin mr-2' }),
-      'Loading system status...',
+      'Loading system status\u2026',
     ),
 
-    // Error
-    error && React.createElement('div', { className: 'border border-red-500/30 rounded p-4 text-sm text-red-400' },
-      'Failed to load system status: ', error,
-    ),
+    error && React.createElement('div', {
+      className: 'border border-red-500/30 rounded p-4 text-sm text-red-400',
+    }, 'Failed to load system status: ', error),
 
-    // Not available
     !loading && data && !data.available && React.createElement('div', {
-      className: 'border border-noctis-border/50 rounded p-8 text-center text-noctis-dim text-sm'
+      className: 'border border-noctis-border/50 rounded p-8 text-center text-noctis-dim text-sm',
     }, 'Module status tracking is not available.'),
 
-    // Health banner
-    !loading && data?.available && healthBanner(mods),
+    data?.available && React.createElement(HealthBanner, { modMap, lastUpdated }),
 
-    // Sections grouped by category
-    !loading && data?.available && CATEGORY_ORDER.filter(cat => mods[cat]?.length > 0).map(cat => {
-      const meta = CATEGORY_META[cat] || { title: cat, icon: Activity }
-      const Icon = meta.icon
-      const items = mods[cat]
-      const enabledItems = items.filter(m => m.enabled)
-      const healthyCt = enabledItems.filter(m => moduleHealth(m) === 'healthy').length
-      const sectionDot = enabledItems.length === 0 ? 'bg-gray-500'
-        : healthyCt === enabledItems.length ? 'bg-green-400'
-        : healthyCt > 0 ? 'bg-yellow-400'
-        : 'bg-red-400'
-
-      return React.createElement('div', { key: cat },
-        // Section header with aggregate health
-        React.createElement('div', { className: 'flex items-center gap-2 mb-3' },
-          React.createElement(Icon, { className: 'w-4 h-4 text-noctis-purple' }),
-          React.createElement('h2', { className: 'text-sm font-medium text-noctis-text' }, meta.title),
-          React.createElement('span', { className: 'text-xs text-noctis-dim' },
-            `\u2014 ${healthyCt}/${enabledItems.length} healthy`,
-          ),
-          React.createElement('span', {
-            className: `inline-block w-1.5 h-1.5 rounded-full ${sectionDot}`
-          }),
-        ),
-        // Card grid
-        React.createElement('div', {
-          className: 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3'
-        },
-          items.map(mod => React.createElement(ModuleCard, {
-            key: mod.id,
-            mod,
-            expanded: expanded.has(mod.id),
-            onToggle: () => toggleExpand(mod.id),
-          })),
-        ),
-      )
-    }),
+    data?.available && React.createElement('div', {
+      className: 'flex flex-col md:flex-row md:items-start gap-1 md:gap-0 overflow-x-auto',
+    }, pipeline),
   )
 }
