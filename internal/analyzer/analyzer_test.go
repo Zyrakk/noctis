@@ -72,6 +72,11 @@ func TestExtractJSON(t *testing.T) {
 		{"preamble with lang tag", "Based on analysis:\n\n```json\n{\"a\":\"b\"}\n```\n", `{"a":"b"}`},
 		{"preamble and postamble", "Result:\n{\"a\":\"b\"}\nNote: done.", `{"a":"b"}`},
 		{"real classify response", "Here is the classification:\n\n```json\n{\"category\":\"malware_sample\",\"confidence\":0.9}\n```", `{"category":"malware_sample","confidence":0.9}`},
+		// Production failures: postamble after code fence contains {} which confused old LastIndexByte logic.
+		{"fence with postamble braces", "```json\n{\"a\":\"b\"}\n```\n\nNote: based on {rules}.", `{"a":"b"}`},
+		{"preamble fence postamble braces", "Here is the classification:\n\n```json\n{\"category\":\"access_broker\",\"confidence\":0.8}\n```\n\nThis analysis is based on {{classification rules}}.", `{"category":"access_broker","confidence":0.8}`},
+		{"prose fence array postamble", "After analyzing the content:\n\n```json\n[{\"type\":\"ip\",\"value\":\"1.2.3.4\"}]\n```\n\nThese IOCs were found in {context}.", `[{"type":"ip","value":"1.2.3.4"}]`},
+		{"truncated response no closing fence", "```json\n{\"a\":\"b\",\"c\":\"d\"}", `{"a":"b","c":"d"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -151,16 +151,34 @@ func (a *Analyzer) renderTemplate(name string, data any) (string, error) {
 
 // extractJSON extracts a JSON object or array from an LLM response that may
 // contain preamble text, markdown code fences, or postamble commentary.
-// It finds the first { or [ and the last matching } or ], returning only
-// the JSON substring. This handles all common LLM response formats:
+// It first strips code fences to isolate the inner content, then finds the
+// first { or [ and last matching } or ]. This handles all common formats:
 //   - Raw JSON: {"key": "value"}
 //   - Code-fenced: ```json\n{"key": "value"}\n```
-//   - Preamble: "Here is the output:\n\n```\n{"key": "value"}\n```"
-//   - Postamble: {"key": "value"}\n\nNote: this is my analysis.
+//   - Preamble + fence: "Here is the output:\n\n```\n{"key": "value"}\n```"
+//   - Preamble + fence + postamble: "Result:\n```json\n{...}\n```\nNote: ..."
+//   - No fence with postamble: {"key": "value"}\n\nNote: this is my analysis.
 func extractJSON(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
 		return s
+	}
+
+	// Strip code fences first. This prevents postamble text (after the
+	// closing ```) from polluting brace matching when it contains {/}.
+	if idx := strings.Index(s, "```"); idx >= 0 {
+		rest := s[idx+3:]
+		// Skip the optional language tag (e.g. "json") to the next newline.
+		if nl := strings.Index(rest, "\n"); nl >= 0 {
+			inner := rest[nl+1:]
+			// Find the closing fence.
+			if close := strings.Index(inner, "```"); close >= 0 {
+				s = strings.TrimSpace(inner[:close])
+			} else {
+				// Opening fence but no closing fence (truncated response).
+				s = strings.TrimSpace(inner)
+			}
+		}
 	}
 
 	// Find the first JSON start character.
