@@ -97,7 +97,7 @@ data:
         retries: 3
         maxConcurrent: 2
         requestsPerMinute: 20
-        tokensPerMinute: 3000
+        tokensPerMinute: 1500
 
       llmFast:
         provider: groq
