@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useApi, apiFetch } from '../hooks/useApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import SeverityBadge from '../components/SeverityBadge.jsx'
-import { Search, X, ChevronLeft, ChevronRight, Filter, Shield, ExternalLink } from 'lucide-react'
+import { Search, X, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, Shield, ExternalLink } from 'lucide-react'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const PAGE_SIZE = 30
@@ -16,6 +16,7 @@ export default function Findings() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [copiedIOC, setCopiedIOC] = useState(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
 
   // Swipe-to-dismiss state for detail panel
   const [panelDragY, setPanelDragY] = React.useState(0)
@@ -43,6 +44,7 @@ export default function Findings() {
   const findings = data?.findings || []
   const total = data?.total || 0
   const totalPages = Math.ceil(total / PAGE_SIZE)
+  const activeFilterCount = [filters.category, filters.subCategory, filters.severity, filters.source, filters.q].filter(Boolean).length
 
   const loadDetail = useCallback(async (id) => {
     setSelectedId(id)
@@ -109,8 +111,8 @@ export default function Findings() {
   }
 
   return React.createElement('div', { className: 'flex gap-6 min-h-[calc(100vh-3rem)]' },
-    // Filters sidebar (desktop only)
-    React.createElement('div', {
+    // Filters sidebar (desktop only, collapsible)
+    showFilters && React.createElement('div', {
       className: 'hidden lg:block w-56 flex-shrink-0 space-y-5'
     },
       React.createElement('div', { className: 'flex items-center gap-2 text-sm font-medium text-noctis-muted' },
@@ -214,15 +216,25 @@ export default function Findings() {
         ),
       ),
 
-      // Mobile filter button
+      // Filter toggle button
       React.createElement('button', {
-        onClick: () => setFiltersOpen(true),
-        className: 'lg:hidden flex items-center gap-2 px-3 py-2 border border-noctis-border/50 rounded text-sm text-noctis-muted mb-4 cursor-pointer'
+        onClick: () => {
+          if (window.matchMedia('(min-width: 1024px)').matches) {
+            setShowFilters(f => !f)
+          } else {
+            setFiltersOpen(true)
+          }
+        },
+        className: 'flex items-center gap-2 px-3 py-1.5 border border-noctis-border/50 rounded text-sm text-noctis-muted mb-4 cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150'
       },
-        React.createElement(Filter, { className: 'w-4 h-4' }),
+        React.createElement(Filter, { className: 'w-3.5 h-3.5' }),
         'Filters',
-        (filters.category || filters.severity || filters.source || filters.q) &&
-          React.createElement('span', { className: 'w-2 h-2 rounded-full bg-noctis-purple' }),
+        activeFilterCount > 0 && React.createElement('span', {
+          className: 'text-[10px] px-1.5 py-0.5 bg-noctis-purple/20 text-noctis-purple-light rounded-full',
+        }, `${activeFilterCount} active`),
+        React.createElement(showFilters ? ChevronUp : ChevronDown, {
+          className: 'w-3 h-3 hidden lg:block',
+        }),
       ),
 
       // Table (desktop only)

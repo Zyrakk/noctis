@@ -1,7 +1,7 @@
 import React from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
-  LayoutDashboard, Search, Shield, Globe, Network, LogOut, Activity, Menu, X, MonitorCheck, FileText, GitBranch, BookOpen, Bug, MessageSquare, Radar
+  LayoutDashboard, Search, Shield, Globe, Network, LogOut, Activity, Menu, X, MonitorCheck, FileText, GitBranch, BookOpen, Bug, MessageSquare, Radar, ChevronsLeft, ChevronsRight
 } from 'lucide-react'
 
 const navItems = [
@@ -42,10 +42,20 @@ function isActive(itemPath, currentPath) {
 export default function Layout({ children, currentPath, navigate }) {
   const { logout } = useAuth()
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  const [collapsed, setCollapsed] = React.useState(() => {
+    try { return localStorage.getItem('noctis-sidebar-collapsed') === 'true' } catch { return false }
+  })
+  const toggleCollapsed = () => {
+    setCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem('noctis-sidebar-collapsed', String(next)) } catch {}
+      return next
+    })
+  }
 
   // Desktop sidebar (lg:translate-x-0, hidden on mobile unless hamburger opens it)
   const sidebar = React.createElement('aside', {
-    className: `fixed top-0 left-0 h-screen w-52 bg-noctis-bg border-r border-noctis-border/50 flex flex-col z-50 transition-transform duration-200 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`
+    className: `fixed top-0 left-0 h-screen w-52 ${collapsed ? 'lg:w-[52px]' : ''} bg-noctis-bg border-r border-noctis-border/50 flex flex-col z-50 overflow-hidden transition-all duration-200 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`
   },
     // Logo
     React.createElement('div', {
@@ -72,7 +82,8 @@ export default function Layout({ children, currentPath, navigate }) {
         React.createElement('button', {
           key: item.path,
           onClick: () => { navigate(item.path); setMobileOpen(false) },
-          className: `w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium cursor-pointer transition-all duration-150 ${
+          title: item.label,
+          className: `w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium cursor-pointer whitespace-nowrap transition-all duration-150 ${
             isActive(item.path, currentPath)
               ? 'bg-noctis-surface text-noctis-text border-l-2 border-noctis-purple pl-[11px]'
               : 'text-noctis-muted hover:text-noctis-text hover:bg-noctis-surface/50'
@@ -84,11 +95,25 @@ export default function Layout({ children, currentPath, navigate }) {
       )
     ),
 
+    // Collapse toggle (desktop only)
+    React.createElement('div', {
+      className: 'hidden lg:flex px-3 py-1',
+    },
+      React.createElement('button', {
+        onClick: toggleCollapsed,
+        className: 'w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium text-noctis-dim hover:text-noctis-muted hover:bg-noctis-surface/50 cursor-pointer whitespace-nowrap transition-colors duration-150',
+        title: collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+      },
+        React.createElement(collapsed ? ChevronsRight : ChevronsLeft, { className: 'w-3.5 h-3.5 flex-shrink-0' }),
+        collapsed ? 'Expand' : 'Collapse',
+      ),
+    ),
+
     // Logout
     React.createElement('div', { className: 'p-3 border-t border-noctis-border/50' },
       React.createElement('button', {
         onClick: logout,
-        className: 'w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium text-noctis-dim hover:text-red-400 hover:bg-red-500/5 cursor-pointer transition-colors duration-200'
+        className: 'w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium text-noctis-dim hover:text-red-400 hover:bg-red-500/5 cursor-pointer whitespace-nowrap transition-colors duration-200'
       },
         React.createElement(LogOut, { className: 'w-3.5 h-3.5' }),
         'Logout',
@@ -169,7 +194,7 @@ export default function Layout({ children, currentPath, navigate }) {
     sidebar,
     // Main content
     React.createElement('main', {
-      className: 'ml-0 lg:ml-52 min-h-screen pt-14 lg:pt-0 pb-24 lg:pb-0'
+      className: `ml-0 ${collapsed ? 'lg:ml-[52px]' : 'lg:ml-52'} min-h-screen pt-14 lg:pt-0 pb-24 lg:pb-0 transition-[margin] duration-200`
     },
       React.createElement('div', { key: currentPath, className: 'p-4 lg:p-6 animate-page-enter' }, children),
     ),
