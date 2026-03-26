@@ -151,61 +151,93 @@ func (a *Analyzer) renderTemplate(name string, data any) (string, error) {
 
 // extractJSON extracts a JSON object or array from an LLM response that may
 // contain preamble text, markdown code fences, or postamble commentary.
-// It first strips code fences to isolate the inner content, then finds the
-// first { or [ and last matching } or ]. This handles all common formats:
-//   - Raw JSON: {"key": "value"}
-//   - Code-fenced: ```json\n{"key": "value"}\n```
-//   - Preamble + fence: "Here is the output:\n\n```\n{"key": "value"}\n```"
-//   - Preamble + fence + postamble: "Result:\n```json\n{...}\n```\nNote: ..."
-//   - No fence with postamble: {"key": "value"}\n\nNote: this is my analysis.
-func extractJSON(s string) string {
+// It validates that the extracted content is well-formed JSON before returning.
+// Returns an error if no valid JSON can be found (e.g. prose-only responses).
+func extractJSON(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
-		return s
+		return "", fmt.Errorf("no valid JSON found in LLM response (len=0)")
 	}
 
-	// Strip code fences first. This prevents postamble text (after the
-	// closing ```) from polluting brace matching when it contains {/}.
+	// Direct JSON — starts with { or [
+	if s[0] == '{' || s[0] == '[' {
+		if candidate, ok := extractBalanced(s, 0); ok && json.Valid([]byte(candidate)) {
+			return candidate, nil
+		}
+	}
+
+	// Code fence — find ```json or ``` blocks.
 	if idx := strings.Index(s, "```"); idx >= 0 {
 		rest := s[idx+3:]
 		// Skip the optional language tag (e.g. "json") to the next newline.
 		if nl := strings.Index(rest, "\n"); nl >= 0 {
 			inner := rest[nl+1:]
 			// Find the closing fence.
-			if close := strings.Index(inner, "```"); close >= 0 {
-				s = strings.TrimSpace(inner[:close])
+			if close := strings.Index(inner, "```"); close > 0 {
+				inner = strings.TrimSpace(inner[:close])
+				if json.Valid([]byte(inner)) {
+					return inner, nil
+				}
 			} else {
 				// Opening fence but no closing fence (truncated response).
-				s = strings.TrimSpace(inner)
+				inner = strings.TrimSpace(inner)
+				if json.Valid([]byte(inner)) {
+					return inner, nil
+				}
 			}
 		}
 	}
 
-	// Find the first JSON start character.
-	startObj := strings.Index(s, "{")
-	startArr := strings.Index(s, "[")
-
-	start := -1
-	var closeChar byte
-	if startObj >= 0 && (startArr < 0 || startObj <= startArr) {
-		start = startObj
-		closeChar = '}'
-	} else if startArr >= 0 {
-		start = startArr
-		closeChar = ']'
+	// Last resort: scan for the first valid JSON object or array.
+	for i := 0; i < len(s); i++ {
+		if s[i] == '{' || s[i] == '[' {
+			if candidate, ok := extractBalanced(s, i); ok && json.Valid([]byte(candidate)) {
+				return candidate, nil
+			}
+		}
 	}
 
-	if start < 0 {
-		return s // no JSON found, return as-is for error reporting
+	return "", fmt.Errorf("no valid JSON found in LLM response (len=%d)", len(s))
+}
+
+// extractBalanced finds the balanced JSON structure starting at position start
+// by counting matching open/close characters while respecting JSON strings.
+func extractBalanced(s string, start int) (string, bool) {
+	opener := s[start]
+	closer := byte('}')
+	if opener == '[' {
+		closer = ']'
 	}
 
-	// Find the last matching close character.
-	end := strings.LastIndexByte(s, closeChar)
-	if end <= start {
-		return s
+	depth := 0
+	inString := false
+	escape := false
+	for i := start; i < len(s); i++ {
+		if escape {
+			escape = false
+			continue
+		}
+		if s[i] == '\\' && inString {
+			escape = true
+			continue
+		}
+		if s[i] == '"' {
+			inString = !inString
+			continue
+		}
+		if inString {
+			continue
+		}
+		if s[i] == opener {
+			depth++
+		} else if s[i] == closer {
+			depth--
+			if depth == 0 {
+				return s[start : i+1], true
+			}
+		}
 	}
-
-	return s[start : end+1]
+	return "", false
 }
 
 // truncate returns the first n characters of s, appending "..." if truncated.
@@ -240,8 +272,12 @@ func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matche
 		return nil, fmt.Errorf("analyzer: classify LLM call: %w", err)
 	}
 
+	extracted, err := extractJSON(resp.Content)
+	if err != nil {
+		return nil, fmt.Errorf("analyzer: classify parse: %w — response starts with: %.100s", err, resp.Content)
+	}
 	var result classifyResponse
-	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extracted), &result); err != nil {
 		return nil, fmt.Errorf("analyzer: classify parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 	return &result, nil
@@ -266,8 +302,12 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 		return nil, fmt.Errorf("analyzer: extract_iocs LLM call: %w", err)
 	}
 
+	extracted, err := extractJSON(resp.Content)
+	if err != nil {
+		return nil, fmt.Errorf("analyzer: extract_iocs parse: %w — response starts with: %.100s", err, resp.Content)
+	}
 	var entries []iocEntry
-	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &entries); err != nil {
+	if err := json.Unmarshal([]byte(extracted), &entries); err != nil {
 		return nil, fmt.Errorf("analyzer: extract_iocs parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
@@ -334,8 +374,12 @@ func (a *Analyzer) ExtractEntities(ctx context.Context, finding *models.Finding,
 		return nil, fmt.Errorf("analyzer: extract_entities LLM call: %w", err)
 	}
 
+	extracted, err := extractJSON(resp.Content)
+	if err != nil {
+		return nil, fmt.Errorf("analyzer: extract_entities parse: %w — response starts with: %.100s", err, resp.Content)
+	}
 	var result EntityExtractionResult
-	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extracted), &result); err != nil {
 		return nil, fmt.Errorf("analyzer: extract_entities parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 	return &result, nil
@@ -367,8 +411,12 @@ func (a *Analyzer) AssessSeverity(ctx context.Context, finding *models.Finding, 
 		return models.SeverityInfo, fmt.Errorf("analyzer: severity LLM call: %w", err)
 	}
 
+	extracted, err := extractJSON(resp.Content)
+	if err != nil {
+		return models.SeverityInfo, fmt.Errorf("analyzer: severity parse: %w — response starts with: %.100s", err, resp.Content)
+	}
 	var result severityResponse
-	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extracted), &result); err != nil {
 		return models.SeverityInfo, fmt.Errorf("analyzer: severity parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
@@ -448,8 +496,12 @@ func (a *Analyzer) SubClassify(ctx context.Context, finding *models.Finding, cat
 		return nil, fmt.Errorf("analyzer: sub_classify LLM call: %w", err)
 	}
 
+	extracted, err := extractJSON(resp.Content)
+	if err != nil {
+		return nil, fmt.Errorf("analyzer: sub_classify parse: %w — response starts with: %.100s", err, resp.Content)
+	}
 	var result SubClassifyResult
-	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extracted), &result); err != nil {
 		return nil, fmt.Errorf("analyzer: sub_classify parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
@@ -505,8 +557,12 @@ func (a *Analyzer) EvaluateCorrelation(ctx context.Context, data *CorrelationPro
 		return nil, fmt.Errorf("analyzer: evaluate_correlation LLM call: %w", err)
 	}
 
+	extracted, err := extractJSON(resp.Content)
+	if err != nil {
+		return nil, fmt.Errorf("analyzer: evaluate_correlation parse: %w — response starts with: %.100s", err, resp.Content)
+	}
 	var result CorrelationEvalResult
-	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extracted), &result); err != nil {
 		return nil, fmt.Errorf("analyzer: evaluate_correlation parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 
@@ -582,8 +638,12 @@ func (a *Analyzer) GenerateBrief(ctx context.Context, data *BriefPromptData) (*B
 		return nil, fmt.Errorf("analyzer: daily_brief LLM call: %w", err)
 	}
 
+	extracted, err := extractJSON(resp.Content)
+	if err != nil {
+		return nil, fmt.Errorf("analyzer: daily_brief parse: %w — response starts with: %.100s", err, resp.Content)
+	}
 	var result BriefResult
-	if err := json.Unmarshal([]byte(extractJSON(resp.Content)), &result); err != nil {
+	if err := json.Unmarshal([]byte(extracted), &result); err != nil {
 		return nil, fmt.Errorf("analyzer: daily_brief parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 

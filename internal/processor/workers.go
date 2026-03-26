@@ -48,6 +48,22 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 			classResult, err := e.classifier.Classify(ctx, &finding)
 			if err != nil {
 				log.Printf("processor: classification worker %d: classify error for %s: %v", workerID, entry.ID, err)
+
+				e.classifyFailMu.Lock()
+				e.classifyFailCounts[entry.ID]++
+				count := e.classifyFailCounts[entry.ID]
+				e.classifyFailMu.Unlock()
+
+				if count >= 5 {
+					log.Printf("processor: classification worker %d: skipping poison item %s after %d failures", workerID, entry.ID, count)
+					e.classifyFailMu.Lock()
+					delete(e.classifyFailCounts, entry.ID)
+					e.classifyFailMu.Unlock()
+					tags := []string{"unclassifiable", "poison_item"}
+					if markErr := e.archive.MarkClassified(ctx, entry.ID, "irrelevant", tags, "info", "", "unknown", CurrentClassificationVersion); markErr != nil {
+						log.Printf("processor: classification worker %d: mark poison error for %s: %v", workerID, entry.ID, markErr)
+					}
+				}
 				continue
 			}
 
@@ -139,6 +155,21 @@ func (e *ProcessingEngine) extractPipelineWorker(ctx context.Context, workerID i
 			iocs, err := e.iocExtract.Extract(ctx, &finding)
 			if err != nil {
 				log.Printf("processor: entity extraction worker %d: extract error for %s: %v", workerID, entry.ID, err)
+
+				e.extractFailMu.Lock()
+				e.extractFailCounts[entry.ID]++
+				count := e.extractFailCounts[entry.ID]
+				e.extractFailMu.Unlock()
+
+				if count >= 5 {
+					log.Printf("processor: entity extraction worker %d: skipping poison item %s after %d failures", workerID, entry.ID, count)
+					e.extractFailMu.Lock()
+					delete(e.extractFailCounts, entry.ID)
+					e.extractFailMu.Unlock()
+					if markErr := e.archive.MarkEntitiesExtracted(ctx, entry.ID); markErr != nil {
+						log.Printf("processor: entity extraction worker %d: mark poison error for %s: %v", workerID, entry.ID, markErr)
+					}
+				}
 				continue
 			}
 

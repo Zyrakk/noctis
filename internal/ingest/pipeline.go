@@ -104,8 +104,8 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		}
 	}
 
-	// 4b. Extract IOCs (full LLM).
-	iocs, err := p.fullAnalyzer.ExtractIOCs(ctx, &f)
+	// 4b. Extract IOCs (fast LLM — same as background workers).
+	iocs, err := p.classifyAnalyzer.ExtractIOCs(ctx, &f)
 	if err != nil {
 		log.Printf("ingest: extract IOCs error for %s: %v", f.ID, err)
 	} else {

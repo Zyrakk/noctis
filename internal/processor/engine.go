@@ -25,6 +25,12 @@ type ProcessingEngine struct {
 	archive   *archive.Store
 	workerCfg config.CollectionConfig
 	registry  *modules.Registry
+
+	// Poison item tracking — shared across workers of the same type.
+	classifyFailCounts map[string]int
+	classifyFailMu     sync.Mutex
+	extractFailCounts  map[string]int
+	extractFailMu      sync.Mutex
 }
 
 // NewProcessingEngine creates the engine with all sub-modules and registers
@@ -85,6 +91,9 @@ func NewProcessingEngine(
 		archive:      archiveStore,
 		workerCfg:   workerCfg,
 		registry:    registry,
+
+		classifyFailCounts: make(map[string]int),
+		extractFailCounts:  make(map[string]int),
 	}
 }
 

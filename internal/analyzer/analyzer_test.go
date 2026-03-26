@@ -80,9 +80,35 @@ func TestExtractJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := extractJSON(tt.input)
+			got, err := extractJSON(tt.input)
+			if err != nil {
+				t.Fatalf("extractJSON(%q) unexpected error: %v", tt.input, err)
+			}
 			if got != tt.want {
 				t.Errorf("extractJSON(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestExtractJSON_ProseOnly verifies that extractJSON returns an error when
+// the LLM response contains no valid JSON (e.g. Cyrillic prose analysis).
+func TestExtractJSON_ProseOnly(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"cyrillic prose", "## Classification\n\nя не всё вспомнил..."},
+		{"english prose", "This is a plain text analysis with no JSON content whatsoever."},
+		{"empty string", ""},
+		{"code fence with prose", "```\nThis is just commentary, no JSON here\n```"},
+		{"braces in prose", "The {rules} say this is {not valid} JSON at all."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := extractJSON(tt.input)
+			if err == nil {
+				t.Errorf("extractJSON(%q) expected error, got nil", tt.input)
 			}
 		})
 	}
