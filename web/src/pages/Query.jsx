@@ -139,11 +139,11 @@ export default function QueryPage() {
 
       // Data table
       result.columns && result.columns.length > 0 && React.createElement('div', {
-        className: 'border border-noctis-border/50 rounded overflow-x-auto'
+        className: 'border border-white/[0.08] rounded-lg overflow-x-auto'
       },
         React.createElement('table', { className: 'w-full text-sm' },
           React.createElement('thead', null,
-            React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
+            React.createElement('tr', { className: 'border-b border-white/[0.08] bg-noctis-surface/30' },
               result.columns.map(col =>
                 React.createElement('th', {
                   key: col,
@@ -156,7 +156,7 @@ export default function QueryPage() {
             result.rows.map((row, i) =>
               React.createElement('tr', {
                 key: i,
-                className: `border-b border-noctis-border/50 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`
+                className: `border-b border-white/[0.05]`
               },
                 row.map((cell, j) =>
                   React.createElement('td', {

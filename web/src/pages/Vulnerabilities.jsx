@@ -74,14 +74,14 @@ export default function Vulnerabilities() {
     ),
 
     // Table
-    React.createElement('div', { className: 'border border-noctis-border/50 rounded overflow-x-auto' },
+    React.createElement('div', { className: 'border border-white/[0.08] rounded-lg overflow-x-auto' },
       React.createElement('table', { className: 'w-full text-sm' },
         React.createElement('thead', null,
-          React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
+          React.createElement('tr', { className: 'border-b border-white/[0.08] bg-noctis-surface/30' },
             ['CVE ID', 'CVSS', 'EPSS', 'KEV', 'Mentions', 'Priority'].map(h =>
               React.createElement('th', {
                 key: h,
-                className: 'px-4 py-3 text-left text-xs font-medium text-noctis-dim uppercase tracking-wider'
+                className: 'px-3 py-2.5 text-left text-[11px] font-medium text-noctis-dim uppercase tracking-wider'
               }, h)
             ),
           ),
@@ -89,9 +89,9 @@ export default function Vulnerabilities() {
         React.createElement('tbody', null,
           loading
             ? Array.from({ length: 10 }).map((_, i) =>
-                React.createElement('tr', { key: i, className: 'border-b border-noctis-border/50' },
+                React.createElement('tr', { key: i, className: 'border-b border-white/[0.05]' },
                   Array.from({ length: 6 }).map((_, j) =>
-                    React.createElement('td', { key: j, className: 'px-4 py-3' },
+                    React.createElement('td', { key: j, className: 'px-3 py-2.5' },
                       React.createElement('div', { className: 'skeleton h-4 w-full' }),
                     )
                   ),
@@ -101,10 +101,10 @@ export default function Vulnerabilities() {
                 React.createElement('tr', {
                   key: v.id,
                   onClick: () => setSelectedCVE(v.cveId),
-                  className: `border-b border-noctis-border/50 hover:bg-white/[0.04] cursor-pointer transition-colors duration-150 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`
+                  className: `border-b border-white/[0.05] hover:bg-white/[0.04] cursor-pointer transition-colors duration-150 `
                 },
-                  React.createElement('td', { className: 'px-4 py-3 font-mono text-sm text-noctis-text' }, v.cveId),
-                  React.createElement('td', { className: 'px-4 py-3' },
+                  React.createElement('td', { className: 'px-3 py-2.5 font-mono text-sm text-noctis-text' }, v.cveId),
+                  React.createElement('td', { className: 'px-3 py-2.5' },
                     v.cvssScore != null
                       ? React.createElement('span', {
                           className: `text-xs font-mono px-2 py-0.5 rounded ${
@@ -116,23 +116,23 @@ export default function Vulnerabilities() {
                         }, v.cvssScore.toFixed(1))
                       : React.createElement('span', { className: 'text-xs text-noctis-dim' }, '-'),
                   ),
-                  React.createElement('td', { className: 'px-4 py-3' },
+                  React.createElement('td', { className: 'px-3 py-2.5' },
                     v.epssScore != null
                       ? React.createElement('span', { className: 'text-xs font-mono text-noctis-muted' },
                           (v.epssScore * 100).toFixed(1) + '%')
                       : React.createElement('span', { className: 'text-xs text-noctis-dim' }, '-'),
                   ),
-                  React.createElement('td', { className: 'px-4 py-3' },
+                  React.createElement('td', { className: 'px-3 py-2.5' },
                     v.kevListed
                       ? React.createElement(AlertTriangle, { className: 'w-4 h-4 text-red-400' })
                       : null,
                   ),
-                  React.createElement('td', { className: 'px-4 py-3' },
+                  React.createElement('td', { className: 'px-3 py-2.5' },
                     v.darkWebMentions > 0
                       ? React.createElement('span', { className: 'text-xs font-mono px-2 py-0.5 bg-noctis-purple/10 text-noctis-purple-light rounded' }, v.darkWebMentions)
                       : null,
                   ),
-                  React.createElement('td', { className: 'px-4 py-3' },
+                  React.createElement('td', { className: 'px-3 py-2.5' },
                     v.priorityLabel
                       ? React.createElement('span', {
                           className: `text-xs px-2 py-0.5 rounded border ${PRIORITY_COLORS[v.priorityLabel] || PRIORITY_COLORS.info}`

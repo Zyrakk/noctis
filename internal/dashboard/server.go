@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -127,19 +128,25 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
-		// Serve root or index.html directly
+		// Serve root or index.html directly (no-cache so browser always gets latest references)
 		if path == "/" || path == "/index.html" {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			fileServer.ServeHTTP(w, r)
 			return
 		}
 
 		// Try to serve a static file at this path
 		if f, err := fs.Stat(staticFS, path[1:]); err == nil && !f.IsDir() {
+			// Hashed assets (contain -[hash]) can be cached forever
+			if strings.Contains(path, "/assets/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
 			fileServer.ServeHTTP(w, r)
 			return
 		}
 
 		// SPA fallback: serve index.html for client-side routing
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		r.URL.Path = "/"
 		fileServer.ServeHTTP(w, r)
 	})

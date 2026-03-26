@@ -139,7 +139,7 @@ function buildStages(modMap) {
 
 function Arrow() {
   return React.createElement('div', {
-    className: 'flex items-center justify-center shrink-0 px-0 py-1 md:py-0 md:px-1.5',
+    className: 'flex items-center justify-center self-stretch shrink-0 px-0 py-1 md:py-0 md:px-1.5',
   },
     React.createElement('svg', {
       className: 'w-5 h-5 text-noctis-dim/40 rotate-90 md:rotate-0',
@@ -214,14 +214,14 @@ function HealthBanner({ modMap, lastUpdated }) {
 function ModuleCard({ mod, isExpanded, onToggle }) {
   const { s, label } = modStatus(mod)
   const dot = STATUS_DOT[s]
-  const name = mod.name || DISPLAY_NAMES[mod.id] || mod.id.split('.').pop().replace(/_/g, ' ')
+  const name = (mod.name && mod.name.trim()) || DISPLAY_NAMES[mod.id] || mod.id.split('.').pop().replace(/_/g, ' ')
   const badge = mod.ai_provider ? PROVIDER_BADGE[mod.ai_provider] : null
   const extras = mod.extra ? Object.entries(mod.extra) : []
   const hasDetail = mod.worker_count > 0 || mod.last_error || extras.length > 0 || mod.last_activity_at
   const borderAccent = s === 'degraded' ? 'border-l-yellow-400/70' : s === 'down' ? 'border-l-red-400/70' : 'border-l-transparent'
 
   return React.createElement('div', {
-    className: `rounded-md border border-noctis-border/20 border-l-2 ${borderAccent} bg-white/[0.02] py-[10px] px-3 ${hasDetail ? 'cursor-pointer hover:bg-white/[0.04]' : ''} transition-colors duration-150`,
+    className: `rounded-md border border-white/[0.06] border-l-2 ${borderAccent} bg-white/[0.03] py-2 px-2.5 ${hasDetail ? 'cursor-pointer hover:bg-white/[0.06] hover:border-white/[0.1]' : ''} transition-colors duration-150`,
     onClick: hasDetail ? onToggle : undefined,
   },
     // Row 1: identity
@@ -230,7 +230,8 @@ function ModuleCard({ mod, isExpanded, onToggle }) {
         className: `inline-block w-[7px] h-[7px] rounded-full shrink-0 transition-colors duration-200 ${dot}`,
       }),
       React.createElement('span', {
-        className: 'text-[13px] font-medium text-noctis-text',
+        className: 'text-[13px] font-medium text-noctis-text truncate md:truncate',
+        title: name,
       }, name),
       badge && React.createElement('span', {
         className: `inline-flex items-center px-1 py-0 text-[9px] font-mono rounded border leading-4 shrink-0 ${badge}`,
@@ -247,7 +248,7 @@ function ModuleCard({ mod, isExpanded, onToggle }) {
 
     // Expanded detail
     isExpanded && React.createElement('div', {
-      className: 'mt-2 pt-2 border-t border-noctis-border/20 space-y-1 text-[11px]',
+      className: 'mt-2 pt-2 border-t border-white/[0.05] space-y-1 text-[11px]',
     },
       mod.worker_count > 0 && React.createElement('div', {
         className: 'flex justify-between text-noctis-dim',
@@ -290,7 +291,7 @@ function SpendingBar({ spending }) {
 
   if (limit <= 0) {
     return React.createElement('div', {
-      className: 'px-3 py-2 border-t border-noctis-border/20 flex justify-between text-[11px] text-noctis-dim',
+      className: 'px-3 py-2 border-t border-white/[0.05] flex justify-between text-[11px] text-noctis-dim',
     },
       React.createElement('span', null, 'Gemini'),
       React.createElement('span', { className: 'font-mono' }, `$${cost.toFixed(2)}`),
@@ -301,7 +302,7 @@ function SpendingBar({ spending }) {
   const bar = pct > 80 ? 'bg-red-400' : pct > 60 ? 'bg-yellow-400' : 'bg-green-400'
 
   return React.createElement('div', {
-    className: 'px-3 py-2 border-t border-noctis-border/20',
+    className: 'px-3 py-2 border-t border-white/[0.05]',
   },
     React.createElement('div', {
       className: 'flex justify-between text-[11px] text-noctis-dim mb-1',
@@ -312,7 +313,7 @@ function SpendingBar({ spending }) {
       ),
     ),
     React.createElement('div', {
-      className: 'w-full h-[3px] rounded-full bg-noctis-border/30',
+      className: 'w-full h-[3px] rounded-full bg-white/[0.06]',
     },
       React.createElement('div', {
         className: `h-full rounded-full transition-all duration-500 ${bar}`,
@@ -328,17 +329,17 @@ function StageBox({ stage, expanded, onToggle, spending }) {
   if (!stage.modules.length) return null
 
   return React.createElement('div', {
-    className: 'border border-noctis-border/40 rounded-lg bg-noctis-surface/50 md:flex-1 md:min-w-0 md:min-h-[280px] w-full',
+    className: 'border border-white/[0.08] rounded-lg bg-noctis-surface/50 md:flex-1 md:min-w-0 md:min-h-[280px] w-full',
   },
     React.createElement('div', {
-      className: 'px-3 py-2 border-b border-noctis-border/20',
+      className: 'px-3 py-2 border-b border-white/[0.06]',
     },
       React.createElement('span', {
         className: 'text-[11px] font-semibold uppercase tracking-[0.1em] text-noctis-dim',
       }, stage.label),
     ),
     React.createElement('div', {
-      className: 'p-3 flex flex-col gap-2.5',
+      className: 'p-2.5 flex flex-col gap-1.5',
     },
       stage.modules.map(mod =>
         React.createElement(ModuleCard, {
@@ -434,7 +435,7 @@ export default function SystemStatus() {
     }, 'Failed to load system status: ', error),
 
     !loading && data && !data.available && React.createElement('div', {
-      className: 'border border-noctis-border/50 rounded p-8 text-center text-noctis-dim text-sm',
+      className: 'border border-white/[0.08] rounded p-8 text-center text-noctis-dim text-sm',
     }, 'Module status tracking is not available.'),
 
     data?.available && React.createElement(HealthBanner, { modMap, lastUpdated }),

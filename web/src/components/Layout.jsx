@@ -19,21 +19,6 @@ const navItems = [
   { path: '/dashboard/system', label: 'System', icon: MonitorCheck },
 ]
 
-const bottomNavItems = [
-  { path: '/dashboard', label: 'Overview', shortLabel: 'Home', icon: LayoutDashboard },
-  { path: '/dashboard/intelligence', label: 'Intelligence', shortLabel: 'Intel', icon: Radar },
-  { path: '/dashboard/findings', label: 'Findings', shortLabel: 'Findings', icon: Search },
-  { path: '/dashboard/iocs', label: 'IOCs', shortLabel: 'IOCs', icon: Shield },
-  { path: '/dashboard/sources', label: 'Sources', shortLabel: 'Sources', icon: Globe },
-  { path: '/dashboard/graph', label: 'Graph', shortLabel: 'Graph', icon: Network },
-  { path: '/dashboard/correlations', label: 'Correlations', shortLabel: 'Corr', icon: GitBranch },
-  { path: '/dashboard/notes', label: 'Notes', shortLabel: 'Notes', icon: FileText },
-  { path: '/dashboard/vulns', label: 'Vulns', shortLabel: 'Vulns', icon: Bug },
-  { path: '/dashboard/briefs', label: 'Briefs', shortLabel: 'Briefs', icon: BookOpen },
-  { path: '/dashboard/query', label: 'Query', shortLabel: 'Query', icon: MessageSquare },
-  { path: '/dashboard/system', label: 'System', shortLabel: 'System', icon: MonitorCheck },
-]
-
 function isActive(itemPath, currentPath) {
   if (itemPath === '/dashboard') return currentPath === '/dashboard'
   return currentPath?.startsWith(itemPath)
@@ -53,21 +38,19 @@ export default function Layout({ children, currentPath, navigate }) {
     })
   }
 
-  // Desktop sidebar (lg:translate-x-0, hidden on mobile unless hamburger opens it)
   const sidebar = React.createElement('aside', {
-    className: `fixed top-0 left-0 h-screen w-52 ${collapsed ? 'lg:w-[52px]' : ''} bg-noctis-bg border-r border-noctis-border/50 flex flex-col z-50 overflow-hidden transition-all duration-200 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`
+    className: `fixed top-0 left-0 h-screen w-52 ${collapsed ? 'lg:w-14' : ''} bg-noctis-bg border-r border-white/[0.08] flex flex-col z-50 overflow-hidden transition-all duration-200 ease-out ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`
   },
     // Logo
     React.createElement('div', {
-      className: 'h-14 flex items-center justify-between px-5 border-b border-noctis-border/50'
+      className: `h-14 flex items-center justify-between px-5 border-b border-white/[0.08] ${collapsed ? 'lg:justify-center lg:px-2' : ''}`
     },
-      React.createElement('div', { className: 'flex items-center' },
-        React.createElement(Activity, { className: 'w-4 h-4 text-noctis-purple mr-2' }),
+      React.createElement('div', { className: `flex items-center ${collapsed ? 'lg:justify-center' : ''}` },
+        React.createElement(Activity, { className: `w-4 h-4 text-noctis-purple ${collapsed ? 'lg:mr-0' : 'mr-2'}` }),
         React.createElement('span', {
-          className: 'font-heading font-semibold text-sm tracking-widest uppercase text-noctis-text'
+          className: `font-heading font-semibold text-sm tracking-widest uppercase text-noctis-text ${collapsed ? 'lg:hidden' : ''}`
         }, 'Noctis'),
       ),
-      // Close button (mobile only)
       React.createElement('button', {
         onClick: () => setMobileOpen(false),
         className: 'p-1 cursor-pointer lg:hidden'
@@ -77,22 +60,25 @@ export default function Layout({ children, currentPath, navigate }) {
     ),
 
     // Nav
-    React.createElement('nav', { className: 'flex-1 py-3 px-3 space-y-0.5' },
-      navItems.map(item =>
-        React.createElement('button', {
+    React.createElement('nav', { className: `flex-1 py-3 space-y-0.5 overflow-y-auto ${collapsed ? 'lg:px-1.5 px-3' : 'px-3'}` },
+      navItems.map(item => {
+        const active = isActive(item.path, currentPath)
+        return React.createElement('button', {
           key: item.path,
           onClick: () => { navigate(item.path); setMobileOpen(false) },
           title: item.label,
-          className: `w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium cursor-pointer whitespace-nowrap transition-all duration-150 ${
-            isActive(item.path, currentPath)
-              ? 'bg-noctis-surface text-noctis-text border-l-2 border-noctis-purple pl-[11px]'
+          className: `w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium cursor-pointer whitespace-nowrap transition-all duration-150 ${collapsed ? 'lg:justify-center lg:px-0 lg:gap-0' : ''} ${
+            active
+              ? `bg-noctis-surface text-noctis-text border-l-2 border-noctis-purple pl-[10px] ${collapsed ? 'lg:pl-0 lg:border-l-0 lg:bg-noctis-purple/10' : ''}`
               : 'text-noctis-muted hover:text-noctis-text hover:bg-noctis-surface/50'
           }`
         },
-          React.createElement(item.icon, { className: 'w-3.5 h-3.5 flex-shrink-0' }),
-          item.label,
+          React.createElement(item.icon, { className: `w-3.5 h-3.5 flex-shrink-0 ${active && collapsed ? 'lg:text-noctis-purple-light' : ''}` }),
+          React.createElement('span', {
+            className: collapsed ? 'lg:hidden' : ''
+          }, item.label),
         )
-      )
+      })
     ),
 
     // Collapse toggle (desktop only)
@@ -101,104 +87,58 @@ export default function Layout({ children, currentPath, navigate }) {
     },
       React.createElement('button', {
         onClick: toggleCollapsed,
-        className: 'w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium text-noctis-dim hover:text-noctis-muted hover:bg-noctis-surface/50 cursor-pointer whitespace-nowrap transition-colors duration-150',
+        className: `w-full flex items-center py-2 rounded-md text-xs font-medium text-noctis-dim hover:text-noctis-muted hover:bg-noctis-surface/50 cursor-pointer whitespace-nowrap transition-colors duration-150 ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'}`,
         title: collapsed ? 'Expand sidebar' : 'Collapse sidebar',
       },
         React.createElement(collapsed ? ChevronsRight : ChevronsLeft, { className: 'w-3.5 h-3.5 flex-shrink-0' }),
-        collapsed ? 'Expand' : 'Collapse',
+        !collapsed && 'Collapse',
       ),
     ),
 
     // Logout
-    React.createElement('div', { className: 'p-3 border-t border-noctis-border/50' },
+    React.createElement('div', { className: `border-t border-white/[0.08] ${collapsed ? 'lg:p-1.5 p-3' : 'p-3'}` },
       React.createElement('button', {
         onClick: logout,
-        className: 'w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium text-noctis-dim hover:text-red-400 hover:bg-red-500/5 cursor-pointer whitespace-nowrap transition-colors duration-200'
+        title: 'Logout',
+        className: `w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium text-noctis-dim hover:text-red-400 hover:bg-red-500/5 cursor-pointer whitespace-nowrap transition-colors duration-200 ${collapsed ? 'lg:justify-center lg:px-0 lg:gap-0' : ''}`
       },
         React.createElement(LogOut, { className: 'w-3.5 h-3.5' }),
-        'Logout',
+        React.createElement('span', { className: collapsed ? 'lg:hidden' : '' }, 'Logout'),
       )
     ),
   )
 
-  // Overlay backdrop for mobile sidebar
   const overlay = mobileOpen && React.createElement('div', {
     className: 'fixed inset-0 bg-black/50 z-40 lg:hidden',
     onClick: () => setMobileOpen(false),
   })
 
-  // Mobile top bar (lg:hidden)
   const topBar = React.createElement('header', {
-    className: 'fixed top-0 left-0 right-0 h-14 bg-noctis-bg/95 backdrop-blur-sm border-b border-noctis-border/50 flex items-center justify-between px-4 z-40 lg:hidden'
+    className: 'fixed top-0 left-0 right-0 h-14 bg-noctis-bg/95 backdrop-blur-sm border-b border-white/[0.08] flex items-center justify-between px-4 z-40 lg:hidden'
   },
-    // Left: logo
     React.createElement('div', { className: 'flex items-center' },
       React.createElement(Activity, { className: 'w-4 h-4 text-noctis-purple mr-2' }),
       React.createElement('span', {
         className: 'font-heading font-semibold text-sm tracking-widest uppercase text-noctis-text'
       }, 'Noctis'),
     ),
-    // Right: hamburger
     React.createElement('button', {
       onClick: () => setMobileOpen(true),
-      className: 'p-2 cursor-pointer rounded hover:bg-noctis-surface/50 transition-colors',
+      className: 'p-2 cursor-pointer rounded-md hover:bg-noctis-surface/50 transition-colors',
       'aria-label': 'Open menu',
     },
       React.createElement(Menu, { className: 'w-5 h-5 text-noctis-muted' }),
     ),
   )
 
-  // Mobile bottom navigation (lg:hidden)
-  const bottomNav = React.createElement('nav', {
-    className: 'fixed bottom-0 left-0 right-0 bg-noctis-bg border-t border-noctis-border/50 z-40 lg:hidden',
-    style: { paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' },
-  },
-    React.createElement('div', { className: 'flex items-stretch' },
-      bottomNavItems.map(item => {
-        const active = isActive(item.path, currentPath)
-        return React.createElement('button', {
-          key: item.path,
-          onClick: () => navigate(item.path),
-          className: `flex-1 flex flex-col items-center justify-center py-2 cursor-pointer transition-all duration-200 active:scale-[0.92] ${
-            active ? 'text-noctis-purple' : 'text-noctis-dim'
-          }`,
-          style: { minHeight: '44px' },
-        },
-          // Icon with pill background when active
-          React.createElement('div', {
-            className: `flex items-center justify-center rounded-xl transition-all duration-200 ${
-              active ? 'bg-noctis-purple/15 px-4 py-1' : 'px-4 py-1'
-            }`,
-          },
-            React.createElement(item.icon, {
-              className: `w-5 h-5 ${active ? 'text-noctis-purple' : 'text-noctis-dim'}`,
-            }),
-          ),
-          // Label
-          React.createElement('span', {
-            className: `text-[10px] mt-0.5 transition-all duration-200 ${
-              active ? 'font-semibold text-noctis-purple' : 'font-medium text-noctis-dim'
-            }`,
-          }, item.shortLabel),
-        )
-      })
-    )
-  )
-
   return React.createElement('div', { className: 'min-h-screen bg-noctis-bg' },
-    // Mobile top bar
     topBar,
-    // Overlay
     overlay,
-    // Sidebar (desktop visible, mobile via hamburger)
     sidebar,
-    // Main content
     React.createElement('main', {
-      className: `ml-0 ${collapsed ? 'lg:ml-[52px]' : 'lg:ml-52'} min-h-screen pt-14 lg:pt-0 pb-24 lg:pb-0 transition-[margin] duration-200`
+      className: `ml-0 ${collapsed ? 'lg:ml-14' : 'lg:ml-52'} min-h-screen pt-14 lg:pt-0 transition-[margin] duration-200`
     },
-      React.createElement('div', { key: currentPath, className: 'p-4 lg:p-6 animate-page-enter' }, children),
+      React.createElement('div', { key: currentPath, className: 'p-3 lg:p-6 animate-page-enter' }, children),
     ),
-    // Mobile bottom nav
-    bottomNav,
   )
 }

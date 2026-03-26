@@ -85,7 +85,7 @@ export default function Overview({ navigate }) {
     React.createElement('div', { className: 'grid grid-cols-1 lg:grid-cols-2 gap-6' },
       // Category donut
       React.createElement('div', {
-        className: 'border border-noctis-border/50 rounded p-5'
+        className: 'border border-white/[0.08] rounded-lg p-5'
       },
         React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted mb-4' }, 'Category Distribution'),
         catData.length > 0
@@ -130,7 +130,7 @@ export default function Overview({ navigate }) {
 
       // Severity bar
       React.createElement('div', {
-        className: 'border border-noctis-border/50 rounded p-5'
+        className: 'border border-white/[0.08] rounded-lg p-5'
       },
         React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted mb-4' }, 'Severity Distribution'),
         sevData.length > 0
@@ -153,7 +153,7 @@ export default function Overview({ navigate }) {
 
     // Timeline
     React.createElement('div', {
-      className: 'border border-noctis-border/50 rounded p-5'
+      className: 'border border-white/[0.08] rounded-lg p-5'
     },
       React.createElement('div', { className: 'flex items-center gap-2 mb-4' },
         React.createElement(TrendingUp, { className: 'w-4 h-4 text-noctis-purple-light' }),
@@ -183,7 +183,7 @@ export default function Overview({ navigate }) {
 
     // Recent findings
     React.createElement('div', {
-      className: 'border border-noctis-border/50 rounded p-5'
+      className: 'border border-white/[0.08] rounded-lg p-5'
     },
       React.createElement('h3', { className: 'text-sm font-medium text-noctis-muted mb-4' }, 'Recent Critical Findings'),
       findings.length > 0

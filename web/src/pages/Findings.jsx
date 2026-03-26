@@ -113,7 +113,7 @@ export default function Findings() {
   return React.createElement('div', { className: 'flex gap-6 min-h-[calc(100vh-3rem)]' },
     // Filters sidebar (desktop only, collapsible)
     showFilters && React.createElement('div', {
-      className: 'hidden lg:block w-56 flex-shrink-0 space-y-5'
+      className: 'hidden lg:block w-[280px] flex-shrink-0 space-y-5 animate-slide-in'
     },
       React.createElement('div', { className: 'flex items-center gap-2 text-sm font-medium text-noctis-muted' },
         React.createElement(Filter, { className: 'w-4 h-4' }),
@@ -225,7 +225,7 @@ export default function Findings() {
             setFiltersOpen(true)
           }
         },
-        className: 'flex items-center gap-2 px-3 py-1.5 border border-noctis-border/50 rounded text-sm text-noctis-muted mb-4 cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150'
+        className: 'flex items-center gap-2 px-3 py-1.5 border border-white/[0.08] rounded-md text-sm text-noctis-muted mb-4 cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150'
       },
         React.createElement(Filter, { className: 'w-3.5 h-3.5' }),
         'Filters',
@@ -240,15 +240,15 @@ export default function Findings() {
       // Table (desktop only)
       React.createElement('div', { className: 'hidden lg:block' },
       React.createElement('div', {
-        className: 'border border-noctis-border/50 rounded overflow-x-auto'
+        className: 'border border-white/[0.08] rounded-lg overflow-x-auto'
       },
         React.createElement('table', { className: 'w-full text-sm' },
           React.createElement('thead', null,
-            React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
+            React.createElement('tr', { className: 'border-b border-white/[0.08] bg-noctis-surface/30' },
               ['Time', 'Source', 'Category', 'Sub-Cat', 'Severity', 'Summary'].map(h =>
                 React.createElement('th', {
                   key: h,
-                  className: 'px-4 py-3 text-left text-xs font-medium text-noctis-dim uppercase tracking-wider'
+                  className: 'px-3 py-2.5 text-left text-[11px] font-medium text-noctis-dim uppercase tracking-wider'
                 }, h)
               ),
             ),
@@ -256,9 +256,9 @@ export default function Findings() {
           React.createElement('tbody', null,
             loading
               ? Array.from({ length: 10 }).map((_, i) =>
-                  React.createElement('tr', { key: i, className: 'border-b border-noctis-border/50' },
+                  React.createElement('tr', { key: i, className: 'border-b border-white/[0.05]' },
                     Array.from({ length: 6 }).map((_, j) =>
-                      React.createElement('td', { key: j, className: 'px-4 py-3' },
+                      React.createElement('td', { key: j, className: 'px-3 py-2.5' },
                         React.createElement('div', { className: 'skeleton h-4 w-full' }),
                       )
                     ),
@@ -268,28 +268,28 @@ export default function Findings() {
                   React.createElement('tr', {
                     key: f.id,
                     onClick: () => loadDetail(f.id),
-                    className: `border-b border-noctis-border/50 cursor-pointer transition-colors duration-150 hover:bg-white/[0.04] ${selectedId === f.id ? 'bg-noctis-purple/5' : i % 2 === 0 ? '' : 'bg-white/[0.02]'}`
+                    className: `border-b border-white/[0.05] cursor-pointer transition-colors duration-150 hover:bg-white/[0.04] ${selectedId === f.id ? 'bg-noctis-purple/5' : ''}`
                   },
-                    React.createElement('td', { className: 'px-4 py-3 text-xs font-mono text-noctis-dim whitespace-nowrap' },
+                    React.createElement('td', { className: 'px-3 py-2.5 text-xs font-mono text-noctis-dim whitespace-nowrap' },
                       new Date(f.collectedAt).toLocaleString(),
                     ),
-                    React.createElement('td', { className: 'px-4 py-3' },
+                    React.createElement('td', { className: 'px-3 py-2.5' },
                       React.createElement('span', { className: 'text-xs px-2 py-0.5 bg-noctis-bg rounded text-noctis-muted' }, f.sourceType),
                     ),
-                    React.createElement('td', { className: 'px-4 py-3 text-xs text-noctis-muted' },
+                    React.createElement('td', { className: 'px-3 py-2.5 text-xs text-noctis-muted' },
                       f.category?.replace(/_/g, ' ') || '-',
                     ),
-                    React.createElement('td', { className: 'px-4 py-3' },
+                    React.createElement('td', { className: 'px-3 py-2.5' },
                       f.subCategory
                         ? React.createElement('span', {
                             className: 'text-[10px] px-1.5 py-0.5 bg-noctis-cyan/10 border border-noctis-cyan/30 rounded text-cyan-400'
                           }, f.subCategory.replace(/_/g, ' '))
                         : '-',
                     ),
-                    React.createElement('td', { className: 'px-4 py-3' },
+                    React.createElement('td', { className: 'px-3 py-2.5' },
                       f.severity ? React.createElement(SeverityBadge, { severity: f.severity }) : '-',
                     ),
-                    React.createElement('td', { className: 'px-4 py-3 text-sm text-noctis-text truncate max-w-md' },
+                    React.createElement('td', { className: 'px-3 py-2.5 text-sm text-noctis-text truncate max-w-md' },
                       f.summary || 'Pending classification\u2026',
                     ),
                   )
@@ -315,7 +315,7 @@ export default function Findings() {
               React.createElement('div', {
                 key: f.id,
                 onClick: () => loadDetail(f.id),
-                className: `p-4 rounded-lg border border-noctis-border/30 cursor-pointer transition-all duration-150 active:scale-[0.98] active:bg-noctis-surface ${selectedId === f.id ? 'bg-noctis-purple/5 border-noctis-purple/30' : ''}`
+                className: `p-4 rounded-lg border border-white/[0.06] cursor-pointer transition-all duration-150 active:scale-[0.98] active:bg-noctis-surface ${selectedId === f.id ? 'bg-noctis-purple/5 border-noctis-purple/30' : ''}`
               },
                 // Top row: severity badge + category
                 React.createElement('div', { className: 'flex items-center justify-between mb-1.5' },
@@ -365,7 +365,7 @@ export default function Findings() {
 
     // Detail panel
     selectedId && React.createElement('div', {
-      className: 'fixed inset-0 z-40 bg-noctis-bg overflow-y-auto lg:relative lg:inset-auto lg:z-auto lg:w-96 lg:flex-shrink-0 lg:border lg:border-noctis-border/50 lg:rounded lg:max-h-[calc(100vh-3rem)] lg:sticky lg:top-0 p-5 pt-12 lg:pt-5 animate-slide-up lg:animate-slide-in',
+      className: 'fixed inset-0 z-40 bg-noctis-bg overflow-y-auto lg:relative lg:inset-auto lg:z-auto lg:w-96 lg:flex-shrink-0 lg:border lg:border-white/[0.08] lg:rounded-lg lg:max-h-[calc(100vh-3rem)] lg:sticky lg:top-0 p-5 pt-12 lg:pt-5 animate-slide-up lg:animate-slide-in',
       onTouchStart: handlePanelTouchStart,
       onTouchMove: handlePanelTouchMove,
       onTouchEnd: handlePanelTouchEnd,
@@ -504,7 +504,7 @@ export default function Findings() {
     },
       React.createElement('div', { className: 'fixed inset-0 bg-black/50' }),
       React.createElement('div', {
-        className: 'fixed bottom-0 left-0 right-0 bg-noctis-bg border-t border-noctis-border/50 rounded-t-xl p-5 z-10 max-h-[70vh] overflow-y-auto animate-slide-up',
+        className: 'fixed bottom-0 left-0 right-0 bg-noctis-bg border-t border-white/[0.08] rounded-t-xl p-5 z-10 max-h-[70vh] overflow-y-auto animate-slide-up',
         onTouchStart: handleSheetTouchStart,
         onTouchMove: handleSheetTouchMove,
         onTouchEnd: handleSheetTouchEnd,

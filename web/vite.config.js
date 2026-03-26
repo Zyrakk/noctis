@@ -16,8 +16,9 @@ export default defineConfig({
         'lucide-react',
       ],
       output: {
-        entryFileNames: 'app.js',
-        assetFileNames: '[name][extname]',
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         format: 'es',
       },
     },

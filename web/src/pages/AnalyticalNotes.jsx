@@ -108,7 +108,7 @@ export default function AnalyticalNotes() {
 
               return React.createElement('div', {
                 key: n.id,
-                className: 'p-4 rounded-lg border border-noctis-border/30 bg-noctis-surface/20 transition-all duration-150'
+                className: 'p-4 rounded-lg border border-white/[0.06] bg-noctis-surface/20 transition-all duration-150'
               },
                 // Top row: title + type badge
                 React.createElement('div', { className: 'flex items-start justify-between gap-2 mb-2' },

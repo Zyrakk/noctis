@@ -85,7 +85,7 @@ export default function Correlations() {
               ? items.map(c =>
                   React.createElement('div', {
                     key: c.id,
-                    className: 'p-4 rounded-lg border border-noctis-border/30 bg-noctis-surface/20'
+                    className: 'p-4 rounded-lg border border-white/[0.06] bg-noctis-surface/20'
                   },
                     React.createElement('div', { className: 'flex items-center gap-2 mb-2 flex-wrap' },
                       React.createElement('span', {
@@ -115,7 +115,7 @@ export default function Correlations() {
                   const cls = decisionColors[d.decision] || decisionColors.defer
                   return React.createElement('div', {
                     key: d.id,
-                    className: 'p-4 rounded-lg border border-noctis-border/30 bg-noctis-surface/20'
+                    className: 'p-4 rounded-lg border border-white/[0.06] bg-noctis-surface/20'
                   },
                     React.createElement('div', { className: 'flex items-center gap-2 mb-2 flex-wrap' },
                       React.createElement('span', {

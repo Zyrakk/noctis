@@ -131,15 +131,15 @@ export default function IOCs() {
 
     // Table (desktop)
     React.createElement('div', {
-      className: 'hidden lg:block border border-noctis-border/50 rounded overflow-x-auto'
+      className: 'hidden lg:block border border-white/[0.08] rounded-lg overflow-x-auto'
     },
       React.createElement('table', { className: 'w-full text-sm' },
         React.createElement('thead', null,
-          React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
+          React.createElement('tr', { className: 'border-b border-white/[0.08] bg-noctis-surface/30' },
             ['Type', 'Value', 'Context', 'Score', 'Enriched'].map(h =>
               React.createElement('th', {
                 key: h,
-                className: 'px-4 py-3 text-left text-xs font-medium text-noctis-dim uppercase tracking-wider'
+                className: 'px-3 py-2.5 text-left text-[11px] font-medium text-noctis-dim uppercase tracking-wider'
               }, h)
             ),
           ),
@@ -147,9 +147,9 @@ export default function IOCs() {
         React.createElement('tbody', null,
           loading
             ? Array.from({ length: 10 }).map((_, i) =>
-                React.createElement('tr', { key: i, className: 'border-b border-noctis-border/50' },
+                React.createElement('tr', { key: i, className: 'border-b border-white/[0.05]' },
                   Array.from({ length: 5 }).map((_, j) =>
-                    React.createElement('td', { key: j, className: 'px-4 py-3' },
+                    React.createElement('td', { key: j, className: 'px-3 py-2.5' },
                       React.createElement('div', { className: 'skeleton h-4 w-full' }),
                     )
                   ),
@@ -158,14 +158,14 @@ export default function IOCs() {
             : iocs.map((ioc, i) =>
                 React.createElement('tr', {
                   key: ioc.id,
-                  className: `border-b border-noctis-border/50 hover:bg-white/[0.04] transition-colors duration-150 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`
+                  className: `border-b border-white/[0.05] hover:bg-white/[0.04] transition-colors duration-150 `
                 },
-                  React.createElement('td', { className: 'px-4 py-3' },
+                  React.createElement('td', { className: 'px-3 py-2.5' },
                     React.createElement('span', {
                       className: 'text-xs px-2 py-0.5 bg-noctis-cyan/10 border border-noctis-cyan/30 rounded text-cyan-400 font-mono'
                     }, ioc.type),
                   ),
-                  React.createElement('td', { className: 'px-4 py-3' },
+                  React.createElement('td', { className: 'px-3 py-2.5' },
                     React.createElement('div', { className: 'flex items-center gap-2' },
                       React.createElement('span', {
                         className: 'font-mono text-sm text-noctis-text truncate max-w-xs'
@@ -181,10 +181,10 @@ export default function IOCs() {
                       ),
                     ),
                   ),
-                  React.createElement('td', { className: 'px-4 py-3 text-xs text-noctis-muted truncate max-w-xs' },
+                  React.createElement('td', { className: 'px-3 py-2.5 text-xs text-noctis-muted truncate max-w-xs' },
                     ioc.context || '-',
                   ),
-                  React.createElement('td', { className: 'px-4 py-3' },
+                  React.createElement('td', { className: 'px-3 py-2.5' },
                     React.createElement('span', {
                       className: `text-xs font-mono px-2 py-0.5 rounded ${
                         !ioc.active ? 'bg-noctis-bg text-noctis-dim line-through' :
@@ -194,7 +194,7 @@ export default function IOCs() {
                       }`
                     }, ioc.active ? ((ioc.threatScore || 0) * 100).toFixed(0) + '%' : 'inactive'),
                   ),
-                  React.createElement('td', { className: 'px-4 py-3' },
+                  React.createElement('td', { className: 'px-3 py-2.5' },
                     ioc.enrichmentSources?.length > 0
                       ? React.createElement('div', { className: 'flex gap-1' },
                           ioc.enrichmentSources.map(src =>

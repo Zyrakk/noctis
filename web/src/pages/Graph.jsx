@@ -355,7 +355,7 @@ export default function Graph() {
                 React.createElement(Search, { className: 'w-10 h-10 mb-3 opacity-30' }),
                 React.createElement('p', { className: 'text-sm' }, 'No entities found for this search.'),
               )
-            : React.createElement('div', { className: 'border border-noctis-border/50 rounded-lg overflow-hidden divide-y divide-noctis-border/30' },
+            : React.createElement('div', { className: 'border border-white/[0.08] rounded-lg overflow-hidden divide-y divide-noctis-border/30' },
                 entities.map(entity =>
                   React.createElement('button', {
                     key: entity.id,
@@ -405,7 +405,7 @@ export default function Graph() {
     React.createElement('div', { className: 'flex items-center gap-3' },
       React.createElement('button', {
         onClick: goBackToList,
-        className: 'flex items-center gap-1.5 px-3 py-1.5 text-sm text-noctis-muted hover:text-noctis-text border border-noctis-border/50 hover:border-noctis-border rounded-lg transition-colors duration-200 cursor-pointer',
+        className: 'flex items-center gap-1.5 px-3 py-1.5 text-sm text-noctis-muted hover:text-noctis-text border border-white/[0.08] hover:border-noctis-border rounded-lg transition-colors duration-200 cursor-pointer',
       },
         React.createElement(ArrowLeft, { className: 'w-3.5 h-3.5' }),
         'Back to entities',
@@ -461,7 +461,7 @@ export default function Graph() {
 
     // Canvas area
     React.createElement('div', {
-      className: 'border border-noctis-border/50 rounded overflow-hidden relative',
+      className: 'border border-white/[0.08] rounded overflow-hidden relative',
       style: { height: '500px' },
     },
       graphLoading

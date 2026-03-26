@@ -41,7 +41,7 @@ export default function Briefs() {
     const title = SECTION_TITLES[key] || key
     return React.createElement('div', {
       key,
-      className: 'border border-noctis-border/30 rounded-lg p-4'
+      className: 'border border-white/[0.06] rounded-lg p-4'
     },
       React.createElement('div', { className: 'flex items-center gap-2 mb-3' },
         React.createElement(Icon, { className: 'w-4 h-4 text-noctis-purple-light' }),
@@ -100,7 +100,7 @@ export default function Briefs() {
 
               // Metrics bar
               brief.metrics && React.createElement('div', {
-                className: 'grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-noctis-surface/50 border border-noctis-border/30 rounded-lg'
+                className: 'grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-noctis-surface/50 border border-white/[0.06] rounded-lg'
               },
                 renderMetric('Findings', brief.metrics.total_findings || 0),
                 renderMetric('IOCs', brief.metrics.total_iocs || 0),
@@ -137,7 +137,7 @@ export default function Briefs() {
               React.createElement('div', {
                 key: b.id,
                 onClick: () => setView('latest'),
-                className: 'p-4 border border-noctis-border/30 rounded-lg cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150'
+                className: 'p-4 border border-white/[0.06] rounded-lg cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150'
               },
                 React.createElement('div', { className: 'flex items-center justify-between mb-1' },
                   React.createElement('h3', { className: 'text-sm font-medium text-noctis-text' }, b.title),

@@ -28,7 +28,7 @@ export default function Intelligence({ navigate }) {
   const m = overview.metrics || {}
 
   const metricCard = (label, value, icon) =>
-    React.createElement('div', { className: 'text-center p-3 bg-noctis-surface/50 border border-noctis-border/30 rounded-lg' },
+    React.createElement('div', { className: 'text-center p-3 bg-noctis-surface/50 border border-white/[0.06] rounded-lg' },
       React.createElement(icon, { className: 'w-4 h-4 mx-auto text-noctis-dim mb-1' }),
       React.createElement('div', { className: 'text-lg font-mono text-noctis-text' }, (value || 0).toLocaleString()),
       React.createElement('div', { className: 'text-[10px] text-noctis-dim mt-0.5 uppercase tracking-wider' }, label),
@@ -107,7 +107,7 @@ export default function Intelligence({ navigate }) {
                   React.createElement('div', {
                     key: actor.entityId,
                     onClick: () => navigate(`/dashboard/graph?entity=${actor.entityId}`),
-                    className: 'p-3 border border-noctis-border/30 rounded-lg cursor-pointer hover:border-noctis-purple/30 hover:bg-noctis-surface/30 transition-all duration-150'
+                    className: 'p-3 border border-white/[0.06] rounded-lg cursor-pointer hover:border-noctis-purple/30 hover:bg-noctis-surface/30 transition-all duration-150'
                   },
                     React.createElement('div', { className: 'flex items-center justify-between mb-1.5' },
                       React.createElement('span', { className: 'text-sm font-medium text-noctis-text' }, actor.name),
@@ -148,7 +148,7 @@ export default function Intelligence({ navigate }) {
               ? overview.activeCampaigns.map(c =>
                   React.createElement('div', {
                     key: c.clusterId,
-                    className: 'p-3 border border-noctis-border/30 rounded-lg'
+                    className: 'p-3 border border-white/[0.06] rounded-lg'
                   },
                     React.createElement('div', { className: 'flex items-center gap-2 mb-1.5' },
                       React.createElement('span', {
@@ -257,7 +257,7 @@ export default function Intelligence({ navigate }) {
               ? overview.recentNotes.slice(0, 5).map(n =>
                   React.createElement('div', {
                     key: n.id,
-                    className: 'p-2 border border-noctis-border/20 rounded'
+                    className: 'p-2 border border-white/[0.06] rounded'
                   },
                     React.createElement('div', { className: 'flex items-center gap-2 mb-0.5' },
                       React.createElement('span', {

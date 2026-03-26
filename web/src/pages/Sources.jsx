@@ -138,7 +138,7 @@ export default function Sources() {
 
     // Tabs + type filter
     React.createElement('div', { className: 'flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3' },
-      React.createElement('div', { className: 'flex w-full lg:w-auto items-center gap-1 border border-noctis-border/50 rounded p-1 overflow-x-auto flex-nowrap' },
+      React.createElement('div', { className: 'flex w-full lg:w-auto items-center gap-1 border border-white/[0.08] rounded p-1 overflow-x-auto flex-nowrap' },
         TABS.map(t =>
           React.createElement('button', {
             key: t.value,
@@ -159,7 +159,7 @@ export default function Sources() {
       (tab === 'discovered' || tab === 'paused' || tab === 'rejected') && React.createElement('select', {
         value: typeFilter,
         onChange: e => { setTypeFilter(e.target.value); setPage(0) },
-        className: 'w-full lg:w-auto px-3 py-2 bg-noctis-bg border border-noctis-border/50 rounded text-xs text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-muted/50'
+        className: 'w-full lg:w-auto px-3 py-2 bg-noctis-bg border border-white/[0.08] rounded text-xs text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-muted/50'
       },
         TYPE_FILTER_OPTIONS.map(t =>
           React.createElement('option', { key: t.value, value: t.value }, t.label)
@@ -229,15 +229,15 @@ export default function Sources() {
           // Desktop table
           React.createElement('div', { className: 'hidden lg:block' },
             React.createElement('div', {
-              className: 'border border-noctis-border/50 rounded overflow-x-auto'
+              className: 'border border-white/[0.08] rounded-lg overflow-x-auto'
             },
               React.createElement('table', { className: 'w-full text-sm' },
                 React.createElement('thead', null,
-                  React.createElement('tr', { className: 'border-b border-noctis-border bg-noctis-surface/30' },
+                  React.createElement('tr', { className: 'border-b border-white/[0.08] bg-noctis-surface/30' },
                     ['Type', 'Identifier', 'Discovered', tab === 'discovered' ? 'Actions' : 'Status'].map(h =>
                       React.createElement('th', {
                         key: h,
-                        className: 'px-4 py-3 text-left text-xs font-medium text-noctis-dim uppercase tracking-wider'
+                        className: 'px-3 py-2.5 text-left text-[11px] font-medium text-noctis-dim uppercase tracking-wider'
                       }, h)
                     ),
                   ),
@@ -245,9 +245,9 @@ export default function Sources() {
                 React.createElement('tbody', null,
                   loading
                     ? Array.from({ length: 5 }).map((_, i) =>
-                        React.createElement('tr', { key: i, className: 'border-b border-noctis-border/50' },
+                        React.createElement('tr', { key: i, className: 'border-b border-white/[0.05]' },
                           Array.from({ length: 4 }).map((_, j) =>
-                            React.createElement('td', { key: j, className: 'px-4 py-3' },
+                            React.createElement('td', { key: j, className: 'px-3 py-2.5' },
                               React.createElement('div', { className: 'skeleton h-4 w-full' }),
                             )
                           ),
@@ -257,23 +257,23 @@ export default function Sources() {
                         const Icon = TYPE_ICONS[s.type] || Globe
                         return React.createElement('tr', {
                           key: s.id,
-                          className: `border-b border-noctis-border/50 hover:bg-white/[0.04] transition-all duration-500 ${
+                          className: `border-b border-white/[0.05] hover:bg-white/[0.04] transition-all duration-500 ${
                             fadingIds.has(s.id) ? 'opacity-0' : 'opacity-100'
-                          } ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`
+                          }`
                         },
-                          React.createElement('td', { className: 'px-4 py-3' },
+                          React.createElement('td', { className: 'px-3 py-2.5' },
                             React.createElement('div', { className: 'flex items-center gap-2' },
                               React.createElement(Icon, { className: 'w-4 h-4 text-noctis-muted' }),
                               React.createElement('span', { className: 'text-xs text-noctis-muted' }, s.type.replace(/_/g, ' ')),
                             ),
                           ),
-                          React.createElement('td', { className: 'px-4 py-3 font-mono text-xs text-noctis-text truncate max-w-sm' },
+                          React.createElement('td', { className: 'px-3 py-2.5 font-mono text-xs text-noctis-text truncate max-w-sm' },
                             s.identifier,
                           ),
-                          React.createElement('td', { className: 'px-4 py-3 text-xs text-noctis-dim font-mono' },
+                          React.createElement('td', { className: 'px-3 py-2.5 text-xs text-noctis-dim font-mono' },
                             new Date(s.createdAt).toLocaleDateString(),
                           ),
-                          React.createElement('td', { className: 'px-4 py-3' },
+                          React.createElement('td', { className: 'px-3 py-2.5' },
                             tab === 'discovered'
                               ? React.createElement('div', { className: 'flex items-center gap-2' },
                                   React.createElement('button', {
@@ -380,14 +380,14 @@ export default function Sources() {
               React.createElement('button', {
                 onClick: () => setPage(p => Math.max(0, p - 1)),
                 disabled: page === 0,
-                className: 'p-2 border border-noctis-border/50 rounded disabled:opacity-30 cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150'
+                className: 'p-2 border border-white/[0.08] rounded disabled:opacity-30 cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150'
               },
                 React.createElement(ChevronLeft, { className: 'w-4 h-4' }),
               ),
               React.createElement('button', {
                 onClick: () => setPage(p => Math.min(totalPages - 1, p + 1)),
                 disabled: page >= totalPages - 1,
-                className: 'p-2 border border-noctis-border/50 rounded disabled:opacity-30 cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150'
+                className: 'p-2 border border-white/[0.08] rounded disabled:opacity-30 cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150'
               },
                 React.createElement(ChevronRight, { className: 'w-4 h-4' }),
               ),
@@ -403,7 +403,7 @@ export default function Sources() {
       React.createElement('div', { className: 'fixed inset-0 bg-black/60 backdrop-blur-sm' }),
       React.createElement('form', {
         onSubmit: handleAdd,
-        className: 'relative bg-noctis-bg border border-noctis-border/50 rounded p-6 w-full max-w-md z-10'
+        className: 'relative bg-noctis-bg border border-white/[0.08] rounded p-6 w-full max-w-md z-10'
       },
         React.createElement('div', { className: 'flex items-center justify-between mb-5' },
           React.createElement('h2', { className: 'font-heading font-normal text-lg' }, 'Add Source'),
@@ -422,7 +422,7 @@ export default function Sources() {
             React.createElement('select', {
               value: newType,
               onChange: e => setNewType(e.target.value),
-              className: 'w-full px-3 py-3 bg-noctis-bg border border-noctis-border/50 rounded text-sm text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-muted/50'
+              className: 'w-full px-3 py-3 bg-noctis-bg border border-white/[0.08] rounded text-sm text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-muted/50'
             },
               SOURCE_TYPES.map(t =>
                 React.createElement('option', { key: t.value, value: t.value }, t.label)
@@ -436,7 +436,7 @@ export default function Sources() {
               value: newIdentifier,
               onChange: e => setNewIdentifier(e.target.value),
               placeholder: 'e.g., t.me/channel_name or https://...',
-              className: 'w-full px-3 py-3 bg-noctis-bg border border-noctis-border/50 rounded text-sm text-noctis-text placeholder-noctis-dim focus:outline-none focus:border-noctis-muted/50 font-mono transition-colors duration-200'
+              className: 'w-full px-3 py-3 bg-noctis-bg border border-white/[0.08] rounded text-sm text-noctis-text placeholder-noctis-dim focus:outline-none focus:border-noctis-muted/50 font-mono transition-colors duration-200'
             }),
           ),
         ),
@@ -457,7 +457,7 @@ export default function Sources() {
     ),
 
     toast && React.createElement('div', {
-      className: 'fixed bottom-24 left-4 right-4 lg:bottom-6 lg:right-6 lg:left-auto z-50 px-4 py-3 bg-noctis-surface border border-noctis-border/50 rounded-lg text-sm text-noctis-text shadow-lg'
+      className: 'fixed bottom-24 left-4 right-4 lg:bottom-6 lg:right-6 lg:left-auto z-50 px-4 py-3 bg-noctis-surface border border-white/[0.08] rounded-lg text-sm text-noctis-text shadow-lg'
     },
       toast,
     ),
