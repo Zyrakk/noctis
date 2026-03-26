@@ -145,7 +145,7 @@ func newServeCmd() *cobra.Command {
 			archiveStore := archive.New(pool)
 
 			// Build LLM clients
-			// GLM-5 — smart model for summarization and entity extraction
+			// GLM — smart model for entity extraction and sub-classification
 			fullClient := llm.NewOpenAICompatClient(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.LLM.Model)
 			fullClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLM.TokensPerMinute, 0))
 

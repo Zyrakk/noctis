@@ -77,7 +77,7 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 				}
 			}
 
-			// Summarize (full LLM).
+			// Summarize (fast LLM).
 			summary, err := e.summarizer.Summarize(ctx, &finding, category, severity)
 			if err != nil {
 				log.Printf("processor: classification worker %d: summarize error for %s: %v", workerID, entry.ID, err)
@@ -135,7 +135,7 @@ func (e *ProcessingEngine) extractPipelineWorker(ctx context.Context, workerID i
 
 			finding := FindingFromRawContent(entry)
 
-			// Extract IOCs (full LLM).
+			// Extract IOCs (fast LLM).
 			iocs, err := e.iocExtract.Extract(ctx, &finding)
 			if err != nil {
 				log.Printf("processor: entity extraction worker %d: extract error for %s: %v", workerID, entry.ID, err)

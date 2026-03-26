@@ -58,8 +58,8 @@ func NewProcessingEngine(
 	}
 
 	classifier := NewClassifier(classifyAnalyzer, classifyConcurrency, classifyProvider, classifyModel)
-	summarizer := NewSummarizer(fullAnalyzer, extractConcurrency, fullProvider, fullModel)
-	iocExtract := NewIOCExtractor(fullAnalyzer, extractConcurrency, fullProvider, fullModel)
+	summarizer := NewSummarizer(classifyAnalyzer, classifyConcurrency, classifyProvider, classifyModel)
+	iocExtract := NewIOCExtractor(classifyAnalyzer, classifyConcurrency, classifyProvider, classifyModel)
 	entExtract := NewEntityExtractor(fullAnalyzer, extractConcurrency, fullProvider, fullModel)
 	graphBridge := NewGraphBridge(archiveStore)
 	librarian := NewLibrarian(fullAnalyzer, extractConcurrency, fullProvider, fullModel)

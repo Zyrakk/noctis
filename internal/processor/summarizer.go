@@ -8,7 +8,7 @@ import (
 	"github.com/Zyrakk/noctis/internal/modules"
 )
 
-// Summarizer is the summarization sub-module. It uses the full LLM to
+// Summarizer is the summarization sub-module. It uses the fast LLM (Groq) to
 // produce a text summary for classified findings.
 type Summarizer struct {
 	analyzer *analyzer.Analyzer

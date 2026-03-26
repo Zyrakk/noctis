@@ -8,8 +8,8 @@ import (
 	"github.com/Zyrakk/noctis/internal/modules"
 )
 
-// IOCExtractor is the IOC extraction sub-module. It uses the full LLM to
-// extract indicators of compromise from findings.
+// IOCExtractor is the IOC extraction sub-module. It uses the fast LLM (Groq)
+// to extract indicators of compromise from findings.
 type IOCExtractor struct {
 	analyzer *analyzer.Analyzer
 	sem      *ConcurrencyLimiter
