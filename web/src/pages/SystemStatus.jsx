@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { AlertTriangle, Loader, ChevronDown, ChevronRight } from 'lucide-react'
+import { AlertTriangle, Loader } from 'lucide-react'
 
 // ── Pipeline stage mapping (module IDs from internal/modules/status.go) ──
 
@@ -47,6 +47,19 @@ const PIPELINE_STAGES = [
 const ON_DEMAND = new Set(['brain.query_engine'])
 const SCHEDULED = { 'brain.brief_generator': '06:00 UTC' }
 const HIDDEN = new Set(['infra.dashboard', 'infra.discovery'])
+
+const DISPLAY_NAMES = {
+  'collector.telegram': 'Telegram', 'collector.rss': 'RSS', 'collector.paste': 'Paste',
+  'collector.forum': 'Forum', 'collector.leaksite': 'Leak Site', 'collector.specter': 'Specter',
+  'processor.classifier': 'Classifier', 'processor.summarizer': 'Summarizer',
+  'processor.ioc_extractor': 'IOC Extractor', 'processor.entity_extractor': 'Entity Extractor',
+  'processor.graph_bridge': 'Graph Bridge', 'processor.librarian': 'Librarian',
+  'processor.ioc_lifecycle': 'IOC Lifecycle', 'brain.correlator': 'Correlator',
+  'brain.analyst': 'Analyst', 'brain.brief_generator': 'Brief Generator',
+  'brain.query_engine': 'Query Engine', 'brain.attributor': 'Attributor',
+  'processor.enrichment': 'Enrichment', 'infra.vuln_ingestor': 'Vuln Ingestor',
+  'infra.source_analyzer': 'Source Analyzer',
+}
 
 const PROVIDER_BADGE = {
   groq: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
@@ -196,53 +209,51 @@ function HealthBanner({ modMap, lastUpdated }) {
   )
 }
 
-// ── Module row ───────────────────────────────────────────────────────────
+// ── Module card ──────────────────────────────────────────────────────────
 
-function ModuleRow({ mod, isExpanded, onToggle }) {
+function ModuleCard({ mod, isExpanded, onToggle }) {
   const { s, label } = modStatus(mod)
   const dot = STATUS_DOT[s]
+  const name = mod.name || DISPLAY_NAMES[mod.id] || mod.id.split('.').pop().replace(/_/g, ' ')
   const badge = mod.ai_provider ? PROVIDER_BADGE[mod.ai_provider] : null
   const extras = mod.extra ? Object.entries(mod.extra) : []
   const hasDetail = mod.worker_count > 0 || mod.last_error || extras.length > 0 || mod.last_activity_at
+  const borderAccent = s === 'degraded' ? 'border-l-yellow-400/70' : s === 'down' ? 'border-l-red-400/70' : 'border-l-transparent'
 
-  return React.createElement('div', null,
-    React.createElement('div', {
-      className: `flex items-center gap-1.5 py-2 px-2 rounded ${hasDetail ? 'cursor-pointer hover:bg-white/[0.03]' : ''} transition-colors duration-150`,
-      onClick: hasDetail ? onToggle : undefined,
-    },
+  return React.createElement('div', {
+    className: `rounded-md border border-noctis-border/20 border-l-2 ${borderAccent} bg-white/[0.02] py-[10px] px-3 ${hasDetail ? 'cursor-pointer hover:bg-white/[0.04]' : ''} transition-colors duration-150`,
+    onClick: hasDetail ? onToggle : undefined,
+  },
+    // Row 1: identity
+    React.createElement('div', { className: 'flex items-center gap-1.5' },
       React.createElement('span', {
         className: `inline-block w-[7px] h-[7px] rounded-full shrink-0 transition-colors duration-200 ${dot}`,
       }),
       React.createElement('span', {
-        className: 'text-[13px] font-medium text-noctis-text md:truncate',
-      }, mod.name),
+        className: 'text-[13px] font-medium text-noctis-text',
+      }, name),
       badge && React.createElement('span', {
         className: `inline-flex items-center px-1 py-0 text-[9px] font-mono rounded border leading-4 shrink-0 ${badge}`,
       }, mod.ai_provider),
-      React.createElement('span', { className: 'flex-1 min-w-0' }),
-      React.createElement('span', {
-        className: 'text-[11px] font-mono text-noctis-dim shrink-0 whitespace-nowrap',
-      }, label),
-      hasDetail && React.createElement(
-        isExpanded ? ChevronDown : ChevronRight,
-        { className: 'w-3 h-3 text-noctis-dim/60 shrink-0 ml-0.5' },
-      ),
     ),
 
+    // Row 2: stats
+    React.createElement('div', {
+      className: 'flex items-center justify-between mt-1.5 text-[11px] font-mono text-noctis-dim',
+    },
+      React.createElement('span', null, label),
+      mod.last_activity_at && React.createElement('span', null, timeAgo(mod.last_activity_at)),
+    ),
+
+    // Expanded detail
     isExpanded && React.createElement('div', {
-      className: 'ml-[15px] pl-2 py-1.5 border-l border-noctis-border/30 space-y-1 animate-expand-down text-[11px]',
+      className: 'mt-2 pt-2 border-t border-noctis-border/20 space-y-1 text-[11px]',
     },
       mod.worker_count > 0 && React.createElement('div', {
         className: 'flex justify-between text-noctis-dim',
       },
         React.createElement('span', null, 'Workers'),
         React.createElement('span', { className: 'font-mono text-noctis-muted' }, mod.worker_count),
-      ),
-      mod.last_activity_at && React.createElement('div', {
-        className: 'flex justify-between text-noctis-dim',
-      },
-        React.createElement('span', null, 'Last active'),
-        React.createElement('span', { className: 'font-mono text-noctis-muted' }, timeAgo(mod.last_activity_at)),
       ),
       mod.total_errors > 0 && React.createElement('div', {
         className: 'flex justify-between text-noctis-dim',
@@ -327,10 +338,10 @@ function StageBox({ stage, expanded, onToggle, spending }) {
       }, stage.label),
     ),
     React.createElement('div', {
-      className: 'p-1 grid grid-cols-2 md:grid-cols-1 gap-0.5 md:gap-0',
+      className: 'p-3 flex flex-col gap-2.5',
     },
       stage.modules.map(mod =>
-        React.createElement(ModuleRow, {
+        React.createElement(ModuleCard, {
           key: mod.id,
           mod,
           isExpanded: expanded.has(mod.id),
