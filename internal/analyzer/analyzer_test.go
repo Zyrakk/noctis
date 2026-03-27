@@ -80,12 +80,12 @@ func TestExtractJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := extractJSON(tt.input)
+			got, err := ExtractJSON(tt.input)
 			if err != nil {
-				t.Fatalf("extractJSON(%q) unexpected error: %v", tt.input, err)
+				t.Fatalf("ExtractJSON(%q) unexpected error: %v", tt.input, err)
 			}
 			if got != tt.want {
-				t.Errorf("extractJSON(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("ExtractJSON(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -106,9 +106,9 @@ func TestExtractJSON_ProseOnly(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := extractJSON(tt.input)
+			_, err := ExtractJSON(tt.input)
 			if err == nil {
-				t.Errorf("extractJSON(%q) expected error, got nil", tt.input)
+				t.Errorf("ExtractJSON(%q) expected error, got nil", tt.input)
 			}
 		})
 	}

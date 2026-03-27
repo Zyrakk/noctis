@@ -88,6 +88,12 @@ type severityResponse struct {
 	Reasoning string `json:"reasoning"`
 }
 
+// triageResponse holds the JSON result from the triage prompt.
+type triageResponse struct {
+	Investigate []string `json:"investigate"`
+	Trash       []string `json:"trash"`
+}
+
 // iocEntry is one element of the JSON array returned by the extract_iocs prompt.
 type iocEntry struct {
 	Type      string `json:"type"`
@@ -149,11 +155,11 @@ func (a *Analyzer) renderTemplate(name string, data any) (string, error) {
 	return buf.String(), nil
 }
 
-// extractJSON extracts a JSON object or array from an LLM response that may
+// ExtractJSON extracts a JSON object or array from an LLM response that may
 // contain preamble text, markdown code fences, or postamble commentary.
 // It validates that the extracted content is well-formed JSON before returning.
 // Returns an error if no valid JSON can be found (e.g. prose-only responses).
-func extractJSON(s string) (string, error) {
+func ExtractJSON(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
 		return "", fmt.Errorf("no valid JSON found in LLM response (len=0)")
@@ -278,7 +284,7 @@ func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matche
 		return nil, fmt.Errorf("analyzer: classify LLM call: %w", err)
 	}
 
-	extracted, err := extractJSON(resp.Content)
+	extracted, err := ExtractJSON(resp.Content)
 	if err != nil {
 		return nil, fmt.Errorf("analyzer: classify parse: %w — response starts with: %.100s", err, resp.Content)
 	}
@@ -308,7 +314,7 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 		return nil, fmt.Errorf("analyzer: extract_iocs LLM call: %w", err)
 	}
 
-	extracted, err := extractJSON(resp.Content)
+	extracted, err := ExtractJSON(resp.Content)
 	if err != nil {
 		return nil, fmt.Errorf("analyzer: extract_iocs parse: %w — response starts with: %.100s", err, resp.Content)
 	}
@@ -380,7 +386,7 @@ func (a *Analyzer) ExtractEntities(ctx context.Context, finding *models.Finding,
 		return nil, fmt.Errorf("analyzer: extract_entities LLM call: %w", err)
 	}
 
-	extracted, err := extractJSON(resp.Content)
+	extracted, err := ExtractJSON(resp.Content)
 	if err != nil {
 		return nil, fmt.Errorf("analyzer: extract_entities parse: %w — response starts with: %.100s", err, resp.Content)
 	}
@@ -417,7 +423,7 @@ func (a *Analyzer) AssessSeverity(ctx context.Context, finding *models.Finding, 
 		return models.SeverityInfo, fmt.Errorf("analyzer: severity LLM call: %w", err)
 	}
 
-	extracted, err := extractJSON(resp.Content)
+	extracted, err := ExtractJSON(resp.Content)
 	if err != nil {
 		return models.SeverityInfo, fmt.Errorf("analyzer: severity parse: %w — response starts with: %.100s", err, resp.Content)
 	}
@@ -502,7 +508,7 @@ func (a *Analyzer) SubClassify(ctx context.Context, finding *models.Finding, cat
 		return nil, fmt.Errorf("analyzer: sub_classify LLM call: %w", err)
 	}
 
-	extracted, err := extractJSON(resp.Content)
+	extracted, err := ExtractJSON(resp.Content)
 	if err != nil {
 		return nil, fmt.Errorf("analyzer: sub_classify parse: %w — response starts with: %.100s", err, resp.Content)
 	}
@@ -563,7 +569,7 @@ func (a *Analyzer) EvaluateCorrelation(ctx context.Context, data *CorrelationPro
 		return nil, fmt.Errorf("analyzer: evaluate_correlation LLM call: %w", err)
 	}
 
-	extracted, err := extractJSON(resp.Content)
+	extracted, err := ExtractJSON(resp.Content)
 	if err != nil {
 		return nil, fmt.Errorf("analyzer: evaluate_correlation parse: %w — response starts with: %.100s", err, resp.Content)
 	}
@@ -644,7 +650,7 @@ func (a *Analyzer) GenerateBrief(ctx context.Context, data *BriefPromptData) (*B
 		return nil, fmt.Errorf("analyzer: daily_brief LLM call: %w", err)
 	}
 
-	extracted, err := extractJSON(resp.Content)
+	extracted, err := ExtractJSON(resp.Content)
 	if err != nil {
 		return nil, fmt.Errorf("analyzer: daily_brief parse: %w — response starts with: %.100s", err, resp.Content)
 	}
@@ -669,4 +675,33 @@ func (a *Analyzer) RawCompletion(ctx context.Context, prompt string) (string, er
 		return "", fmt.Errorf("analyzer: raw completion: %w", err)
 	}
 	return resp.Content, nil
+}
+
+// TriageURLs sends a batch of URLs to the LLM for classification as
+// "investigate" or "trash". Returns the parsed response.
+func (a *Analyzer) TriageURLs(ctx context.Context, urls []string) (*triageResponse, error) {
+	prompt, err := a.renderTemplate("triage", struct {
+		URLs []string
+	}{URLs: urls})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := a.client.ChatCompletion(ctx, []llm.Message{
+		{Role: "user", Content: prompt},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("analyzer: triage LLM call: %w", err)
+	}
+
+	extracted, err := ExtractJSON(resp.Content)
+	if err != nil {
+		return nil, fmt.Errorf("analyzer: triage parse: %w — response starts with: %.100s", err, resp.Content)
+	}
+
+	var result triageResponse
+	if err := json.Unmarshal([]byte(extracted), &result); err != nil {
+		return nil, fmt.Errorf("analyzer: triage parse response %q: %w", truncate(resp.Content, 200), err)
+	}
+	return &result, nil
 }
