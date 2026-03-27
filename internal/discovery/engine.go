@@ -46,6 +46,7 @@ type Engine struct {
 	config            config.DiscoveryConfig
 	urlRegexes        []*regexp.Regexp     // compiled URL extraction patterns
 	blacklistDomains  map[string]struct{}  // domains to skip during discovery
+	allowDomains      map[string]struct{}  // domains that bypass triage
 	monitoredChannels map[string]struct{}  // telegram usernames already in config (lowercase)
 }
 
@@ -82,11 +83,17 @@ func NewEngine(pool *pgxpool.Pool, cfg config.DiscoveryConfig) *Engine {
 		blacklist[strings.ToLower(d)] = struct{}{}
 	}
 
+	allow := make(map[string]struct{}, len(cfg.AllowDomains))
+	for _, d := range cfg.AllowDomains {
+		allow[strings.ToLower(d)] = struct{}{}
+	}
+
 	return &Engine{
 		pool:              pool,
 		config:            cfg,
 		urlRegexes:        regexes,
 		blacklistDomains:  blacklist,
+		allowDomains:      allow,
 		monitoredChannels: make(map[string]struct{}),
 	}
 }
@@ -182,6 +189,55 @@ func (e *Engine) isBlacklisted(rawURL string) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// matchesAllowlist returns true if the URL matches any configured allow
+// pattern or domain. Telegram links (t.me/*) are always allowed.
+func (e *Engine) matchesAllowlist(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+
+	host := strings.ToLower(parsed.Hostname())
+
+	// Telegram links always pass.
+	if host == "t.me" {
+		return true
+	}
+
+	// Check exact allow domains.
+	if _, ok := e.allowDomains[host]; ok {
+		return true
+	}
+	// Check subdomain match against allow domains.
+	for domain := range e.allowDomains {
+		if strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+
+	// Check allow patterns from config.
+	for _, pattern := range e.config.AllowPatterns {
+		switch {
+		case strings.HasPrefix(pattern, "*."): // suffix match: *.onion
+			suffix := pattern[1:] // ".onion"
+			if strings.HasSuffix(host, suffix) {
+				return true
+			}
+		case strings.HasSuffix(pattern, ".*"): // prefix match: ghostbin.*
+			prefix := pattern[:len(pattern)-2] // "ghostbin"
+			if host == prefix || strings.HasPrefix(host, prefix+".") {
+				return true
+			}
+		default: // exact match: pastebin.com, rentry.co
+			if host == pattern || strings.HasSuffix(host, "."+pattern) {
+				return true
+			}
+		}
+	}
+
 	return false
 }
 

@@ -410,3 +410,67 @@ func TestNormalizeTelegramURL_SkipMonitored(t *testing.T) {
 		})
 	}
 }
+
+// newAllowlistEngine creates an Engine with allowlist patterns and domains configured.
+func newAllowlistEngine() *Engine {
+	return NewEngine(nil, config.DiscoveryConfig{
+		Enabled: true,
+		AllowPatterns: []string{
+			"*.onion",
+			"pastebin.com",
+			"ghostbin.*",
+			"privatebin.*",
+			"rentry.co",
+		},
+		AllowDomains: []string{
+			"leakbase.la",
+			"breachforums.st",
+		},
+	})
+}
+
+func TestMatchesAllowlist_OnionURL(t *testing.T) {
+	e := newAllowlistEngine()
+	if !e.matchesAllowlist("http://abc2345678901234567.onion/forum/thread") {
+		t.Error("expected .onion URL to match allowlist")
+	}
+}
+
+func TestMatchesAllowlist_PasteSite(t *testing.T) {
+	e := newAllowlistEngine()
+	tests := []string{
+		"https://pastebin.com/abc123",
+		"https://ghostbin.co/paste/xyz",
+		"https://privatebin.net/p12345",
+		"https://rentry.co/abc",
+	}
+	for _, u := range tests {
+		if !e.matchesAllowlist(u) {
+			t.Errorf("expected %q to match allowlist", u)
+		}
+	}
+}
+
+func TestMatchesAllowlist_TelegramLink(t *testing.T) {
+	e := newAllowlistEngine()
+	if !e.matchesAllowlist("https://t.me/darkleaks") {
+		t.Error("expected t.me link to match allowlist")
+	}
+}
+
+func TestMatchesAllowlist_AllowedDomain(t *testing.T) {
+	e := newAllowlistEngine()
+	if !e.matchesAllowlist("https://leakbase.la/threads/dump") {
+		t.Error("expected allowDomains entry to match")
+	}
+	if !e.matchesAllowlist("https://breachforums.st/thread/123") {
+		t.Error("expected allowDomains entry to match")
+	}
+}
+
+func TestMatchesAllowlist_UnknownDomain(t *testing.T) {
+	e := newAllowlistEngine()
+	if e.matchesAllowlist("https://randomsite.com/page") {
+		t.Error("expected unknown domain to NOT match allowlist")
+	}
+}
