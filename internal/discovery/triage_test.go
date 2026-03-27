@@ -123,13 +123,13 @@ func TestTriageResponseParsing(t *testing.T) {
 // TestTriageWorker_BelowThreshold verifies the worker is constructable with defaults.
 func TestTriageWorker_BelowThreshold(t *testing.T) {
 	// Verify default batch size.
-	tw := NewTriageWorker(nil, nil, 0)
+	tw := NewTriageWorker(nil, nil, 0, "test-model")
 	if tw.batchSize != 100 {
 		t.Errorf("default batchSize = %d, want 100", tw.batchSize)
 	}
 
 	// Verify custom batch size.
-	tw2 := NewTriageWorker(nil, nil, 50)
+	tw2 := NewTriageWorker(nil, nil, 50, "test-model")
 	if tw2.batchSize != 50 {
 		t.Errorf("custom batchSize = %d, want 50", tw2.batchSize)
 	}

@@ -18,12 +18,14 @@ type TriageWorker struct {
 	pool      *pgxpool.Pool
 	analyzer  *analyzer.Analyzer
 	batchSize int
+	modelName string
 	status    *modules.StatusTracker
 }
 
 // NewTriageWorker creates a triage worker using the given analyzer (typically
-// the fast/classify analyzer) for LLM calls.
-func NewTriageWorker(pool *pgxpool.Pool, az *analyzer.Analyzer, batchSize int) *TriageWorker {
+// the fast/classify analyzer) for LLM calls. modelName is recorded in the
+// audit log for traceability.
+func NewTriageWorker(pool *pgxpool.Pool, az *analyzer.Analyzer, batchSize int, modelName string) *TriageWorker {
 	if batchSize <= 0 {
 		batchSize = 100
 	}
@@ -31,6 +33,7 @@ func NewTriageWorker(pool *pgxpool.Pool, az *analyzer.Analyzer, batchSize int) *
 		pool:      pool,
 		analyzer:  az,
 		batchSize: batchSize,
+		modelName: modelName,
 		status:    modules.NewStatusTracker(modules.ModSourceTriage, "Source Triage", "infra"),
 	}
 }
@@ -187,7 +190,7 @@ func (tw *TriageWorker) processBatch(ctx context.Context) {
 		if _, err := tw.pool.Exec(ctx, `
 			INSERT INTO source_triage_log (batch_id, identifier, decision, model_used)
 			VALUES ($1, $2, $3, $4)`,
-			batchID, r.Identifier, decision, "",
+			batchID, r.Identifier, decision, tw.modelName,
 		); err != nil {
 			slog.Error("triage: log decision", "error", err)
 		}

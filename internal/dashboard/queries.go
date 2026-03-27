@@ -497,6 +497,10 @@ func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType st
 			conditions = append(conditions, fmt.Sprintf("s.status = %s", p))
 			args = append(args, status)
 		}
+	} else {
+		// Exclude pending_triage from unfiltered listings — those are
+		// awaiting AI classification and should not appear in the UI.
+		conditions = append(conditions, "s.status != 'pending_triage'")
 	}
 	if sourceType != "" {
 		p := nextArg()
