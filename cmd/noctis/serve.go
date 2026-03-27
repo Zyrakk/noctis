@@ -373,6 +373,14 @@ func newServeCmd() *cobra.Command {
 			registry.Register(enricher.Status())
 			go enricher.Run(pipelineCtx)
 
+			// Start source triage worker (AI classification of unknown URLs).
+			if cfg.Discovery.TriageEnabled {
+				triageWorker := discovery.NewTriageWorker(pool, classifyAnalyzer, cfg.Discovery.TriageBatchSize)
+				registry.Register(triageWorker.Status())
+				go triageWorker.Run(pipelineCtx)
+				slog.Info("triage worker enabled", "batch_size", cfg.Discovery.TriageBatchSize)
+			}
+
 			// Build collector manager with status tracking.
 			collectorMgr := collector.NewCollectorManager(
 				collectors,
