@@ -109,13 +109,16 @@ internal/
                               transport + CollectorManager + SourceValueAnalyzer
   config/                   — YAML parsing, ${VAR} env substitution, validation
   database/                 — PostgreSQL connection pool and migration runner
-  discovery/                — Source discovery engine (URL extraction, approval)
+  discovery/                — Source discovery engine (URL extraction, three-tier
+                              filtering, AI triage worker, auto-blacklist learning)
   dispatcher/               — Prometheus metrics recording
   enrichment/               — IOC enrichment pipeline: AbuseIPDB, VirusTotal,
                               crt.sh providers
   health/                   — HTTP health checks (/healthz, /readyz) + QR auth
   ingest/                   — Real-time ingest pipeline (matching + alert path)
-  llm/                      — OpenAI-compatible LLM client interface + implementation
+  llm/                      — OpenAI-compatible LLM client, token-bucket rate
+                              limiter (ratelimit.go), Gemini spending tracker
+                              (spending.go)
   matcher/                  — Keyword/regex pattern matching engine
   models/                   — Finding, IOC, Severity, Category, ActorProfile, Canary
   modules/                  — StatusTracker, ModuleStatus, Registry (system-wide

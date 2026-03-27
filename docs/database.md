@@ -2,7 +2,7 @@
 
 ## Overview
 
-Noctis uses PostgreSQL 16 (`postgres:16-alpine` in production) with a pgx/v5 connection pool. The schema is applied through 9 sequential migration files run automatically at startup via `database.RunMigrations` in `serve.go`. No manual steps required.
+Noctis uses PostgreSQL 16 (`postgres:16-alpine` in production) with a pgx/v5 connection pool. The schema is applied through 11 sequential migration files run automatically at startup via `database.RunMigrations` in `serve.go`. No manual steps required.
 
 Connection is configured via the `DATABASE_URL` environment variable (see `docs/configuration.md`). All queries use parameterized SQL via `pgxpool.Pool`.
 
@@ -42,7 +42,7 @@ The pivot migration that introduces the full intelligence pipeline tables. These
 - `raw_content` — Central archive storing every collected item regardless of relevance. UUID PK. Key columns: `source_type` (telegram, paste, forum, web, rss), `source_id`, `source_name`, `content TEXT`, `content_hash TEXT UNIQUE` (SHA-256, deduplication), `author`, `author_id`, `url`, `language`, `collected_at TIMESTAMPTZ`, `posted_at TIMESTAMPTZ`, `metadata JSONB`, `classified BOOL DEFAULT FALSE`, `category TEXT`, `tags TEXT[]`, `severity TEXT`, `summary TEXT`, `entities_extracted BOOL DEFAULT FALSE`. Indexes include a partial index on `collected_at ASC WHERE classified = FALSE` for efficient queue processing.
 - `iocs` — All indicators of compromise extracted across all content. UUID PK. Key columns: `type TEXT` (ip, domain, hash_md5, hash_sha256, email, crypto_wallet, url, cve), `value TEXT`, `context TEXT`, `source_content_id UUID FK → raw_content(id)`, `first_seen`, `last_seen`, `sighting_count INT DEFAULT 1`, `confidence REAL DEFAULT 0.5`. `UNIQUE(type, value)` constraint deduplicates across sources.
 - `artifacts` — Downloaded binary files and attachments. UUID PK. Key columns: `source_content_id UUID FK → raw_content(id)`, `filename`, `mime_type`, `size_bytes BIGINT`, `sha256 TEXT UNIQUE`, `storage_path TEXT` (NFS volume path), `tags TEXT[]`, `analyzed BOOL`, `analysis JSONB`.
-- `sources` — Registry of all monitored and discovered sources. UUID PK. Key columns: `identifier TEXT UNIQUE`, `name TEXT`, `type TEXT` (telegram_channel, telegram_group, forum, paste_site, web, rss), `status TEXT` (discovered, approved, active, paused, dead, banned), `discovered_from UUID`, `last_collected`, `collection_interval TEXT`, `error_count INT`, `metadata JSONB`. Indexed on `status` and `type`.
+- `sources` — Registry of all monitored and discovered sources. UUID PK. Key columns: `identifier TEXT UNIQUE`, `name TEXT`, `type TEXT` (telegram_channel, telegram_group, forum, paste_site, web, rss), `status TEXT` (discovered, approved, active, paused, dead, banned, pending_triage), `discovered_from UUID`, `last_collected`, `collection_interval TEXT`, `error_count INT`, `metadata JSONB`. Indexed on `status` and `type`.
 
 ---
 
@@ -126,6 +126,32 @@ Phase 2 additions enabling fine-grained content classification, LLM memory, anal
 
 ---
 
+### 010_triage.sql — AI Triage Audit Log and Auto-Blacklist
+
+Adds tables for the AI-powered source triage system and learned domain blacklisting.
+
+**Tables created:** `source_triage_log`, `discovered_blacklist`
+
+- `source_triage_log` — Audit trail of every AI triage decision. `id UUID PK DEFAULT gen_random_uuid()`, `batch_id TEXT NOT NULL` (groups decisions from the same triage run), `identifier TEXT NOT NULL` (the source URL/identifier evaluated), `decision TEXT NOT NULL` (investigate or trash), `model_used TEXT`, `created_at TIMESTAMPTZ DEFAULT NOW()`. Indexed on `batch_id` and `created_at DESC`.
+- `discovered_blacklist` — Domains automatically blocked after repeated trash decisions by the triage worker. `domain TEXT PK`, `trash_count INTEGER NOT NULL DEFAULT 1`, `auto_added BOOLEAN NOT NULL DEFAULT TRUE`, `created_at TIMESTAMPTZ DEFAULT NOW()`. When `trash_count` reaches 3, the domain is loaded into a runtime blacklist that prevents future URLs from that domain from entering the triage pipeline.
+
+---
+
+### 011_normalize_telegram_identifiers.sql — Telegram Identifier Normalization
+
+A data-only migration (no schema changes). Normalizes Telegram channel identifiers in the `sources` table from full URLs (`https://t.me/username` or `t.me/username`) to bare usernames. This resolves a mismatch where the discovery engine stored full URLs but the config and collector used bare usernames, preventing reliable matching for `last_collected` updates.
+
+```sql
+UPDATE sources
+SET identifier = regexp_replace(identifier, '^(https?://)?t\.me/', ''),
+    name = regexp_replace(name, '^(https?://)?t\.me/', ''),
+    updated_at = NOW()
+WHERE type = 'telegram_channel'
+  AND identifier ~ '(^https?://t\.me/|^t\.me/)';
+```
+
+---
+
 ## Table Reference
 
 | Table | Purpose | Key Columns |
@@ -139,13 +165,15 @@ Phase 2 additions enabling fine-grained content classification, LLM memory, anal
 | `iocs` | Extracted indicators of compromise | `UNIQUE(type,value)`, `threat_score`, `base_score`, `active`, `lifetime_days`, `enrichment JSONB` |
 | `ioc_sightings` | Multi-source IOC provenance log | `PK(ioc_type, ioc_value, raw_content_id)`, `source_id`, `source_name` |
 | `artifacts` | Downloaded binary files | `sha256 UNIQUE`, `storage_path`, `analyzed BOOL`, `analysis JSONB` |
-| `sources` | Source registry | `identifier UNIQUE`, `status`, `type`, `value_score`, `signal_to_noise` |
+| `sources` | Source registry (status: discovered, approved, active, paused, dead, banned, pending_triage) | `identifier UNIQUE`, `status`, `type`, `value_score`, `signal_to_noise` |
 | `correlations` | Confirmed cross-source correlations | `cluster_id UNIQUE`, `correlation_type`, `confidence`, `entity_ids TEXT[]`, `evidence JSONB` |
 | `correlation_candidates` | Weak signals pending LLM evaluation | `cluster_id UNIQUE`, `status`, `signal_count`, `signals JSONB` |
 | `analytical_notes` | LLM and human analytical conclusions | `note_type`, `confidence`, `status`, `superseded_by FK` |
 | `correlation_decisions` | Analyst LLM decision audit trail | `candidate_id FK`, `decision`, `reasoning`, `context_snapshot JSONB` |
 | `intelligence_briefs` | Periodic LLM-generated intelligence summaries | `brief_type`, `period_start/end`, `sections JSONB`, `metrics JSONB` |
 | `vulnerabilities` | CVE tracking with CVSS/EPSS/KEV enrichment | `cve_id UNIQUE`, `priority_score`, `kev_listed`, `epss_score`, `dark_web_mentions` |
+| `source_triage_log` | AI triage decision audit trail | `batch_id TEXT`, `identifier TEXT`, `decision TEXT`, `model_used TEXT` |
+| `discovered_blacklist` | Auto-learned domain blacklist from triage | `domain TEXT PK`, `trash_count INT`, `auto_added BOOL` |
 
 ---
 

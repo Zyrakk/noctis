@@ -96,8 +96,8 @@ Collector.Start() emits models.Finding
         │     │    ├── [no match] → return       // stays classified=false
         │     │    └── [match] → alert path
         │     │          ├── Classify (fast LLM)
-        │     │          ├── ExtractIOCs (full LLM)
-        │     │          ├── Summarize (full LLM)
+        │     │          ├── ExtractIOCs (fast LLM)
+        │     │          ├── Summarize (fast LLM)
         │     │          └── alertFn(EnrichedFinding) → Prometheus metrics
         │     └── archive.MarkClassified()
         │
@@ -105,7 +105,7 @@ Collector.Start() emits models.Finding
               └── ExtractURLs → classify by heuristic → INSERT INTO sources ON CONFLICT DO NOTHING
 
 [background] ProcessingEngine.classifyPipelineWorker (N workers)
-  FetchUnclassified() → Classify (fast LLM) → Summarize (full LLM) → MarkClassified()
+  FetchUnclassified() → Classify (fast LLM) → Summarize (fast LLM) → MarkClassified()
 
 [background] ProcessingEngine.extractPipelineWorker (M workers)
   FetchClassifiedUnextracted() → IOCExtractor → GraphBridge.BridgeIOCs()
@@ -238,6 +238,8 @@ migrations/
   007_phase2.sql       sub_classification columns, analytical_notes, correlation_decisions, source value columns
   008_phase3.sql       IOC lifecycle columns, intelligence_briefs, vulnerabilities
   009_enrichment.sql   IOC enrichment columns (enrichment JSONB, enriched_at, enrichment_sources)
+  010_triage.sql       source_triage_log, discovered_blacklist (AI triage audit + auto-blacklist)
+  011_normalize_telegram_identifiers.sql  Telegram identifier URL→username normalization
 
 prompts/
   classify.tmpl            Category + confidence + severity + provenance + reasoning
@@ -248,6 +250,7 @@ prompts/
   severity.tmpl            Severity assessment (standalone, used in alert path)
   summarize.tmpl           Analyst-readable one-paragraph summary
   daily_brief.tmpl         Full intelligence brief synthesis
+  triage.tmpl              URL batch triage for source discovery (fast LLM)
   stylometry.tmpl          Actor stylometric fingerprinting (reserved)
 
 web/                   React SPA source (built output embedded in dashboard/static/)
@@ -283,7 +286,7 @@ pool, _ := database.Connect(ctx, cfg.Database.DSN)
 migrations, _ := database.LoadMigrations("migrations")
 database.RunMigrations(ctx, pool, migrations)
 ```
-Migrations are idempotent (`IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`). All 9 migrations run sequentially.
+Migrations are idempotent (`IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`). All 11 migrations run sequentially.
 
 **5. Module Registry**
 ```go
@@ -304,8 +307,8 @@ Three clients are constructed in single-mode or dual-mode depending on config:
 
 | Client | Config key | Default use |
 |---|---|---|
-| `fullClient` | `llm` | Summarization, IOC extraction, entity extraction, Librarian |
-| `classifyClient` (fast) | `llmFast` | Classification — falls back to `fullClient` if `llmFast.model` is empty |
+| `fullClient` | `llm` | Entity extraction, Librarian |
+| `classifyClient` (fast) | `llmFast` | Classification, Summarization, IOC extraction — falls back to `fullClient` if `llmFast.model` is empty |
 | `brainClient` | `llmBrain` | Correlator evaluation, Brief Generator, Query Engine — falls back to `fullClient` |
 
 All three use `llm.NewOpenAICompatClient(baseURL, apiKey, model)`, an OpenAI-compatible HTTP client.
@@ -325,6 +328,23 @@ discoveryEngine.SetMonitoredChannels(telegramUsernames)
 ```
 Registered Telegram channel usernames are pre-loaded so the discovery engine skips already-monitored sources.
 
+The discovery engine uses a three-tier filtering system (evaluated in order in `ProcessContent`):
+
+1. `isBlacklisted` (config `domainBlacklist`) — skip
+2. `isAutoBlacklisted` (learned from triage decisions) — skip
+3. `shouldSkipURL` (structural filters: private IPs, FUZZ, localhost, image URLs like `.png`/`.jpg`/`.gif`/`.svg`/`.webp`/`.ico`/`.bmp`) — skip
+4. `matchesAllowlist` (config `allowPatterns` + `allowDomains`) — status `discovered`
+5. else — status `pending_triage`
+
+**AI triage worker:** Runs every 5 minutes, checks the `pending_triage` count. When count >= `triageBatchSize` (default 100), fetches a batch and sends the URL list to the fast LLM (Groq/llmFast) with `triage.tmpl` prompt. Decisions:
+- `investigate` — promoted to status `discovered`
+- `trash` — hard deleted from `sources` table
+- All decisions are logged to `source_triage_log` table
+
+**Auto-blacklist learning:** The `discovered_blacklist` table tracks domains of trashed sources. After 3+ trash decisions for a domain, it is auto-added to the runtime blacklist. The auto-blacklist is loaded on startup and refreshed after each triage batch. Auto-blacklisted domains cannot override `allowDomains` or `allowPatterns`.
+
+Valid source statuses: `discovered`, `approved`, `active`, `paused`, `dead`, `banned`, `pending_triage`.
+
 **10. ProcessingEngine** (goroutine)
 
 Registers 7 sub-modules with the registry, runs startup backfill tasks, then starts worker goroutines:
@@ -340,7 +360,7 @@ go processingEngine.Run(pipelineCtx)
 
 Defaults when config values are zero:
 - `ClassificationWorkers`: 8
-- `EntityExtractionWorkers`: 2
+- `EntityExtractionWorkers`: 1
 - `LibrarianWorkers`: 1
 - `ClassificationBatchSize`: 10
 
@@ -537,6 +557,8 @@ The `WaitGroup` in `CollectorManager.Run` waits for all goroutines before return
 - On start: optionally fetches the last N messages via `MessagesGetHistory` for catch-up
 - Message handler: `OnNewChannelMessage` — SHA-256 dedup in-memory, converts to `models.Finding`
 - Channel discovery: telegram-specific messages are passed through `discoveryEngine` for new channel extraction
+- Private invite links (`t.me/+` format) are skipped since they cannot be resolved via `ResolveUsername`
+- The collector merges config channels with DB sources of type `telegram_channel` (`status='active'`)
 
 **PasteCollector** (`collector.paste`)
 - Two sub-goroutines per `Start` call: one polls the Pastebin `scrape.pastebin.com` API (limit 50), one polls each custom scraper URL
@@ -553,6 +575,8 @@ The `WaitGroup` in `CollectorManager.Run` waits for all goroutines before return
 
 **WebCollector / RSS** (`collector.rss`)
 - One goroutine per feed in `cfg.Sources.Web.Feeds`
+- In addition to config feeds, the RSS collector loads feeds from the `sources` table (`type='rss'`, `status='active'`). DB sources are refreshed every 30 minutes.
+- `sources.last_collected` is updated after each collection cycle for both config and DB-sourced feeds.
 - Three feed types:
   - `rss`: parsed via `gofeed`, each item becomes a finding
   - `scrape`: fetches URL, extracts content via CSS selector
@@ -569,11 +593,11 @@ The `WaitGroup` in `CollectorManager.Run` waits for all goroutines before return
 | Sub-module | LLM | Worker count |
 |---|---|---|
 | Classifier | fast (Groq/llama-4-scout) | `cfg.Collection.ClassificationWorkers` (default 8) |
-| Summarizer | full (GLM-5) | shares classify worker count |
-| IOC Extractor | full (GLM-5) | `cfg.Collection.EntityExtractionWorkers` (default 2) |
-| Entity Extractor | full (GLM-5) | shares extract worker count |
+| Summarizer | fast (Groq/llama-4-scout) | shares classify worker count |
+| IOC Extractor | fast (Groq/llama-4-scout) | `cfg.Collection.EntityExtractionWorkers` (default 1) |
+| Entity Extractor | full (GLM-5-Turbo) | shares extract worker count |
 | Graph Bridge | none | shares extract worker count |
-| Librarian | full (GLM-5) | `cfg.Collection.LibrarianWorkers` (default 1) |
+| Librarian | full (GLM-5-Turbo) | `cfg.Collection.LibrarianWorkers` (default 1) |
 | IOC Lifecycle Manager | none | 1 (periodic ticker) |
 
 ### Startup Backfill
@@ -595,7 +619,7 @@ FetchUnclassified(ctx, batchSize)   [ORDER BY collected_at ASC, WHERE classified
       → category, confidence, severity, provenance
     if confidence < 0.80 → tags += "needs_review"
     Summarizer.Summarize(ctx, finding, category, severity)
-      → summary text
+      → summary text (fast LLM, summarize.tmpl)
     archive.MarkClassified(ctx, id, category, tags, severity, summary, provenance, version=3)
 ```
 
@@ -609,13 +633,13 @@ Runs M times concurrently. Each iteration:
 FetchClassifiedUnextracted(ctx, batchSize)  [WHERE classified=true AND entities_extracted=false]
   for each entry:
     IOCExtractor.Extract(ctx, finding)
-      → []models.IOC (only entries with malicious=true)
+      → []models.IOC (fast LLM, extract_iocs.tmpl; only entries with malicious=true)
     for each IOC: archive.UpsertIOC(...)
     if IOCs > 0: GraphBridge.BridgeIOCs(entry, iocs)
 
     if category != "irrelevant":
       EntityExtractor.Extract(ctx, finding, category, sourceName, sourceType, provenance)
-        → EntityExtractionResult{Entities, Relationships}
+        → EntityExtractionResult{Entities, Relationships} (full LLM, extract_entities.tmpl)
       GraphBridge.BridgeEntities(entry, result)
 
     archive.MarkEntitiesExtracted(entry.ID)
@@ -671,6 +695,10 @@ func (c *ConcurrencyLimiter) Release() { <-c.sem }
 ```
 
 Each sub-module (Classifier, Summarizer, IOCExtractor, EntityExtractor, Librarian) has its own independent `ConcurrencyLimiter` sized from `classifyConcurrency` or `extractConcurrency` config.
+
+### Poison Item Skip
+
+Classification and entity extraction workers track consecutive failures per content ID. After 5 consecutive failures, the item is marked as `unclassifiable` and skipped. This prevents single bad items from blocking the entire pipeline.
 
 ### Graph Bridge Entity ID Format
 
@@ -813,13 +841,13 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
     // 3a. Classify (fast LLM) — returns category, confidence, severity, provenance
     classResult, _ := p.classifyAnalyzer.Classify(ctx, &f, result.MatchedRules)
 
-    // 3b. Extract IOCs (full LLM)
+    // 3b. Extract IOCs (fast LLM)
     iocs, _ := p.fullAnalyzer.ExtractIOCs(ctx, &f)
 
     // 3c. Merge severity (LLM severity used if higher than rule-based)
     if llmSev > enriched.Severity { enriched.Severity = llmSev }
 
-    // 3d. Summarize (full LLM)
+    // 3d. Summarize (fast LLM)
     summary, _ := p.fullAnalyzer.Summarize(ctx, &f, category, severity)
 
     // 4. Alert dispatch
@@ -934,8 +962,8 @@ Results are merged into a JSONB map keyed by provider name and stored in `iocs.e
 │       ├── [no match] → metrics.RecordMatcherDrop() → return             │
 │       └── [match]                                                        │
 │            ├── Classify    (fast LLM, classify.tmpl)                    │
-│            ├── ExtractIOCs (full LLM, extract_iocs.tmpl)                │
-│            ├── Summarize   (full LLM, summarize.tmpl)                   │
+│            ├── ExtractIOCs (fast LLM, extract_iocs.tmpl)                │
+│            ├── Summarize   (fast LLM, summarize.tmpl)                   │
 │            ├── alertFn(EnrichedFinding) → PrometheusMetrics             │
 │            └── archive.MarkClassified(classified=true, version=3)       │
 │                                                                          │
@@ -951,12 +979,12 @@ Results are merged into a JSONB map keyed by provider name and stored in `iocs.e
 │  ├── FetchUnclassified(batch=10) [ORDER BY collected_at ASC]            │
 │  ├── Classifier → category, confidence, severity, provenance            │
 │  │   (fast LLM, classify.tmpl)                                          │
-│  └── Summarizer → summary text (full LLM, summarize.tmpl)              │
+│  └── Summarizer → summary text (fast LLM, summarize.tmpl)              │
 │       └── MarkClassified(classified=true, version=3)                    │
 │                                                                          │
-│  extractPipelineWorker (M=2 goroutines)                                 │
+│  extractPipelineWorker (M=1 goroutines)                                 │
 │  ├── FetchClassifiedUnextracted(batch=10)                               │
-│  ├── IOCExtractor → []IOC (full LLM, extract_iocs.tmpl)               │
+│  ├── IOCExtractor → []IOC (fast LLM, extract_iocs.tmpl)               │
 │  │   └── UpsertIOC + GraphBridge.BridgeIOCs                            │
 │  ├── EntityExtractor → {entities, relationships} (full LLM)            │
 │  │   └── GraphBridge.BridgeEntities                                     │
@@ -964,7 +992,7 @@ Results are merged into a JSONB map keyed by provider name and stored in `iocs.e
 │                                                                          │
 │  librarianPipelineWorker (L=1 goroutines)                               │
 │  ├── FetchUnsubclassified(batch=10)                                     │
-│  ├── Librarian → sub_category + sub_metadata (full LLM)                │
+│  ├── Librarian → sub_category + sub_metadata (full LLM, GLM-5-Turbo)   │
 │  └── MarkSubClassified                                                  │
 │                                                                          │
 │  IOCLifecycleManager (ticker, default 60m)                              │
@@ -1028,7 +1056,7 @@ main goroutine
   │
   ├── processingEngine.Run goroutine
   │     ├── classifyPipelineWorker goroutine × 8 (default)
-  │     ├── extractPipelineWorker goroutine × 2 (default)
+  │     ├── extractPipelineWorker goroutine × 1 (default)
   │     ├── librarianPipelineWorker goroutine × 1 (default)
   │     └── iocLifecycle.Run goroutine × 1 (ticker)
   │
@@ -1061,8 +1089,8 @@ main goroutine
 
 | Sub-module | Concurrency config |
 |---|---|
-| Classifier | `cfg.LLMFast.MaxConcurrency` → fallback `cfg.LLM.MaxConcurrent` → default 2 |
-| Summarizer, IOCExtractor, EntityExtractor, Librarian | `cfg.LLM.MaxConcurrent` → default 2 |
+| Classifier, Summarizer, IOCExtractor | `cfg.LLMFast.MaxConcurrency` → fallback `cfg.LLM.MaxConcurrent` → default 2 |
+| EntityExtractor, Librarian | `cfg.LLM.MaxConcurrent` → default 2 |
 | Analyst, BriefGenerator, QueryEngine | `cfg.LLMBrain.MaxConcurrent` → default 1 |
 
 **No shared rate limiter exists between worker goroutines.** Concurrency is bounded by the semaphore; workers proceed as fast as the LLM allows within the slot budget. Workers sleep `WorkerIdleInterval` (30 seconds) when their fetch query returns an empty batch, then immediately re-poll.
@@ -1071,7 +1099,7 @@ main goroutine
 - 1 health server
 - 1 dashboard server
 - 8 classification workers
-- 2 extraction workers
+- 1 extraction worker
 - 1 librarian worker
 - 1 IOC lifecycle ticker
 - 1 correlator ticker
@@ -1084,4 +1112,4 @@ main goroutine
 - 4 collector consumers (1 per collector type)
 - N sub-goroutines inside PasteCollector (1 + scrapers), ForumCollector (1 per site), WebCollector (1 per feed)
 
-Minimum at steady state with all default workers and 1 of each collector type: approximately 28 goroutines before accounting for sub-collector goroutines driven by site/feed configuration.
+Minimum at steady state with all default workers and 1 of each collector type: approximately 27 goroutines before accounting for sub-collector goroutines driven by site/feed configuration.

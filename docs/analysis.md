@@ -43,9 +43,9 @@ Noctis operates three distinct LLM clients, each purpose-matched to its task:
 
 | Config key | Provider | Role | Prompt templates used |
 |------------|----------|------|-----------------------|
-| `llm` | GLM-5 | Full analysis: IOC extraction, entity extraction, summarization, sub-classification | `extract_iocs`, `extract_entities`, `summarize`, `classify_detail`, `severity` |
-| `llmFast` | Groq | High-volume classification | `classify` |
-| `llmBrain` | Gemini 2.5 Pro | Correlation analysis, brief generation, NL queries | `evaluate_correlation`, `daily_brief`, (NL→SQL) |
+| `llm` | GLM-5-Turbo (via api.z.ai) | Entity extraction, sub-classification | `extract_entities`, `classify_detail`, `severity` |
+| `llmFast` | Groq (llama-4-scout) | Classification, summarization, IOC extraction | `classify`, `summarize`, `extract_iocs` |
+| `llmBrain` | Gemini 3.1 Pro | Correlation analysis, brief generation, NL queries | `evaluate_correlation`, `daily_brief`, (NL→SQL) |
 
 When `llmFast.model` is empty the system falls back to `llm` for classification
 (single-LLM mode). When `llmBrain.baseURL` is empty the system falls back to
@@ -60,23 +60,27 @@ All templates live in `prompts/`. They use Go `text/template` syntax
 `*.tmpl` file at startup; templates are keyed by filename without extension. A
 missing or unparseable template logs a warning rather than a fatal error.
 
-### `stripCodeFences`
+### `extractJSON`
 
-GLM and some other models wrap JSON responses in markdown code fences
-(` ```json ... ``` `). `stripCodeFences` removes the opening and closing fence
-before JSON unmarshalling. Without this, every structured response from GLM
-would fail to parse.
+LLM responses frequently arrive wrapped in markdown code fences, prefixed with
+conversational prose, or truncated mid-object. `extractJSON` (in
+`internal/analyzer/analyzer.go`) uses a brace-depth-counting parser to locate
+and extract the first complete JSON object or array from the response text. It
+handles nested braces, strings with escaped characters, and ignores braces
+inside string literals. This replaced the earlier `stripCodeFences` approach,
+which only removed fences and failed on responses with leading prose or
+multiple JSON fragments.
 
 ### Template index
 
 | Template | LLM | Input variables | Output |
 |----------|-----|-----------------|--------|
 | `classify` | llmFast (Groq) | `Source`, `SourceName`, `Content`, `MatchedRules` | `{"category", "confidence", "provenance", "severity", "reasoning"}` |
-| `classify_detail` | llm (GLM-5) | `Category`, `Source`, `SourceName`, `Provenance`, `Entities`, `IOCs`, `Content`, `ValidSubCategories` | `{"sub_category", "sub_metadata", "confidence", "reasoning"}` |
-| `extract_iocs` | llm (GLM-5) | `Content` | `[{"type", "value", "context", "malicious"}]` |
-| `extract_entities` | llm (GLM-5) | `Content`, `Category`, `Summary` | `[{"type", "name", "properties"}]` |
-| `severity` | llm (GLM-5) | `Source`, `SourceName`, `Content`, `Category`, `MatchedRules` | `{"severity", "reasoning"}` |
-| `summarize` | llm (GLM-5) | `Source`, `SourceName`, `Content`, `Category`, `Severity`, `Author`, `Timestamp` | plain text paragraph |
+| `classify_detail` | llm (GLM-5-Turbo) | `Category`, `Source`, `SourceName`, `Provenance`, `Entities`, `IOCs`, `Content`, `ValidSubCategories` | `{"sub_category", "sub_metadata", "confidence", "reasoning"}` |
+| `extract_iocs` | llmFast (Groq) | `Content` | `[{"type", "value", "context", "malicious"}]` |
+| `extract_entities` | llm (GLM-5-Turbo) | `Content`, `Category`, `Summary` | `[{"type", "name", "properties"}]` |
+| `severity` | llm (GLM-5-Turbo) | `Source`, `SourceName`, `Content`, `Category`, `MatchedRules` | `{"severity", "reasoning"}` |
+| `summarize` | llmFast (Groq) | `Source`, `SourceName`, `Content`, `Category`, `Severity`, `Author`, `Timestamp` | plain text paragraph |
 | `evaluate_correlation` | llmBrain (Gemini) | `CandidateType`, `SignalCount`, `Evidence`, `Findings[]`, `Entities[]`, `Notes[]` | `{"decision", "confidence", "reasoning", "missing_evidence"}` |
 | `daily_brief` | llmBrain (Gemini) | metrics snapshot, top findings, entity trends, source health | `{"title", "executive_summary", "sections": {...}}` |
 | `stylometry` | any | `Author`, `Source`, `Content` | stylometric feature JSON object |
@@ -108,7 +112,7 @@ Classification also returns `provenance`: `first_party` (direct observation),
 
 After IOC and entity extraction, the Librarian worker runs the
 `classify_detail` prompt on each finding to assign a fine-grained
-`sub_category` and structured `sub_metadata` JSONB. The Librarian uses the GLM-5
+`sub_category` and structured `sub_metadata` JSONB. The Librarian uses the GLM-5-Turbo
 client and a separate concurrency limiter.
 
 Per-category sub-category taxonomies are defined and passed to the template as
@@ -151,8 +155,8 @@ non-threatening indicators that appear in security research content.
 | Sub-module | Module ID | LLM | Workers |
 |------------|-----------|-----|---------|
 | Classifier | `processor.classifier` | llmFast | `classificationWorkers` |
-| Summarizer | `processor.summarizer` | llm | `classificationWorkers` |
-| IOCExtractor | `processor.ioc_extractor` | llm | `entityExtractionWorkers` |
+| Summarizer | `processor.summarizer` | llmFast | `classificationWorkers` |
+| IOCExtractor | `processor.ioc_extractor` | llmFast | `entityExtractionWorkers` |
 | EntityExtractor | `processor.entity_extractor` | llm | `entityExtractionWorkers` |
 | GraphBridge | `processor.graph_bridge` | — | `entityExtractionWorkers` |
 | Librarian | `processor.librarian` | llm | `librarianWorkers` |
@@ -205,12 +209,12 @@ Collector → ingest pipeline → archive (raw_content)
                           ┌────────────┴────────────┐
                           │   Classification worker   │
                           │  Classifier (llmFast)     │
-                          │  Summarizer (llm)         │
+                          │  Summarizer (llmFast)     │
                           └────────────┬────────────┘
                                        │ MarkClassified
                           ┌────────────┴────────────┐
                           │   Extraction worker       │
-                          │  IOCExtractor (llm)       │
+                          │  IOCExtractor (llmFast)   │
                           │  EntityExtractor (llm)    │
                           │  GraphBridge              │
                           └────────────┬────────────┘
@@ -223,6 +227,16 @@ Collector → ingest pipeline → archive (raw_content)
                                        ▼
                                fully enriched entry
 ```
+
+### Poison Item Skip
+
+Classification and entity extraction workers track consecutive failures per
+content ID. After 5 consecutive LLM failures on the same item, the worker
+marks the item as "unclassifiable" (category set to `irrelevant`, tags include
+`poison_skip`) and advances to the next item. This prevents a single
+malformed or adversarial item from permanently blocking pipeline progress.
+The failure counter resets when a different content ID is processed
+successfully.
 
 ---
 

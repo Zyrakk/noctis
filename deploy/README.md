@@ -7,7 +7,9 @@ Deploy Noctis on a Kubernetes cluster (tested on k3s).
 - Kubernetes cluster with `kubectl` access
 - StorageClass `nfs-shared` available (used by PostgreSQL PVC)
 - Container image built and pushed: `ghcr.io/zyrakk/noctis:latest`
-- GLM API key from [open.bigmodel.cn](https://open.bigmodel.cn)
+- GLM-5-Turbo API key from [Z.ai](https://api.z.ai)
+- Groq API key (Dev tier recommended)
+- Gemini API key
 
 ### Build and push the image
 
@@ -57,7 +59,10 @@ Required keys:
 
 | Key | Description |
 |-----|-------------|
-| `NOCTIS_LLM_API_KEY` | GLM API key |
+| `NOCTIS_LLM_API_KEY` | Z.ai GLM-5-Turbo API key |
+| `NOCTIS_GROQ_API_KEY` | Groq API key (Dev tier recommended) |
+| `NOCTIS_GEMINI_API_KEY` | Google Gemini API key |
+| `NOCTIS_DASHBOARD_API_KEY` | Dashboard Bearer token |
 | `NOCTIS_DB_PASSWORD` | PostgreSQL password (used by both postgres and noctis) |
 | `NOCTIS_DB_DSN` | Full connection string: `postgres://noctis:<PASSWORD>@noctis-postgres.noctis.svc:5432/noctis?sslmode=disable` |
 
@@ -221,7 +226,7 @@ kubectl -n noctis exec -it noctis-postgres-0 -- psql -U noctis -c \
 - Increase log level: edit `logLevel: debug` in configmap, re-apply, restart
 
 **Classification not happening:**
-- Check GLM API key: `kubectl -n noctis get secret noctis-secrets -o jsonpath='{.data.NOCTIS_LLM_API_KEY}' | base64 -d`
+- Classification uses Groq, not GLM. Check: `kubectl -n noctis get secret noctis-secrets -o jsonpath='{.data.NOCTIS_GROQ_API_KEY}' | base64 -d`
 - Check metrics: `curl -s localhost:9090/metrics | grep llm_errors`
 - Workers only classify after content is collected — wait for RSS feeds to populate first
 

@@ -9,7 +9,9 @@ This guide covers deploying Noctis on Kubernetes and as a standalone binary.
 - A Kubernetes cluster (k3s, kubeadm, EKS, GKE, AKS, or any distribution)
 - `kubectl` configured and pointing at your cluster
 - A StorageClass available for PostgreSQL persistent storage (the manifests default to `nfs-shared` — edit `deploy/postgres.yaml` to match your cluster)
-- A GLM API key from [open.bigmodel.cn](https://open.bigmodel.cn) or a compatible OpenAI-format LLM provider
+- A GLM-5-Turbo API key from [Z.ai](https://api.z.ai) or a compatible OpenAI-format LLM provider
+- A Groq API key (Dev tier recommended) for classification, summarization, and IOC extraction
+- A Google Gemini API key for analytical reasoning (correlations, briefs, natural language queries)
 - (Optional) Telegram API credentials for Telegram collection — see [Telegram Setup](#telegram-setup) and [docs/telegram.md](telegram.md)
 
 ---

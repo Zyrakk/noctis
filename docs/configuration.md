@@ -37,8 +37,8 @@ substitution in the ConfigMap that holds the YAML.
 | Variable | Used by |
 |----------|---------|
 | `NOCTIS_DB_DSN` | `database.dsn` |
-| `NOCTIS_LLM_API_KEY` | `llm.apiKey` (GLM-5 full analyzer) |
-| `NOCTIS_GROQ_API_KEY` | `llmFast.apiKey` (Groq classification) |
+| `NOCTIS_LLM_API_KEY` | `llm.apiKey` (Z.ai GLM-5-Turbo — entity extraction, sub-classification) |
+| `NOCTIS_GROQ_API_KEY` | `llmFast.apiKey` (Groq — classification, summarization, IOC extraction) |
 | `NOCTIS_GEMINI_API_KEY` | `llmBrain.apiKey` (Gemini analytical reasoning) |
 | `NOCTIS_DASHBOARD_API_KEY` | `dashboard.apiKey` |
 
@@ -68,15 +68,13 @@ substitution in the ConfigMap that holds the YAML.
 
 ## `llm`
 
-Primary LLM client — GLM-5. Used for summarization, IOC extraction, entity
-extraction, and sub-classification (Librarian). Falls back as the brain
-analyzer when `llmBrain` is not configured.
+Primary LLM client — GLM-5-Turbo. Used for entity extraction and sub-classification (Librarian).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `provider` | string | — | Provider label, e.g. `glm`. Informational; shown in the dashboard status view. |
-| `baseURL` | string | — | API base URL without trailing path, e.g. `https://open.bigmodel.cn/api/coding/paas/v4`. |
-| `model` | string | — | Model identifier forwarded in each request body, e.g. `glm-4-flash`. |
+| `baseURL` | string | — | API base URL without trailing path, e.g. `https://api.z.ai/api/coding/paas/v4`. |
+| `model` | string | — | Model identifier forwarded in each request body, e.g. `glm-5-turbo`. |
 | `apiKey` | string | — | API key for Bearer authentication. Use `${NOCTIS_LLM_API_KEY}`. |
 | `maxTokens` | int | — | Maximum tokens per completion request. |
 | `temperature` | float64 | — | Sampling temperature (0.0–2.0). |
@@ -84,22 +82,24 @@ analyzer when `llmBrain` is not configured.
 | `retries` | int | — | Retry attempts on transient errors. |
 | `maxConcurrent` | int | `2` | Maximum simultaneous in-flight LLM requests. Used as the extraction concurrency cap and as the fallback for `llmFast.maxConcurrency` when that field is unset. |
 | `requestsPerMinute` | int | — | Rate limit cap for outbound requests. |
+| `tokensPerMinute` | int | — | Token-bucket rate limiter: maximum tokens per minute. The rate limiter (`internal/llm/ratelimit.go`) tracks consumption and delays requests when the budget is exhausted. 429 responses trigger exponential backoff (2s/4s/8s) with Retry-After header parsing. |
 
 ---
 
 ## `llmFast`
 
-Fast LLM client — Groq. Used exclusively for the Classifier stage (initial
-category, confidence, severity, provenance). When `llmFast.model` is empty the
+Fast LLM client — Groq. Used for the Classifier, Summarizer, and IOC Extractor stages. When `llmFast.model` is empty the
 system falls back to `llm` for classification (single-LLM mode).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `provider` | string | — | Provider label, e.g. `groq`. |
 | `baseURL` | string | — | API base URL, e.g. `https://api.groq.com/openai/v1`. |
-| `model` | string | — | Model identifier, e.g. `llama-4-scout-17b-16e-instruct`. |
+| `model` | string | — | Model identifier, e.g. `meta-llama/llama-4-scout-17b-16e-instruct`. |
 | `apiKey` | string | — | API key. Use `${NOCTIS_GROQ_API_KEY}`. |
 | `maxConcurrency` | int | — | Maximum concurrent in-flight classification requests. Falls back to `llm.maxConcurrent` when unset. |
+| `tokensPerMinute` | int | — | Token-bucket rate limiter: maximum tokens per minute. |
+| `tokensPerDay` | int | `0` | Daily token budget. `0` disables the daily limit. |
 
 ---
 
@@ -116,7 +116,7 @@ Uses the same fields as `llm`:
 |-------|------|---------|-------------|
 | `provider` | string | — | Provider label, e.g. `gemini`. |
 | `baseURL` | string | — | API base URL for the Gemini OpenAI-compatible endpoint. |
-| `model` | string | — | Model identifier, e.g. `gemini-2.5-pro-exp-03-25`. |
+| `model` | string | — | Model identifier, e.g. `gemini-3.1-pro-preview`. |
 | `apiKey` | string | — | API key. Use `${NOCTIS_GEMINI_API_KEY}`. |
 | `maxTokens` | int | — | Maximum tokens per completion. |
 | `temperature` | float64 | — | Sampling temperature. |
@@ -124,6 +124,10 @@ Uses the same fields as `llm`:
 | `retries` | int | — | Retry attempts. |
 | `maxConcurrent` | int | `1` | Concurrency cap for brain operations. Defaults to 1 when unset. |
 | `requestsPerMinute` | int | — | Rate limit cap. |
+| `monthlyBudgetUSD` | float64 | — | Monthly spending budget in USD. The spending tracker (`internal/llm/spending.go`) estimates cost from token counts using `inputCostPer1M` and `outputCostPer1M` rates. When the budget is reached, brain LLM calls are skipped until the next calendar month. |
+| `inputCostPer1M` | float64 | — | Cost per 1M input tokens in USD, used for budget tracking. |
+| `outputCostPer1M` | float64 | — | Cost per 1M output tokens in USD, used for budget tracking. |
+| `tokensPerMinute` | int | — | Token-bucket rate limiter: maximum tokens per minute. |
 
 ---
 
@@ -135,7 +139,7 @@ Controls archive-everything behavior and processing pipeline worker counts.
 |-------|------|---------|-------------|
 | `archiveAll` | bool | `false` | When `true`, store every ingested item regardless of rule matches. |
 | `classificationWorkers` | int | `8` | Goroutines running the Classifier → Summarizer pipeline. |
-| `entityExtractionWorkers` | int | `2` | Goroutines running the IOC Extractor → Entity Extractor → Graph Bridge pipeline. |
+| `entityExtractionWorkers` | int | `1` | Goroutines running the IOC Extractor → Entity Extractor → Graph Bridge pipeline. |
 | `librarianWorkers` | int | `1` | Goroutines running the Librarian (sub-classification) pipeline. |
 | `classificationBatchSize` | int | `10` | Maximum items fetched per poll by classification workers. |
 | `maxContentLength` | int | `0` | Truncate ingested content to this byte length before storage and LLM calls. `0` means no limit. |
@@ -233,13 +237,50 @@ it requires no API key.
 ## `discovery`
 
 Controls the automatic source discovery engine. Extracts URLs and channel
-references from ingested content and proposes new monitoring sources.
+references from ingested content, filters them through a three-tier system
+(blacklist → allowlist → AI triage), and proposes new monitoring sources.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | bool | `false` | Enable the discovery engine. |
 | `autoApprove` | bool | `false` | Automatically add discovered sources without manual review. When `false`, sources enter `discovered` status and require approval via `noctis source approve`. |
-| `domainBlacklist` | []string | — | Domains that the discovery engine will never propose as sources, e.g. `google.com`, `youtube.com`. |
+| `triageEnabled` | bool | `false` | Enable the AI batch triage worker. When enabled, URLs that don't match the allowlist or blacklist enter `pending_triage` status and are periodically evaluated by the fast LLM. |
+| `triageBatchSize` | int | `100` | Number of pending URLs that must accumulate before the AI triage worker fires a batch. |
+| `allowPatterns` | []string | — | Glob patterns for instant-approve. URLs matching these patterns bypass triage and go directly to `discovered` status. Example: `"*.onion"`, `"pastebin.com"`, `"ghostbin.*"`. Patterns are normalized to lowercase for case-insensitive matching. |
+| `allowDomains` | []string | — | Exact domain names that bypass triage. Example: `breachforums.st`, `exploit.in`, `xss.is`. |
+| `domainBlacklist` | []string | — | Domains that the discovery engine will never propose as sources. Checked first in the filtering pipeline. |
+
+### Three-tier filtering
+
+When `ProcessContent` encounters a URL extracted from ingested content:
+
+1. **Config blacklist** (`domainBlacklist`) — if the domain matches, the URL is silently dropped.
+2. **Auto-blacklist** (learned from triage) — if the domain has been trashed 3+ times by the AI triage worker, the URL is dropped. Cannot override `allowDomains` or `allowPatterns`.
+3. **Structural skip** — private IPs, `localhost`, `FUZZ` tokens, and image/media URLs (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.ico`, `.bmp`) are dropped.
+4. **Allowlist** (`allowPatterns` + `allowDomains`) — if the URL matches, it is inserted with status `discovered`.
+5. **Default** — the URL is inserted with status `pending_triage` (if triage is enabled) or `discovered` (if triage is disabled).
+
+### AI triage worker
+
+When `triageEnabled` is `true`, a background worker runs every 5 minutes:
+
+- Checks the count of `pending_triage` sources.
+- When the count reaches `triageBatchSize`, fetches a batch ordered by `created_at ASC`.
+- Sends the URL list to the fast LLM (`llmFast`) using the `triage.tmpl` prompt template.
+- URLs classified as `"investigate"` are promoted to status `discovered`.
+- URLs classified as `"trash"` are hard-deleted from the `sources` table.
+- All decisions are logged to the `source_triage_log` table with a `batch_id` UUID.
+
+### Auto-blacklist learning
+
+After each triage batch, domains from trashed URLs are counted in the
+`discovered_blacklist` table. When a domain accumulates 3 or more trash
+decisions across batches, it is automatically added to a runtime blacklist.
+
+- The auto-blacklist is loaded on engine startup via `LoadAutoBlacklist()`.
+- Refreshed after each triage batch via `RefreshAutoBlacklist()`.
+- Cannot override `allowDomains` or `allowPatterns`.
+- Checked between the config blacklist and the structural skip in `ProcessContent`.
 
 ---
 
@@ -430,8 +471,8 @@ noctis:
 
   llm:
     provider: glm
-    baseURL: https://open.bigmodel.cn/api/coding/paas/v4
-    model: glm-4-flash
+    baseURL: https://api.z.ai/api/coding/paas/v4
+    model: glm-5-turbo
     apiKey: ${NOCTIS_LLM_API_KEY}
     maxTokens: 2048
     temperature: 0.1
@@ -443,14 +484,14 @@ noctis:
   llmFast:
     provider: groq
     baseURL: https://api.groq.com/openai/v1
-    model: llama-4-scout-17b-16e-instruct
+    model: meta-llama/llama-4-scout-17b-16e-instruct
     apiKey: ${NOCTIS_GROQ_API_KEY}
     maxConcurrency: 8
 
   llmBrain:
     provider: gemini
     baseURL: https://generativelanguage.googleapis.com/v1beta/openai
-    model: gemini-2.5-pro-exp-03-25
+    model: gemini-3.1-pro-preview
     apiKey: ${NOCTIS_GEMINI_API_KEY}
     maxTokens: 8192
     temperature: 0.3
@@ -461,7 +502,7 @@ noctis:
   collection:
     archiveAll: true
     classificationWorkers: 8
-    entityExtractionWorkers: 2
+    entityExtractionWorkers: 1
     librarianWorkers: 1
     classificationBatchSize: 10
     maxContentLength: 65536
@@ -503,6 +544,16 @@ noctis:
   discovery:
     enabled: true
     autoApprove: false
+    triageEnabled: true
+    triageBatchSize: 100
+    allowPatterns:
+      - "*.onion"
+      - "pastebin.com"
+      - "ghostbin.*"
+    allowDomains:
+      - breachforums.st
+      - exploit.in
+      - xss.is
     domainBlacklist:
       - google.com
       - youtube.com
