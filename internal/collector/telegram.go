@@ -60,10 +60,12 @@ func (m telegramMessage) toFinding() models.Finding {
 	return *f
 }
 
-// SourceQuerier is the subset of discovery.Engine that the Telegram collector
-// needs. Using an interface allows nil checks and test doubles.
+// SourceQuerier is the subset of discovery.Engine that collectors need for
+// loading DB sources and recording collection timestamps. Using an interface
+// allows nil checks and test doubles.
 type SourceQuerier interface {
 	GetApprovedSources(ctx context.Context, sourceType string) ([]discovery.Source, error)
+	RecordCollectionByIdentifier(ctx context.Context, identifier string) error
 }
 
 // TelegramCollector implements the Collector interface for Telegram channels
@@ -273,6 +275,12 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 				if tc.discovery == nil {
 					continue
 				}
+
+				// Update last_collected for all subscribed channels.
+				for key := range subscribed {
+					_ = tc.discovery.RecordCollectionByIdentifier(ctx, key)
+				}
+
 				newChannels := tc.checkForNewChannels(ctx, subscribed)
 				for _, ch := range newChannels {
 					subscribed[channelKey(ch)] = true
@@ -411,6 +419,13 @@ func (tc *TelegramCollector) catchupChannels(ctx context.Context, api *tg.Client
 		}
 
 		slog.Info("telegram: catchup complete", "channel", channelName, "messages", len(modified.GetMessages()))
+
+		// Update last_collected for this channel in the sources table.
+		if tc.discovery != nil {
+			if err := tc.discovery.RecordCollectionByIdentifier(ctx, channelKey(ch)); err != nil {
+				slog.Error("telegram: failed to record collection", "channel", channelName, "error", err)
+			}
+		}
 	}
 }
 
@@ -656,6 +671,11 @@ func (tc *TelegramCollector) subscribeChannel(ctx context.Context, api *tg.Clien
 			}
 			slog.Info("telegram: catchup complete for new channel", "channel", channelName, "messages", len(modified.GetMessages()))
 		}
+	}
+
+	// Update last_collected for this newly subscribed channel.
+	if tc.discovery != nil {
+		_ = tc.discovery.RecordCollectionByIdentifier(ctx, channelKey(ch))
 	}
 
 	slog.Info("telegram: subscribed to new channel", "channel", channelName)

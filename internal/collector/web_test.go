@@ -58,7 +58,7 @@ func TestWebCollector_RSS(t *testing.T) {
 		},
 	}
 
-	wc := NewWebCollector(cfg, nil)
+	wc := NewWebCollector(cfg, nil, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -138,7 +138,7 @@ func TestWebCollector_Scrape(t *testing.T) {
 		},
 	}
 
-	wc := NewWebCollector(cfg, nil)
+	wc := NewWebCollector(cfg, nil, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -225,7 +225,7 @@ func TestWebCollector_Search(t *testing.T) {
 		},
 	}
 
-	wc := NewWebCollector(cfg, nil)
+	wc := NewWebCollector(cfg, nil, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -288,7 +288,7 @@ func TestWebCollector_Dedup(t *testing.T) {
 		},
 	}
 
-	wc := NewWebCollector(cfg, nil)
+	wc := NewWebCollector(cfg, nil, nil)
 
 	// Run long enough for at least 2 fetch cycles.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -316,7 +316,7 @@ func TestWebCollector_Dedup(t *testing.T) {
 }
 
 func TestWebCollector_Name(t *testing.T) {
-	wc := NewWebCollector(&config.WebSourcesConfig{}, nil)
+	wc := NewWebCollector(&config.WebSourcesConfig{}, nil, nil)
 	if wc.Name() != "web" {
 		t.Errorf("expected Name()=%q, got %q", "web", wc.Name())
 	}

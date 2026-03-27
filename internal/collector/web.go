@@ -22,8 +22,9 @@ import (
 // WebCollector collects threat intelligence from RSS feeds, web scraping,
 // and search engine result parsing.
 type WebCollector struct {
-	cfg    *config.WebSourcesConfig
-	torCfg *config.TorConfig
+	cfg       *config.WebSourcesConfig
+	torCfg    *config.TorConfig
+	discovery SourceQuerier
 
 	httpClient *http.Client
 	torClient  *http.Client
@@ -36,10 +37,12 @@ type WebCollector struct {
 }
 
 // NewWebCollector creates a WebCollector from the given configuration.
-func NewWebCollector(cfg *config.WebSourcesConfig, torCfg *config.TorConfig) *WebCollector {
+// disc may be nil if source discovery is disabled.
+func NewWebCollector(cfg *config.WebSourcesConfig, torCfg *config.TorConfig, disc SourceQuerier) *WebCollector {
 	wc := &WebCollector{
 		cfg:        cfg,
 		torCfg:     torCfg,
+		discovery:  disc,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		seen:       make(map[string]bool),
 	}
@@ -81,8 +84,19 @@ func (wc *WebCollector) Start(ctx context.Context, out chan<- models.Finding) er
 
 	var wg sync.WaitGroup
 
-	for i := range wc.cfg.Feeds {
-		feed := wc.cfg.Feeds[i]
+	// Track active feeds by URL to avoid duplicate goroutines.
+	active := make(map[string]bool)
+	var activeMu sync.Mutex
+
+	startFeed := func(feed config.WebConfig) {
+		activeMu.Lock()
+		if active[feed.URL] {
+			activeMu.Unlock()
+			return
+		}
+		active[feed.URL] = true
+		activeMu.Unlock()
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -99,8 +113,67 @@ func (wc *WebCollector) Start(ctx context.Context, out chan<- models.Finding) er
 		}()
 	}
 
+	// Start config feeds.
+	for i := range wc.cfg.Feeds {
+		startFeed(wc.cfg.Feeds[i])
+	}
+
+	// Load and start RSS feeds from the sources table.
+	for _, f := range wc.loadDBFeeds(ctx) {
+		startFeed(f)
+	}
+
+	// Periodically check for new DB RSS sources every 30 minutes.
+	if wc.discovery != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ticker := time.NewTicker(30 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					for _, f := range wc.loadDBFeeds(ctx) {
+						startFeed(f)
+					}
+				}
+			}
+		}()
+	}
+
 	wg.Wait()
 	return nil
+}
+
+// loadDBFeeds queries the sources table for active/approved RSS sources
+// and returns them as WebConfig entries.
+func (wc *WebCollector) loadDBFeeds(ctx context.Context) []config.WebConfig {
+	if wc.discovery == nil {
+		return nil
+	}
+
+	sources, err := wc.discovery.GetApprovedSources(ctx, "rss")
+	if err != nil {
+		log.Printf("[web] failed to load DB RSS sources: %v", err)
+		return nil
+	}
+
+	var feeds []config.WebConfig
+	for _, src := range sources {
+		feeds = append(feeds, config.WebConfig{
+			Name:     src.Name,
+			URL:      src.Identifier,
+			Type:     "rss",
+			Interval: 15 * time.Minute,
+		})
+	}
+
+	if len(feeds) > 0 {
+		log.Printf("[web] loaded %d RSS feeds from sources table", len(feeds))
+	}
+	return feeds
 }
 
 // pollRSS periodically fetches and parses an RSS/Atom feed.
@@ -202,6 +275,8 @@ func (wc *WebCollector) fetchRSS(ctx context.Context, feedCfg *config.WebConfig,
 			return
 		}
 	}
+
+	wc.recordCollection(ctx, feedCfg.URL)
 }
 
 // pollScrape periodically fetches a web page and extracts content using a CSS selector.
@@ -274,6 +349,8 @@ func (wc *WebCollector) fetchScrape(ctx context.Context, feedCfg *config.WebConf
 		case <-ctx.Done():
 		}
 	})
+
+	wc.recordCollection(ctx, feedCfg.URL)
 }
 
 // pollSearch periodically runs search queries and extracts results.
@@ -389,6 +466,18 @@ func (wc *WebCollector) fetchSearch(ctx context.Context, feedCfg *config.WebConf
 				return
 			}
 		}
+	}
+
+	wc.recordCollection(ctx, feedCfg.URL)
+}
+
+// recordCollection updates the last_collected timestamp for a source in the DB.
+func (wc *WebCollector) recordCollection(ctx context.Context, identifier string) {
+	if wc.discovery == nil {
+		return
+	}
+	if err := wc.discovery.RecordCollectionByIdentifier(ctx, identifier); err != nil {
+		log.Printf("[web] failed to record collection for %s: %v", identifier, err)
 	}
 }
 

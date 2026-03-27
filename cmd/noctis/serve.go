@@ -326,7 +326,7 @@ func newServeCmd() *cobra.Command {
 				slog.Info("forum collector enabled", "sites", len(cfg.Sources.Forums.Sites))
 			}
 			if cfg.Sources.Web.Enabled {
-				wc := collector.NewWebCollector(&cfg.Sources.Web, &cfg.Sources.Tor)
+				wc := collector.NewWebCollector(&cfg.Sources.Web, &cfg.Sources.Tor, discoveryEngine)
 				collectors = append(collectors, wc)
 				slog.Info("web/RSS collector enabled", "feeds", len(cfg.Sources.Web.Feeds))
 			}

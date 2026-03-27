@@ -334,8 +334,8 @@ func TestNilIfEmpty(t *testing.T) {
 	}
 }
 
-// TestNormalizeTelegramURL_StripMessageID verifies that message-specific
-// URLs like t.me/channel/123 are normalized to t.me/channel.
+// TestNormalizeTelegramURL_StripMessageID verifies that telegram channel
+// URLs are normalized to bare usernames.
 func TestNormalizeTelegramURL_StripMessageID(t *testing.T) {
 	e := newTestEngine()
 
@@ -343,11 +343,11 @@ func TestNormalizeTelegramURL_StripMessageID(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"https://t.me/darkleaks/456", "https://t.me/darkleaks"},
-		{"https://t.me/darkleaks/123456", "https://t.me/darkleaks"},
-		{"t.me/darkleaks/99", "t.me/darkleaks"},
-		{"https://t.me/darkleaks", "https://t.me/darkleaks"},       // no message ID
-		{"https://t.me/darkleaks/", "https://t.me/darkleaks"},      // trailing slash only
+		{"https://t.me/darkleaks/456", "darkleaks"},
+		{"https://t.me/darkleaks/123456", "darkleaks"},
+		{"t.me/darkleaks/99", "darkleaks"},
+		{"https://t.me/darkleaks", "darkleaks"},       // no message ID
+		{"https://t.me/darkleaks/", "darkleaks"},      // trailing slash only
 		{"https://t.me/joinchat/abc123", "https://t.me/joinchat/abc123"}, // invite link unchanged
 		{"https://t.me/+xyz789", "https://t.me/+xyz789"},           // group invite unchanged
 	}
@@ -397,8 +397,8 @@ func TestNormalizeTelegramURL_SkipMonitored(t *testing.T) {
 		{"https://t.me/ad_poheque/123", ""},
 		{"https://t.me/RalfHackerChannel", ""},
 		{"https://t.me/ralfhackerchannel/456", ""},  // case-insensitive
-		{"https://t.me/newchannel", "https://t.me/newchannel"},     // not monitored — keep
-		{"https://t.me/newchannel/789", "https://t.me/newchannel"}, // not monitored — strip msg ID
+		{"https://t.me/newchannel", "newchannel"},     // not monitored — keep
+		{"https://t.me/newchannel/789", "newchannel"}, // not monitored — strip msg ID
 	}
 
 	for _, tt := range tests {

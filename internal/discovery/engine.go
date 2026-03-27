@@ -259,9 +259,9 @@ func (e *Engine) normalizeTelegramURL(rawURL string) string {
 		return ""
 	}
 
-	// Reconstruct with just the username (strip message ID)
-	prefix := rawURL[:idx+5] // preserve original scheme + "t.me/"
-	return prefix + username
+	// Return bare username — all telegram_channel identifiers are stored as
+	// plain usernames for consistency with config channels.
+	return username
 }
 
 // ExtractURLs returns a deduplicated list of URLs found in the given content.
@@ -641,6 +641,22 @@ WHERE id = $1`, id)
 	}
 	if ct.RowsAffected() == 0 {
 		return fmt.Errorf("discovery: record collection: no row with id %s", id)
+	}
+	return nil
+}
+
+// RecordCollectionByIdentifier updates last_collected for a source matched
+// by its identifier string. Returns nil silently if no row matches (e.g.
+// config-only sources that have no DB record).
+func (e *Engine) RecordCollectionByIdentifier(ctx context.Context, identifier string) error {
+	if identifier == "" {
+		return nil
+	}
+	_, err := e.pool.Exec(ctx, `
+UPDATE sources SET last_collected = NOW(), error_count = 0, updated_at = NOW()
+WHERE identifier = $1`, identifier)
+	if err != nil {
+		return fmt.Errorf("discovery: record collection by identifier %q: %w", identifier, err)
 	}
 	return nil
 }
