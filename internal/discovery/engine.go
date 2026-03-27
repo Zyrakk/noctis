@@ -48,6 +48,7 @@ type Engine struct {
 	blacklistDomains  map[string]struct{}  // domains to skip during discovery
 	allowDomains      map[string]struct{}  // domains that bypass triage
 	monitoredChannels map[string]struct{}  // telegram usernames already in config (lowercase)
+	autoBlacklist     map[string]struct{}  // learned blacklist from triage trash decisions
 }
 
 // NewEngine creates a discovery Engine with pre-compiled URL extraction
@@ -93,14 +94,24 @@ func NewEngine(pool *pgxpool.Pool, cfg config.DiscoveryConfig) *Engine {
 		cfg.AllowPatterns[i] = strings.ToLower(p)
 	}
 
-	return &Engine{
+	e := &Engine{
 		pool:              pool,
 		config:            cfg,
 		urlRegexes:        regexes,
 		blacklistDomains:  blacklist,
 		allowDomains:      allow,
 		monitoredChannels: make(map[string]struct{}),
+		autoBlacklist:     make(map[string]struct{}),
 	}
+
+	// Pre-load learned blacklist from DB if available.
+	if pool != nil {
+		if err := e.LoadAutoBlacklist(context.Background()); err != nil {
+			slog.Warn("discovery: failed to load auto-blacklist on startup", "error", err)
+		}
+	}
+
+	return e
 }
 
 // SetMonitoredChannels registers Telegram channel usernames that are already
@@ -111,6 +122,101 @@ func (e *Engine) SetMonitoredChannels(usernames []string) {
 	for _, u := range usernames {
 		e.monitoredChannels[strings.ToLower(u)] = struct{}{}
 	}
+}
+
+// autoBlacklistThreshold is the number of trash decisions a domain must
+// accumulate before being auto-blacklisted.
+const autoBlacklistThreshold = 3
+
+// LoadAutoBlacklist reads domains from the discovered_blacklist table that
+// have reached the trash threshold and populates the in-memory map.
+func (e *Engine) LoadAutoBlacklist(ctx context.Context) error {
+	rows, err := e.pool.Query(ctx,
+		`SELECT domain FROM discovered_blacklist WHERE trash_count >= $1`,
+		autoBlacklistThreshold,
+	)
+	if err != nil {
+		return fmt.Errorf("discovery: load auto-blacklist: %w", err)
+	}
+	defer rows.Close()
+
+	bl := make(map[string]struct{})
+	for rows.Next() {
+		var domain string
+		if err := rows.Scan(&domain); err != nil {
+			return fmt.Errorf("discovery: scan auto-blacklist row: %w", err)
+		}
+		bl[domain] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("discovery: auto-blacklist rows: %w", err)
+	}
+
+	e.autoBlacklist = bl
+	slog.Info("discovery: loaded auto-blacklist", "domains", len(bl))
+	return nil
+}
+
+// RefreshAutoBlacklist reloads the auto-blacklist from the database. Called
+// by the triage worker after each batch so newly blacklisted domains take
+// effect immediately.
+func (e *Engine) RefreshAutoBlacklist(ctx context.Context) {
+	if err := e.LoadAutoBlacklist(ctx); err != nil {
+		slog.Error("discovery: refresh auto-blacklist failed", "error", err)
+	}
+}
+
+// isAutoBlacklisted returns true if the URL's domain appears in the learned
+// auto-blacklist (domains trashed >= threshold times by triage).
+func (e *Engine) isAutoBlacklisted(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+
+	host := strings.ToLower(parsed.Hostname())
+	for domain := range e.autoBlacklist {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	return false
+}
+
+// isDomainAllowed returns true if the domain is in the allowDomains set or
+// matches any allow pattern. Used to prevent auto-blacklisting of explicitly
+// allowed domains.
+func (e *Engine) isDomainAllowed(domain string) bool {
+	domain = strings.ToLower(domain)
+
+	if _, ok := e.allowDomains[domain]; ok {
+		return true
+	}
+	for d := range e.allowDomains {
+		if strings.HasSuffix(domain, "."+d) {
+			return true
+		}
+	}
+
+	for _, pattern := range e.config.AllowPatterns {
+		switch {
+		case strings.HasPrefix(pattern, "*."):
+			if strings.HasSuffix(domain, pattern[1:]) {
+				return true
+			}
+		case strings.HasSuffix(pattern, ".*"):
+			prefix := pattern[:len(pattern)-2]
+			if domain == prefix || strings.HasPrefix(domain, prefix+".") {
+				return true
+			}
+		default:
+			if domain == pattern || strings.HasSuffix(domain, "."+pattern) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // normalizeTelegramURL cleans up a t.me URL for source storage:
@@ -387,7 +493,7 @@ func (e *Engine) ProcessContent(ctx context.Context, content string, sourceConte
 	}
 
 	for _, u := range urls {
-		if e.isBlacklisted(u) || shouldSkipURL(u) {
+		if e.isBlacklisted(u) || e.isAutoBlacklisted(u) || shouldSkipURL(u) {
 			slog.Debug("discovery: skipping filtered URL", "url", u)
 			continue
 		}

@@ -499,6 +499,71 @@ func TestProcessContent_StatusDetermination(t *testing.T) {
 	}
 }
 
+func TestIsAutoBlacklisted(t *testing.T) {
+	e := newTestEngine()
+	e.autoBlacklist = map[string]struct{}{
+		"spam-domain.com":  {},
+		"trash-forum.net":  {},
+	}
+
+	blocked := []string{
+		"https://spam-domain.com/page",
+		"https://sub.spam-domain.com/path",
+		"https://trash-forum.net/thread/1",
+	}
+	for _, u := range blocked {
+		if !e.isAutoBlacklisted(u) {
+			t.Errorf("expected %q to be auto-blacklisted", u)
+		}
+	}
+
+	allowed := []string{
+		"https://legit-site.com/page",
+		"https://pastebin.com/abc",
+	}
+	for _, u := range allowed {
+		if e.isAutoBlacklisted(u) {
+			t.Errorf("expected %q to NOT be auto-blacklisted", u)
+		}
+	}
+}
+
+func TestIsAutoBlacklisted_EmptyMap(t *testing.T) {
+	e := newTestEngine()
+	if e.isAutoBlacklisted("https://anything.com/page") {
+		t.Error("empty auto-blacklist should not block anything")
+	}
+}
+
+func TestIsDomainAllowed(t *testing.T) {
+	e := newAllowlistEngine()
+
+	allowed := []string{
+		"leakbase.la",
+		"breachforums.st",
+		"sub.leakbase.la",
+		"pastebin.com",
+		"ghostbin.co",
+		"ghostbin.net",
+		"something.onion",
+	}
+	for _, d := range allowed {
+		if !e.isDomainAllowed(d) {
+			t.Errorf("expected domain %q to be allowed", d)
+		}
+	}
+
+	blocked := []string{
+		"randomsite.com",
+		"spam-domain.com",
+	}
+	for _, d := range blocked {
+		if e.isDomainAllowed(d) {
+			t.Errorf("expected domain %q to NOT be allowed", d)
+		}
+	}
+}
+
 func TestExtractInviteHash(t *testing.T) {
 	tests := []struct {
 		input string

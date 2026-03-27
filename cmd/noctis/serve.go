@@ -375,7 +375,7 @@ func newServeCmd() *cobra.Command {
 
 			// Start source triage worker (AI classification of unknown URLs).
 			if cfg.Discovery.TriageEnabled {
-				triageWorker := discovery.NewTriageWorker(pool, classifyAnalyzer, cfg.Discovery.TriageBatchSize, classifyModel)
+				triageWorker := discovery.NewTriageWorker(pool, classifyAnalyzer, cfg.Discovery.TriageBatchSize, classifyModel, discoveryEngine)
 				registry.Register(triageWorker.Status())
 				go triageWorker.Run(pipelineCtx)
 				slog.Info("triage worker enabled", "batch_size", cfg.Discovery.TriageBatchSize)

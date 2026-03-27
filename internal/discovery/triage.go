@@ -3,6 +3,8 @@ package discovery
 import (
 	"context"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +19,7 @@ import (
 type TriageWorker struct {
 	pool      *pgxpool.Pool
 	analyzer  *analyzer.Analyzer
+	engine    *Engine // optional; used to refresh auto-blacklist after learning
 	batchSize int
 	modelName string
 	status    *modules.StatusTracker
@@ -24,14 +27,16 @@ type TriageWorker struct {
 
 // NewTriageWorker creates a triage worker using the given analyzer (typically
 // the fast/classify analyzer) for LLM calls. modelName is recorded in the
-// audit log for traceability.
-func NewTriageWorker(pool *pgxpool.Pool, az *analyzer.Analyzer, batchSize int, modelName string) *TriageWorker {
+// audit log for traceability. The engine parameter is optional; when provided,
+// the worker refreshes the engine's auto-blacklist after learning new domains.
+func NewTriageWorker(pool *pgxpool.Pool, az *analyzer.Analyzer, batchSize int, modelName string, engine *Engine) *TriageWorker {
 	if batchSize <= 0 {
 		batchSize = 100
 	}
 	return &TriageWorker{
 		pool:      pool,
 		analyzer:  az,
+		engine:    engine,
 		batchSize: batchSize,
 		modelName: modelName,
 		status:    modules.NewStatusTracker(modules.ModSourceTriage, "Source Triage", "infra"),
@@ -202,4 +207,77 @@ func (tw *TriageWorker) processBatch(ctx context.Context) {
 		"trash", nTrash,
 	)
 	tw.status.RecordSuccess()
+
+	// Learn from trash decisions: increment domain counts and auto-blacklist
+	// domains that cross the threshold.
+	if nTrash > 0 {
+		tw.learnFromTrash(ctx, result.Trash)
+	}
+}
+
+// learnFromTrash extracts domains from trashed URLs, upserts their counts
+// into discovered_blacklist, and auto-blacklists domains that reach the
+// threshold. It also cleans up remaining pending_triage URLs from newly
+// blacklisted domains.
+func (tw *TriageWorker) learnFromTrash(ctx context.Context, trashedURLs []string) {
+	// Deduplicate domains in this batch.
+	domains := make(map[string]struct{})
+	for _, rawURL := range trashedURLs {
+		d := extractDomain(rawURL)
+		if d != "" {
+			domains[d] = struct{}{}
+		}
+	}
+
+	for domain := range domains {
+		// Skip domains protected by the engine's allowlist.
+		if tw.engine != nil && tw.engine.isDomainAllowed(domain) {
+			continue
+		}
+
+		var count int
+		err := tw.pool.QueryRow(ctx, `
+			INSERT INTO discovered_blacklist (domain, trash_count)
+			VALUES ($1, 1)
+			ON CONFLICT (domain) DO UPDATE SET trash_count = discovered_blacklist.trash_count + 1
+			RETURNING trash_count`, domain,
+		).Scan(&count)
+		if err != nil {
+			slog.Error("triage: upsert blacklist domain", "domain", domain, "error", err)
+			continue
+		}
+
+		if count >= autoBlacklistThreshold {
+			slog.Info("triage: auto-blacklisted domain",
+				"domain", domain, "trash_count", count)
+
+			// Purge remaining pending_triage URLs from this domain.
+			tag, err := tw.pool.Exec(ctx, `
+				DELETE FROM sources
+				WHERE status = 'pending_triage'
+				  AND identifier LIKE '%' || $1 || '%'`, domain)
+			if err != nil {
+				slog.Error("triage: purge pending for blacklisted domain",
+					"domain", domain, "error", err)
+			} else if tag.RowsAffected() > 0 {
+				slog.Info("triage: purged pending URLs for blacklisted domain",
+					"domain", domain, "deleted", tag.RowsAffected())
+			}
+		}
+	}
+
+	// Refresh the engine's in-memory auto-blacklist.
+	if tw.engine != nil {
+		tw.engine.RefreshAutoBlacklist(ctx)
+	}
+}
+
+// extractDomain returns the lowercase hostname from a URL, or "" if
+// the URL cannot be parsed.
+func extractDomain(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+	return strings.ToLower(parsed.Hostname())
 }

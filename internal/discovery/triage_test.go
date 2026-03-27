@@ -120,16 +120,40 @@ func TestTriageResponseParsing(t *testing.T) {
 	}
 }
 
+func TestExtractDomain(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"https://example.com/path", "example.com"},
+		{"https://sub.example.com/path", "sub.example.com"},
+		{"http://EXAMPLE.COM/page", "example.com"},
+		{"https://example.com:8080/path", "example.com"},
+		{"not-a-url", ""},
+		{"", ""},
+		{"invite:+abc123", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := extractDomain(tt.input)
+			if got != tt.want {
+				t.Errorf("extractDomain(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestTriageWorker_BelowThreshold verifies the worker is constructable with defaults.
 func TestTriageWorker_BelowThreshold(t *testing.T) {
 	// Verify default batch size.
-	tw := NewTriageWorker(nil, nil, 0, "test-model")
+	tw := NewTriageWorker(nil, nil, 0, "test-model", nil)
 	if tw.batchSize != 100 {
 		t.Errorf("default batchSize = %d, want 100", tw.batchSize)
 	}
 
 	// Verify custom batch size.
-	tw2 := NewTriageWorker(nil, nil, 50, "test-model")
+	tw2 := NewTriageWorker(nil, nil, 50, "test-model", nil)
 	if tw2.batchSize != 50 {
 		t.Errorf("custom batchSize = %d, want 50", tw2.batchSize)
 	}
