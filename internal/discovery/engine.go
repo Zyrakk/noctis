@@ -350,11 +350,6 @@ func (e *Engine) ProcessContent(ctx context.Context, content string, sourceConte
 		return nil
 	}
 
-	status := "discovered"
-	if e.config.AutoApprove {
-		status = "approved"
-	}
-
 	for _, u := range urls {
 		if e.isBlacklisted(u) || shouldSkipURL(u) {
 			slog.Debug("discovery: skipping filtered URL", "url", u)
@@ -368,6 +363,15 @@ func (e *Engine) ProcessContent(ctx context.Context, content string, sourceConte
 			u = e.normalizeTelegramURL(u)
 			if u == "" {
 				continue
+			}
+		}
+
+		// Three-tier status: allowlist -> discovered, unknown -> pending_triage.
+		status := "pending_triage"
+		if e.matchesAllowlist(u) {
+			status = "discovered"
+			if e.config.AutoApprove {
+				status = "approved"
 			}
 		}
 

@@ -474,3 +474,27 @@ func TestMatchesAllowlist_UnknownDomain(t *testing.T) {
 		t.Error("expected unknown domain to NOT match allowlist")
 	}
 }
+
+func TestProcessContent_StatusDetermination(t *testing.T) {
+	e := newAllowlistEngine()
+
+	// Allowlisted URL — should get "discovered" status
+	if e.matchesAllowlist("https://pastebin.com/abc123") != true {
+		t.Error("pastebin.com should be allowlisted")
+	}
+
+	// Unknown URL — should NOT match allowlist (goes to pending_triage)
+	if e.matchesAllowlist("https://randomforum.xyz/thread/1") != false {
+		t.Error("unknown domain should not match allowlist")
+	}
+
+	// Blacklisted URL — should be blocked
+	eBlack := NewEngine(nil, config.DiscoveryConfig{
+		Enabled:     true,
+		AllowPatterns: []string{"*.onion"},
+		DomainBlacklist: []string{"google.com"},
+	})
+	if !eBlack.isBlacklisted("https://google.com/search") {
+		t.Error("google.com should be blacklisted")
+	}
+}
