@@ -59,6 +59,10 @@ type DiscoveryConfig struct {
 	Enabled         bool     `yaml:"enabled"`
 	AutoApprove     bool     `yaml:"autoApprove"`
 	DomainBlacklist []string `yaml:"domainBlacklist"`
+	AllowPatterns   []string `yaml:"allowPatterns"`
+	AllowDomains    []string `yaml:"allowDomains"`
+	TriageBatchSize int      `yaml:"triageBatchSize"`
+	TriageEnabled   bool     `yaml:"triageEnabled"`
 }
 
 // StorageConfig controls artifact storage on NFS.
