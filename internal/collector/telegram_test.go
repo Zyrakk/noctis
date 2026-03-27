@@ -191,3 +191,91 @@ func TestMergeChannels(t *testing.T) {
 		}
 	}
 }
+
+func TestChannelKey(t *testing.T) {
+	tests := []struct {
+		name string
+		ch   config.ChannelConfig
+		want string
+	}{
+		{
+			name: "username channel",
+			ch:   config.ChannelConfig{Username: "darkleaks"},
+			want: "darkleaks",
+		},
+		{
+			name: "username with URL",
+			ch:   config.ChannelConfig{Username: "https://t.me/darkleaks"},
+			want: "darkleaks",
+		},
+		{
+			name: "invite hash channel",
+			ch:   config.ChannelConfig{InviteHash: "+rZSKKHihZjk1NDI0"},
+			want: "invite:+rZSKKHihZjk1NDI0",
+		},
+		{
+			name: "id-only channel",
+			ch:   config.ChannelConfig{ID: 12345},
+			want: "id:12345",
+		},
+		{
+			name: "invite hash takes precedence over username",
+			ch:   config.ChannelConfig{Username: "test", InviteHash: "+abc"},
+			want: "invite:+abc",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := channelKey(tt.ch)
+			if got != tt.want {
+				t.Errorf("channelKey(%+v) = %q, want %q", tt.ch, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveChannelName_InviteHash(t *testing.T) {
+	ch := config.ChannelConfig{InviteHash: "+rZSKKHihZjk1NDI0"}
+	got := resolveChannelName(ch)
+	want := "invite:+rZSKKHihZjk1NDI0"
+	if got != want {
+		t.Errorf("resolveChannelName(%+v) = %q, want %q", ch, got, want)
+	}
+}
+
+func TestShouldJoinChannel_InviteHash(t *testing.T) {
+	// Invite hash channels should NOT use ChannelsJoinChannel (they use ImportChatInvite)
+	ch := config.ChannelConfig{Username: "test", InviteHash: "+abc"}
+	if shouldJoinChannel(ch) {
+		t.Error("shouldJoinChannel should return false for invite hash channels")
+	}
+}
+
+func TestMergeChannels_WithInviteHashes(t *testing.T) {
+	cfgChannels := []config.ChannelConfig{
+		{Username: "alpha"},
+		{InviteHash: "+abc123"},
+	}
+	dbChannels := []config.ChannelConfig{
+		{InviteHash: "+abc123"}, // duplicate
+		{InviteHash: "+xyz789"}, // new
+		{Username: "beta"},
+	}
+
+	merged := mergeChannels(cfgChannels, dbChannels)
+
+	if len(merged) != 4 {
+		t.Fatalf("expected 4 channels, got %d", len(merged))
+	}
+
+	keys := make(map[string]bool)
+	for _, ch := range merged {
+		keys[channelKey(ch)] = true
+	}
+	for _, want := range []string{"alpha", "invite:+abc123", "invite:+xyz789", "beta"} {
+		if !keys[want] {
+			t.Errorf("expected key %q in merged list, got %v", want, keys)
+		}
+	}
+}

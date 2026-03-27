@@ -498,3 +498,49 @@ func TestProcessContent_StatusDetermination(t *testing.T) {
 		t.Error("google.com should be blacklisted")
 	}
 }
+
+func TestExtractInviteHash(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"https://t.me/+rZSKKHihZjk1NDI0", "+rZSKKHihZjk1NDI0"},
+		{"t.me/+abc123", "+abc123"},
+		{"https://t.me/joinchat/abc123xyz", "+abc123xyz"},
+		{"t.me/joinchat/XYZ789", "+XYZ789"},
+		{"https://t.me/joinchat/abc123/", "+abc123"},
+		{"https://t.me/publicchannel", ""},       // not an invite link
+		{"https://example.com/page", ""},          // not a t.me link
+		{"https://t.me/+rZSKK/extra", "+rZSKK"},  // strip trailing path — TrimSuffix only trims /
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := extractInviteHash(tt.input)
+			if got != tt.want {
+				t.Errorf("extractInviteHash(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClassifySource_InviteLinkFormats(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"https://t.me/+rZSKKHihZjk1NDI0", "telegram_group"},
+		{"t.me/joinchat/abc123", "telegram_group"},
+		{"https://t.me/joinchat/XYZ", "telegram_group"},
+		{"https://t.me/publicchannel", "telegram_channel"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := classifySource(tt.input)
+			if got != tt.want {
+				t.Errorf("classifySource(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}

@@ -195,14 +195,10 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 			slog.Info("telegram: merged channels", "config", len(tc.cfg.Channels), "db", len(dbChannels), "total", len(channels))
 		}
 
-		// Track subscribed channels by normalized username.
+		// Track subscribed channels by normalized key.
 		subscribed := make(map[string]bool, len(channels))
 		for _, ch := range channels {
-			key := extractUsername(ch.Username)
-			if key == "" {
-				key = fmt.Sprintf("id:%d", ch.ID)
-			}
-			subscribed[key] = true
+			subscribed[channelKey(ch)] = true
 		}
 
 		// Register handler for new channel messages.
@@ -279,8 +275,7 @@ func (tc *TelegramCollector) Start(ctx context.Context, out chan<- models.Findin
 				}
 				newChannels := tc.checkForNewChannels(ctx, subscribed)
 				for _, ch := range newChannels {
-					key := extractUsername(ch.Username)
-					subscribed[key] = true
+					subscribed[channelKey(ch)] = true
 					tc.subscribeChannel(ctx, api, ch, out)
 				}
 				if len(newChannels) > 0 {
@@ -420,10 +415,13 @@ func (tc *TelegramCollector) catchupChannels(ctx context.Context, api *tg.Client
 }
 
 // resolveChannelPeer resolves a channel config entry to an InputPeerChannel.
-// If the channel has a username, it is resolved via the API; otherwise the
-// raw ID is used (access hash will be zero, which works for channels the user
-// has already joined).
+// It handles three cases: invite hash (private link), username (public channel),
+// and raw numeric ID.
 func (tc *TelegramCollector) resolveChannelPeer(ctx context.Context, api *tg.Client, ch config.ChannelConfig) (*tg.InputPeerChannel, error) {
+	if ch.InviteHash != "" {
+		return tc.resolveInviteLink(ctx, api, ch.InviteHash)
+	}
+
 	if ch.Username != "" {
 		resolved, err := api.ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
 			Username: ch.Username,
@@ -469,20 +467,83 @@ func (tc *TelegramCollector) resolveChannelPeer(ctx context.Context, api *tg.Cli
 	return &tg.InputPeerChannel{ChannelID: ch.ID}, nil
 }
 
+// resolveInviteLink resolves a private invite hash to an InputPeerChannel.
+// It first checks whether the user has already joined (ChatInviteAlready),
+// and if not, imports the invite to join the channel/group.
+func (tc *TelegramCollector) resolveInviteLink(ctx context.Context, api *tg.Client, hash string) (*tg.InputPeerChannel, error) {
+	hash = strings.TrimPrefix(hash, "+")
+
+	invite, err := api.MessagesCheckChatInvite(ctx, hash)
+	if err != nil {
+		return nil, fmt.Errorf("check invite %q: %w", hash, err)
+	}
+
+	// Already joined — extract the channel directly.
+	if already, ok := invite.(*tg.ChatInviteAlready); ok {
+		channel, ok := already.Chat.(*tg.Channel)
+		if !ok {
+			return nil, fmt.Errorf("invite %q resolved to non-channel chat type", hash)
+		}
+		slog.Info("telegram: already joined invite link", "hash", hash, "channel", channel.Title)
+		return &tg.InputPeerChannel{
+			ChannelID:  channel.ID,
+			AccessHash: channel.AccessHash,
+		}, nil
+	}
+
+	// Not yet joined — import the invite to join.
+	slog.Info("telegram: joining via invite link", "hash", hash)
+	updates, err := api.MessagesImportChatInvite(ctx, hash)
+	if err != nil {
+		return nil, fmt.Errorf("import invite %q: %w", hash, err)
+	}
+
+	// Extract channel from the Updates response.
+	if u, ok := updates.(*tg.Updates); ok {
+		for _, chat := range u.Chats {
+			if channel, ok := chat.(*tg.Channel); ok {
+				slog.Info("telegram: joined via invite link", "hash", hash, "channel", channel.Title)
+				return &tg.InputPeerChannel{
+					ChannelID:  channel.ID,
+					AccessHash: channel.AccessHash,
+				}, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("invite %q: no channel found in join response", hash)
+}
+
 // resolveChannelName returns a human-readable name for a channel config entry,
 // preferring the username over the numeric ID.
 func resolveChannelName(ch config.ChannelConfig) string {
 	if ch.Username != "" {
 		return ch.Username
 	}
+	if ch.InviteHash != "" {
+		return fmt.Sprintf("invite:%s", ch.InviteHash)
+	}
 	return fmt.Sprintf("channel:%d", ch.ID)
 }
 
 // shouldJoinChannel returns true if the channel config uses a username,
 // meaning we should attempt to join the public channel before subscribing.
-// Channels identified only by numeric ID are assumed to be already joined.
+// Channels identified only by numeric ID or invite hash are handled separately.
 func shouldJoinChannel(ch config.ChannelConfig) bool {
-	return ch.Username != ""
+	return ch.Username != "" && ch.InviteHash == ""
+}
+
+// channelKey returns a unique key for a ChannelConfig, used for deduplication
+// in the subscribed set. Invite hash channels use "invite:hash", public
+// channels use the bare username, and numeric IDs use "id:N".
+func channelKey(ch config.ChannelConfig) string {
+	if ch.InviteHash != "" {
+		return "invite:" + ch.InviteHash
+	}
+	if key := extractUsername(ch.Username); key != "" {
+		return key
+	}
+	return fmt.Sprintf("id:%d", ch.ID)
 }
 
 // extractUsername normalizes a Telegram channel identifier to a bare username.
@@ -503,25 +564,38 @@ func extractUsername(identifier string) string {
 }
 
 // loadDBChannels queries the sources table for approved/active telegram channels
-// and converts them to ChannelConfig entries.
+// and groups, converting them to ChannelConfig entries. Sources with an
+// "invite:+hash" identifier are loaded as invite hash channels.
 func (tc *TelegramCollector) loadDBChannels(ctx context.Context) []config.ChannelConfig {
 	if tc.discovery == nil {
 		return nil
 	}
 
+	var channels []config.ChannelConfig
+
+	// Load public channels.
 	sources, err := tc.discovery.GetApprovedSources(ctx, "telegram_channel")
 	if err != nil {
 		slog.Error("telegram: failed to load DB channels", "error", err)
-		return nil
 	}
-
-	channels := make([]config.ChannelConfig, 0, len(sources))
 	for _, src := range sources {
 		username := extractUsername(src.Identifier)
 		if username == "" {
 			continue
 		}
 		channels = append(channels, config.ChannelConfig{Username: username})
+	}
+
+	// Load private groups/channels (invite links).
+	groups, err := tc.discovery.GetApprovedSources(ctx, "telegram_group")
+	if err != nil {
+		slog.Error("telegram: failed to load DB groups", "error", err)
+	}
+	for _, src := range groups {
+		if strings.HasPrefix(src.Identifier, "invite:") {
+			hash := strings.TrimPrefix(src.Identifier, "invite:")
+			channels = append(channels, config.ChannelConfig{InviteHash: hash})
+		}
 	}
 
 	return channels
@@ -534,8 +608,8 @@ func (tc *TelegramCollector) checkForNewChannels(ctx context.Context, subscribed
 	var newChannels []config.ChannelConfig
 
 	for _, ch := range dbChannels {
-		key := extractUsername(ch.Username)
-		if key == "" || subscribed[key] {
+		key := channelKey(ch)
+		if subscribed[key] {
 			continue
 		}
 		newChannels = append(newChannels, ch)
@@ -594,19 +668,12 @@ func mergeChannels(cfgChannels, dbChannels []config.ChannelConfig) []config.Chan
 	merged := make([]config.ChannelConfig, 0, len(cfgChannels)+len(dbChannels))
 
 	for _, ch := range cfgChannels {
-		key := extractUsername(ch.Username)
-		if key == "" {
-			key = fmt.Sprintf("id:%d", ch.ID)
-		}
-		seen[key] = true
+		seen[channelKey(ch)] = true
 		merged = append(merged, ch)
 	}
 
 	for _, ch := range dbChannels {
-		key := extractUsername(ch.Username)
-		if key == "" {
-			continue
-		}
+		key := channelKey(ch)
 		if seen[key] {
 			continue
 		}

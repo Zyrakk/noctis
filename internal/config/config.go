@@ -197,10 +197,13 @@ type TelegramConfig struct {
 	SessionFile     string          `yaml:"sessionFile"`
 }
 
-// ChannelConfig identifies a single Telegram channel.
+// ChannelConfig identifies a single Telegram channel or group.
+// For public channels, Username is used. For private invite links,
+// InviteHash holds the hash portion (e.g. "+rZSKKHihZjk1NDI0").
 type ChannelConfig struct {
-	Username string `yaml:"username"`
-	ID       int64  `yaml:"id"`
+	Username   string `yaml:"username"`
+	ID         int64  `yaml:"id"`
+	InviteHash string `yaml:"inviteHash"`
 }
 
 // PasteConfig configures paste-site scraping.

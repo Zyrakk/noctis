@@ -315,6 +315,37 @@ func isPartialIP(host string) bool {
 	return len(parts) < 4
 }
 
+// extractInviteHash extracts the invite hash from a t.me invite link and
+// returns it in "+hash" format. Handles both t.me/+hash and t.me/joinchat/hash.
+// Returns "" if the URL is not an invite link.
+func extractInviteHash(rawURL string) string {
+	lower := strings.ToLower(rawURL)
+	idx := strings.Index(lower, "t.me/")
+	if idx == -1 {
+		return ""
+	}
+
+	path := rawURL[idx+5:]
+	path = strings.TrimSuffix(path, "/")
+
+	if strings.HasPrefix(path, "+") {
+		// Strip any trailing subpath (e.g. "+hash/123" → "+hash").
+		if slashIdx := strings.Index(path[1:], "/"); slashIdx != -1 {
+			path = path[:slashIdx+1]
+		}
+		return path
+	}
+	if strings.HasPrefix(strings.ToLower(path), "joinchat/") {
+		hash := path[9:]
+		// Strip trailing subpath if present.
+		if slashIdx := strings.Index(hash, "/"); slashIdx != -1 {
+			hash = hash[:slashIdx]
+		}
+		return "+" + hash
+	}
+	return ""
+}
+
 // classifySource determines the source type for a given URL using simple
 // heuristic rules. No LLM call is needed for this classification.
 func classifySource(url string) string {
@@ -363,6 +394,10 @@ func (e *Engine) ProcessContent(ctx context.Context, content string, sourceConte
 
 		srcType := classifySource(u)
 
+		// Check allowlist before normalization (normalized identifiers like
+		// "invite:+hash" are not parseable URLs).
+		allowed := e.matchesAllowlist(u)
+
 		// Normalize telegram URLs: strip message IDs, skip bots and monitored channels.
 		if srcType == "telegram_channel" {
 			u = e.normalizeTelegramURL(u)
@@ -371,9 +406,18 @@ func (e *Engine) ProcessContent(ctx context.Context, content string, sourceConte
 			}
 		}
 
+		// Normalize invite links to "invite:+hash" identifier format.
+		if srcType == "telegram_group" {
+			hash := extractInviteHash(u)
+			if hash == "" {
+				continue
+			}
+			u = "invite:" + hash
+		}
+
 		// Three-tier status: allowlist -> discovered, unknown -> pending_triage.
 		status := "pending_triage"
-		if e.matchesAllowlist(u) {
+		if allowed {
 			status = "discovered"
 			if e.config.AutoApprove {
 				status = "approved"
