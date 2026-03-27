@@ -75,6 +75,7 @@ func NewEngine(pool *pgxpool.Pool, cfg config.DiscoveryConfig) *Engine {
 		"discord.gg", "mega.nz", "boosty.to", "skillbox.ru",
 		"habr.com", "medium.com", "yandex.com", "localhost",
 		"127.0.0.1", "w3.org", "schemas.xmlsoap.org", "microsoft.com",
+		"images.contentstack.io", "brighttalk.com", "paloaltonetworks.com",
 	}
 	blacklist := make(map[string]struct{}, len(cfg.DomainBlacklist)+len(hardcoded))
 	for _, d := range hardcoded {
@@ -394,6 +395,15 @@ func shouldSkipURL(rawURL string) bool {
 	// Skip truncated IPs (like http://45.76.155 — only 3 octets, no path)
 	if net.ParseIP(host) == nil && isPartialIP(host) {
 		return true
+	}
+
+	// Skip image/media URLs
+	imageExts := []string{".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp"}
+	lowerPath := strings.ToLower(parsed.Path)
+	for _, ext := range imageExts {
+		if strings.HasSuffix(lowerPath, ext) {
+			return true
+		}
 	}
 
 	// Skip URLs too short to be meaningful (domain + less than 2 chars of path)
