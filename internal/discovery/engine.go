@@ -88,6 +88,11 @@ func NewEngine(pool *pgxpool.Pool, cfg config.DiscoveryConfig) *Engine {
 		allow[strings.ToLower(d)] = struct{}{}
 	}
 
+	// Normalize allow patterns to lowercase for case-insensitive matching.
+	for i, p := range cfg.AllowPatterns {
+		cfg.AllowPatterns[i] = strings.ToLower(p)
+	}
+
 	return &Engine{
 		pool:              pool,
 		config:            cfg,
