@@ -40,8 +40,9 @@ type Server struct {
 	registry        *modules.Registry
 	mux             *http.ServeMux
 	httpSrv         *http.Server
-	queryEngine     NLQueryEngine
-	spendingTracker *llm.SpendingTracker
+	queryEngine         NLQueryEngine
+	spendingTracker     *llm.SpendingTracker
+	fastSpendingTracker *llm.SpendingTracker
 }
 
 // NewServer creates a dashboard Server listening on addr. It requires a
@@ -81,6 +82,11 @@ func (s *Server) SetQueryEngine(qe NLQueryEngine) {
 // SetSpendingTracker registers a spending tracker for display on the dashboard.
 func (s *Server) SetSpendingTracker(st *llm.SpendingTracker) {
 	s.spendingTracker = st
+}
+
+// SetFastSpendingTracker registers a spending tracker for the fast LLM (Groq).
+func (s *Server) SetFastSpendingTracker(st *llm.SpendingTracker) {
+	s.fastSpendingTracker = st
 }
 
 func (s *Server) registerRoutes() {
@@ -166,6 +172,9 @@ func (s *Server) handleSystemStatus(w http.ResponseWriter, _ *http.Request) {
 	}
 	if s.spendingTracker != nil {
 		result["gemini_spending"] = s.spendingTracker.Snapshot()
+	}
+	if s.fastSpendingTracker != nil {
+		result["groq_spending"] = s.fastSpendingTracker.Snapshot()
 	}
 	writeJSON(w, http.StatusOK, result)
 }

@@ -161,9 +161,23 @@ func newServeCmd() *cobra.Command {
 
 			// Fast model for classification (falls back to full if unconfigured)
 			var classifyAnalyzer *analyzer.Analyzer
+			var fastSpending *llm.SpendingTracker
 			if cfg.LLMFast.Model != "" {
 				fastClient := llm.NewOpenAICompatClient(cfg.LLMFast.BaseURL, cfg.LLMFast.APIKey, cfg.LLMFast.Model)
 				fastClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLMFast.TokensPerMinute, cfg.LLMFast.TokensPerDay))
+				if cfg.LLMFast.MonthlyBudgetUSD > 0 {
+					fastSpending = llm.NewSpendingTracker(
+						cfg.LLMFast.InputCostPer1M,
+						cfg.LLMFast.OutputCostPer1M,
+						cfg.LLMFast.MonthlyBudgetUSD,
+					)
+					fastClient.SetSpendingTracker(fastSpending)
+					slog.Info("fast spending tracker enabled",
+						"budget_usd", cfg.LLMFast.MonthlyBudgetUSD,
+						"input_cost_per_1m", cfg.LLMFast.InputCostPer1M,
+						"output_cost_per_1m", cfg.LLMFast.OutputCostPer1M,
+					)
+				}
 				classifyAnalyzer = analyzer.New(fastClient, promptsDir)
 				slog.Info("dual LLM mode", "fast", cfg.LLMFast.Model, "full", cfg.LLM.Model)
 			} else {
@@ -291,6 +305,9 @@ func newServeCmd() *cobra.Command {
 				dashServer.SetQueryEngine(&queryEngineAdapter{engine: queryEngine})
 				if brainSpending != nil {
 					dashServer.SetSpendingTracker(brainSpending)
+				}
+				if fastSpending != nil {
+					dashServer.SetFastSpendingTracker(fastSpending)
 				}
 			}
 
