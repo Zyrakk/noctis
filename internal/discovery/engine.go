@@ -409,9 +409,13 @@ func shouldSkipURL(rawURL string) bool {
 	// Skip URLs that are clearly not intelligence sources.
 	lowerHost := strings.ToLower(host)
 	skipHosts := []string{
-		"cdn.embedly.com",
-		"www.blogger.com",
+		"embedly.com",
 		"safelinks.protection.outlook.com",
+		"player.vimeo.com",
+		"t.co",
+		"bit.ly",
+		"tinyurl.com",
+		"goo.gl",
 	}
 	for _, h := range skipHosts {
 		if lowerHost == h || strings.HasSuffix(lowerHost, "."+h) {
@@ -421,6 +425,11 @@ func shouldSkipURL(rawURL string) bool {
 
 	// Skip Microsoft SafeLinks wrappers (any *.safelinks.protection.outlook.com).
 	if strings.HasSuffix(lowerHost, ".safelinks.protection.outlook.com") {
+		return true
+	}
+
+	// Skip Blogger video tokens (e.g. blogger.com/video.g?token=...).
+	if strings.HasSuffix(lowerHost, "blogger.com") && strings.Contains(lowerPath, "/video.g") {
 		return true
 	}
 

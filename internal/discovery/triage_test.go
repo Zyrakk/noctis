@@ -144,12 +144,32 @@ func TestExtractDomain(t *testing.T) {
 	}
 }
 
+// TestNormalizeURLForMatch verifies URL normalization for fuzzy comparison.
+func TestNormalizeURLForMatch(t *testing.T) {
+	tests := []struct {
+		a, b string
+		want bool
+	}{
+		{"https://Example.COM/path", "https://example.com/path", true},
+		{"https://example.com/path/", "https://example.com/path", true},
+		{"https://example.com/a%20b", "https://example.com/a b", true},
+		{"https://a.com", "https://b.com", false},
+	}
+	for _, tt := range tests {
+		got := normalizeURLForMatch(tt.a) == normalizeURLForMatch(tt.b)
+		if got != tt.want {
+			t.Errorf("normalizeURLForMatch(%q) == normalizeURLForMatch(%q) = %v, want %v",
+				tt.a, tt.b, got, tt.want)
+		}
+	}
+}
+
 // TestTriageWorker_BelowThreshold verifies the worker is constructable with defaults.
 func TestTriageWorker_BelowThreshold(t *testing.T) {
 	// Verify default batch size.
 	tw := NewTriageWorker(nil, nil, 0, "test-model", nil)
-	if tw.batchSize != 100 {
-		t.Errorf("default batchSize = %d, want 100", tw.batchSize)
+	if tw.batchSize != 30 {
+		t.Errorf("default batchSize = %d, want 30", tw.batchSize)
 	}
 
 	// Verify custom batch size.

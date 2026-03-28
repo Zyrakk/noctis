@@ -147,7 +147,11 @@ func newServeCmd() *cobra.Command {
 			// Build LLM clients
 			// GLM — smart model for entity extraction and sub-classification
 			fullClient := llm.NewOpenAICompatClient(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.LLM.Model)
-			fullClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLM.TokensPerMinute, 0))
+			fullClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLM.TokensPerMinute, cfg.LLM.TokensPerDay))
+			slog.Info("full LLM rate limiter configured",
+				"tokens_per_minute", cfg.LLM.TokensPerMinute,
+				"tokens_per_day", cfg.LLM.TokensPerDay,
+			)
 
 			// Build Prometheus metrics
 			metrics := dispatcher.NewPrometheusMetrics(prometheus.DefaultRegisterer)
@@ -165,6 +169,10 @@ func newServeCmd() *cobra.Command {
 			if cfg.LLMFast.Model != "" {
 				fastClient := llm.NewOpenAICompatClient(cfg.LLMFast.BaseURL, cfg.LLMFast.APIKey, cfg.LLMFast.Model)
 				fastClient.SetRateLimiter(llm.NewRateLimiter(cfg.LLMFast.TokensPerMinute, cfg.LLMFast.TokensPerDay))
+				slog.Info("fast LLM rate limiter configured",
+					"tokens_per_minute", cfg.LLMFast.TokensPerMinute,
+					"tokens_per_day", cfg.LLMFast.TokensPerDay,
+				)
 				if cfg.LLMFast.MonthlyBudgetUSD > 0 {
 					fastSpending = llm.NewSpendingTracker(
 						cfg.LLMFast.InputCostPer1M,

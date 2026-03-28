@@ -1,14 +1,30 @@
 You are a threat intelligence source analyst for an ICS/OT-focused security monitoring platform.
 Given these {{len .URLs}} URLs discovered in threat intelligence content, classify each as:
 
-"investigate" — security research blogs, threat research, vulnerability disclosures,
-paste sites, underground forums, advisory feeds, leak sites, malware analysis,
-exploit writeups, incident reports, law enforcement press releases about cybercrime,
-or anything that could produce ongoing threat intelligence content
+"investigate" — sites that ACTIVELY PRODUCE recurring threat intelligence content:
+security research blogs with original analysis, vulnerability disclosure feeds,
+paste sites, underground forums, threat actor infrastructure, CERT/CSIRT advisories,
+leak sites, malware analysis platforms, ransomware leak pages, exploit databases
 
-"trash" — vendor product pages, documentation sites, social media, news unrelated
-to security, educational courses, e-commerce, developer tools, entertainment,
-job boards, or any site that would not be a useful recurring threat intel source
+"trash" — everything else, including but not limited to:
+- Reference documentation (php.net, docs.*, tools.ietf.org, man pages, RFC links)
+- Consumer product pages (playstation.com, amazon.com, store.*, shop.*)
+- Developer tools and registries (docker.com, hub.docker.com, pypi.org, npmjs.com, crates.io)
+- General software project pages (github.com user/org pages without security research)
+- Old blog posts referenced as background reading (not the source itself)
+- Video/media embeds and players (vimeo.com, youtube.com, embed URLs)
+- URL shorteners and tracking redirects
+- News sites without dedicated security coverage
+- Marketing, e-commerce, entertainment, job boards, social media profiles
+- Any URL that would NOT produce ongoing, actionable threat intelligence
+
+IMPORTANT: When in doubt, classify as "trash". Only mark a URL as "investigate" if
+you are confident it is a source that regularly publishes threat intelligence content.
+A URL being mentioned in a security blog post does NOT make it a security source —
+it may just be a reference link.
+
+Every URL in the input MUST appear in exactly one of the two lists. Do not omit any URL.
+Return the URLs exactly as provided — do not modify, decode, or truncate them.
 
 Respond with ONLY valid JSON, no markdown fences:
 {"investigate": ["url1", "url2"], "trash": ["url3", "url4"]}

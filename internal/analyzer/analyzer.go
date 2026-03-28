@@ -301,7 +301,7 @@ func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matche
 
 	resp, err := a.client.ChatCompletion(ctx, []llm.Message{
 		{Role: "user", Content: prompt},
-	})
+	}, llm.WithMaxTokens(2048))
 	if err != nil {
 		return nil, fmt.Errorf("analyzer: classify LLM call: %w", err)
 	}
@@ -320,6 +320,11 @@ func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matche
 // ExtractIOCs asks the LLM to extract all indicators of compromise from the
 // finding content.
 func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]models.IOC, error) {
+	if strings.TrimSpace(finding.Content) == "" {
+		log.Printf("analyzer: extract_iocs: skipping empty content for finding %s", finding.ID)
+		return nil, nil
+	}
+
 	prompt, err := a.renderTemplate("extract_iocs", struct {
 		Content string
 	}{
@@ -342,7 +347,18 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 	}
 	var entries []iocEntry
 	if err := json.Unmarshal([]byte(extracted), &entries); err != nil {
-		return nil, fmt.Errorf("analyzer: extract_iocs parse response %q: %w", truncate(resp.Content, 200), err)
+		// Fallback: LLM wrapped the array in an object like {"iocs": [...]}.
+		var wrapper map[string]json.RawMessage
+		if json.Unmarshal([]byte(extracted), &wrapper) == nil {
+			for _, v := range wrapper {
+				if json.Unmarshal(v, &entries) == nil && len(entries) > 0 {
+					break
+				}
+			}
+		}
+		if len(entries) == 0 {
+			return nil, fmt.Errorf("analyzer: extract_iocs parse response %q: %w", truncate(resp.Content, 200), err)
+		}
 	}
 
 	iocs := make([]models.IOC, 0, len(entries))
@@ -384,6 +400,11 @@ type EntityExtractionResult struct {
 // ExtractEntities asks the LLM to extract named entities (actors, malware,
 // campaigns, TTPs) and their relationships from the finding content.
 func (a *Analyzer) ExtractEntities(ctx context.Context, finding *models.Finding, category, sourceName, sourceType, provenance string) (*EntityExtractionResult, error) {
+	if strings.TrimSpace(finding.Content) == "" {
+		log.Printf("analyzer: extract_entities: skipping empty content for finding %s", finding.ID)
+		return &EntityExtractionResult{}, nil
+	}
+
 	prompt, err := a.renderTemplate("extract_entities", struct {
 		Content    string
 		Category   string

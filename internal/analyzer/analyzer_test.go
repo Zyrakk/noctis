@@ -220,6 +220,49 @@ func TestAnalyzer_ExtractIOCs_FiltersMalicious(t *testing.T) {
 	}
 }
 
+// TestAnalyzer_ExtractIOCs_WrappedObject verifies fallback when the LLM wraps
+// IOCs in an object like {"iocs": [...]}.
+func TestAnalyzer_ExtractIOCs_WrappedObject(t *testing.T) {
+	client := &mockLLMClient{
+		responses: map[string]string{
+			"Extract": `{"iocs": [{"type":"ip","value":"10.0.0.1","context":"C2","malicious":true}]}`,
+		},
+	}
+
+	a := newTestAnalyzer(t, client)
+	iocs, err := a.ExtractIOCs(context.Background(), testFinding())
+	if err != nil {
+		t.Fatalf("ExtractIOCs() wrapped object: unexpected error: %v", err)
+	}
+	if len(iocs) != 1 {
+		t.Fatalf("len(IOCs) = %d; want 1", len(iocs))
+	}
+	if iocs[0].Value != "10.0.0.1" {
+		t.Errorf("IOC.Value = %q; want %q", iocs[0].Value, "10.0.0.1")
+	}
+}
+
+// TestAnalyzer_ExtractIOCs_EmptyContent verifies that empty content returns
+// an empty IOC list without calling the LLM.
+func TestAnalyzer_ExtractIOCs_EmptyContent(t *testing.T) {
+	client := &mockLLMClient{
+		responses: map[string]string{
+			"Extract": `should not be called`,
+		},
+	}
+
+	a := newTestAnalyzer(t, client)
+	f := testFinding()
+	f.Content = "   "
+	iocs, err := a.ExtractIOCs(context.Background(), f)
+	if err != nil {
+		t.Fatalf("ExtractIOCs() empty content: unexpected error: %v", err)
+	}
+	if len(iocs) != 0 {
+		t.Errorf("len(IOCs) = %d; want 0 for empty content", len(iocs))
+	}
+}
+
 // TestAnalyzer_AssessSeverity verifies that the severity assessment parses the
 // JSON response and maps the string level to models.SeverityCritical.
 func TestAnalyzer_AssessSeverity(t *testing.T) {

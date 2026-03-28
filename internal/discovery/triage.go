@@ -14,15 +14,20 @@ import (
 	"github.com/Zyrakk/noctis/internal/modules"
 )
 
+// maxTriageAttempts is the number of times a URL can appear in a triage batch
+// without being classified before it is auto-trashed.
+const maxTriageAttempts = 3
+
 // TriageWorker periodically checks for pending_triage sources, sends them
 // to the LLM for classification, and promotes or deletes them.
 type TriageWorker struct {
-	pool      *pgxpool.Pool
-	analyzer  *analyzer.Analyzer
-	engine    *Engine // optional; used to refresh auto-blacklist after learning
-	batchSize int
-	modelName string
-	status    *modules.StatusTracker
+	pool           *pgxpool.Pool
+	analyzer       *analyzer.Analyzer
+	engine         *Engine // optional; used to refresh auto-blacklist after learning
+	batchSize      int
+	modelName      string
+	status         *modules.StatusTracker
+	triageAttempts map[string]int // identifier -> failed attempt count
 }
 
 // NewTriageWorker creates a triage worker using the given analyzer (typically
@@ -31,15 +36,16 @@ type TriageWorker struct {
 // the worker refreshes the engine's auto-blacklist after learning new domains.
 func NewTriageWorker(pool *pgxpool.Pool, az *analyzer.Analyzer, batchSize int, modelName string, engine *Engine) *TriageWorker {
 	if batchSize <= 0 {
-		batchSize = 100
+		batchSize = 30
 	}
 	return &TriageWorker{
-		pool:      pool,
-		analyzer:  az,
-		engine:    engine,
-		batchSize: batchSize,
-		modelName: modelName,
-		status:    modules.NewStatusTracker(modules.ModSourceTriage, "Source Triage", "infra"),
+		pool:           pool,
+		analyzer:       az,
+		engine:         engine,
+		batchSize:      batchSize,
+		modelName:      modelName,
+		status:         modules.NewStatusTracker(modules.ModSourceTriage, "Source Triage", "infra"),
+		triageAttempts: make(map[string]int),
 	}
 }
 
@@ -148,26 +154,31 @@ func (tw *TriageWorker) processBatch(ctx context.Context) {
 		return
 	}
 
-	// Build lookup sets. If a URL appears in both, treat as investigate.
+	// Build lookup sets with normalized keys for fuzzy matching.
+	// The LLM may return URLs with minor differences (trailing slashes,
+	// lowercased, URL-decoded) compared to the original identifiers.
 	investigateSet := make(map[string]struct{}, len(result.Investigate))
 	for _, u := range result.Investigate {
-		investigateSet[u] = struct{}{}
+		investigateSet[normalizeURLForMatch(u)] = struct{}{}
 	}
 	trashSet := make(map[string]struct{}, len(result.Trash))
 	for _, u := range result.Trash {
-		if _, dup := investigateSet[u]; !dup {
-			trashSet[u] = struct{}{}
+		norm := normalizeURLForMatch(u)
+		if _, dup := investigateSet[norm]; !dup {
+			trashSet[norm] = struct{}{}
 		}
 	}
 
 	batchID := uuid.New().String()
-	var nInvestigate, nTrash int
+	var nInvestigate, nTrash, nAutoTrashed int
 
 	for _, r := range batch {
+		norm := normalizeURLForMatch(r.Identifier)
 		var decision string
-		if _, ok := investigateSet[r.Identifier]; ok {
+		if _, ok := investigateSet[norm]; ok {
 			decision = "investigate"
 			nInvestigate++
+			delete(tw.triageAttempts, r.Identifier)
 			if _, err := tw.pool.Exec(ctx,
 				`UPDATE sources SET status = 'discovered', updated_at = NOW() WHERE id = $1`,
 				r.ID,
@@ -175,9 +186,10 @@ func (tw *TriageWorker) processBatch(ctx context.Context) {
 				slog.Error("triage: promote source", "id", r.ID, "error", err)
 				continue
 			}
-		} else if _, ok := trashSet[r.Identifier]; ok {
+		} else if _, ok := trashSet[norm]; ok {
 			decision = "trash"
 			nTrash++
+			delete(tw.triageAttempts, r.Identifier)
 			if _, err := tw.pool.Exec(ctx,
 				`DELETE FROM sources WHERE id = $1`, r.ID,
 			); err != nil {
@@ -185,10 +197,28 @@ func (tw *TriageWorker) processBatch(ctx context.Context) {
 				continue
 			}
 		} else {
-			// URL not in LLM response — leave as pending_triage for next batch.
-			slog.Warn("triage: URL not classified by LLM, leaving pending",
-				"identifier", r.Identifier)
-			continue
+			// URL not in LLM response — increment attempt counter.
+			tw.triageAttempts[r.Identifier]++
+			attempts := tw.triageAttempts[r.Identifier]
+			if attempts >= maxTriageAttempts {
+				slog.Warn("triage: auto-trashing URL after max attempts",
+					"identifier", r.Identifier, "attempts", attempts)
+				decision = "trash"
+				nAutoTrashed++
+				delete(tw.triageAttempts, r.Identifier)
+				if _, err := tw.pool.Exec(ctx,
+					`DELETE FROM sources WHERE id = $1`, r.ID,
+				); err != nil {
+					slog.Error("triage: delete stale source", "id", r.ID, "error", err)
+					continue
+				}
+				// Count auto-trashed URLs for domain learning.
+				result.Trash = append(result.Trash, r.Identifier)
+			} else {
+				slog.Warn("triage: URL not classified by LLM",
+					"identifier", r.Identifier, "attempt", attempts)
+				continue
+			}
 		}
 
 		// Log decision to audit table.
@@ -205,6 +235,7 @@ func (tw *TriageWorker) processBatch(ctx context.Context) {
 		"batch_id", batchID,
 		"investigate", nInvestigate,
 		"trash", nTrash,
+		"auto_trashed", nAutoTrashed,
 	)
 	tw.status.RecordSuccess()
 
@@ -270,6 +301,18 @@ func (tw *TriageWorker) learnFromTrash(ctx context.Context, trashedURLs []string
 	if tw.engine != nil {
 		tw.engine.RefreshAutoBlacklist(ctx)
 	}
+}
+
+// normalizeURLForMatch normalizes a URL for fuzzy comparison between the
+// original identifier and the LLM's response. Lowercases, trims trailing
+// slashes, and URL-decodes the path.
+func normalizeURLForMatch(rawURL string) string {
+	rawURL = strings.ToLower(strings.TrimSpace(rawURL))
+	rawURL = strings.TrimRight(rawURL, "/")
+	if decoded, err := url.QueryUnescape(rawURL); err == nil {
+		rawURL = decoded
+	}
+	return rawURL
 }
 
 // extractDomain returns the lowercase hostname from a URL, or "" if

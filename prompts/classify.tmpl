@@ -70,5 +70,6 @@ Severity levels:
 
 ## Output
 
-Respond with ONLY a JSON object containing both classification and severity:
+CRITICAL: Your entire response must be a single JSON object. No preamble, no explanation, no markdown code fences, no text before or after the JSON. Start your response with { and end with }.
+
 {"category": "<category>", "confidence": <0.0-1.0>, "provenance": "<first_party|third_party_reporting|unknown>", "severity": "<critical|high|medium|low|info>", "reasoning": "<one sentence explaining severity>"}

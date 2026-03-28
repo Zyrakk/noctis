@@ -275,6 +275,7 @@ type LLMConfig struct {
 	MaxConcurrent     int           `yaml:"maxConcurrent"`
 	RequestsPerMinute int           `yaml:"requestsPerMinute"`
 	TokensPerMinute   int           `yaml:"tokensPerMinute"`
+	TokensPerDay      int           `yaml:"tokensPerDay"`
 	MonthlyBudgetUSD  float64       `yaml:"monthlyBudgetUSD"`
 	InputCostPer1M    float64       `yaml:"inputCostPer1M"`
 	OutputCostPer1M   float64       `yaml:"outputCostPer1M"`

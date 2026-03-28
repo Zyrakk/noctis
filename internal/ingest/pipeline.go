@@ -104,6 +104,15 @@ func (p *IngestPipeline) Process(ctx context.Context, f models.Finding) error {
 		}
 	}
 
+	// Skip alert path for irrelevant content — persist classification but don't dispatch.
+	if enriched.Category == "irrelevant" {
+		tags := processor.TagsFromCategory(string(enriched.Category))
+		if err := p.archive.MarkClassified(ctx, rc.ID, string(enriched.Category), tags, "info", "", provenance, processor.CurrentClassificationVersion); err != nil {
+			log.Printf("ingest: mark classified error for %s: %v", rc.ID, err)
+		}
+		return nil
+	}
+
 	// 4b. Extract IOCs (fast LLM — same as background workers).
 	iocs, err := p.classifyAnalyzer.ExtractIOCs(ctx, &f)
 	if err != nil {
