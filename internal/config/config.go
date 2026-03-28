@@ -250,13 +250,16 @@ type RuleConfig struct {
 // LLMFastConfig configures a secondary (fast) LLM model used for high-volume
 // structured tasks like classification. Falls back to the primary LLM if unset.
 type LLMFastConfig struct {
-	Provider        string `yaml:"provider"`
-	BaseURL         string `yaml:"baseURL"`
-	Model           string `yaml:"model"`
-	APIKey          string `yaml:"apiKey"`
-	MaxConcurrency  int    `yaml:"maxConcurrency"`
-	TokensPerMinute int    `yaml:"tokensPerMinute"`
-	TokensPerDay    int    `yaml:"tokensPerDay"`
+	Provider         string  `yaml:"provider"`
+	BaseURL          string  `yaml:"baseURL"`
+	Model            string  `yaml:"model"`
+	APIKey           string  `yaml:"apiKey"`
+	MaxConcurrency   int     `yaml:"maxConcurrency"`
+	TokensPerMinute  int     `yaml:"tokensPerMinute"`
+	TokensPerDay     int     `yaml:"tokensPerDay"`
+	MonthlyBudgetUSD float64 `yaml:"monthlyBudgetUSD"`
+	InputCostPer1M   float64 `yaml:"inputCostPer1M"`
+	OutputCostPer1M  float64 `yaml:"outputCostPer1M"`
 }
 
 // LLMConfig configures the language model client.
