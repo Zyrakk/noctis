@@ -260,6 +260,23 @@ func truncate(s string, n int) string {
 	return s[:n] + "..."
 }
 
+// Content truncation limits per LLM stage (characters).
+// Classify needs minimal context; IOC extraction needs more.
+const (
+	classifyContentLimit   = 4096
+	summarizeContentLimit  = 6144
+	iocExtractContentLimit = 8192
+)
+
+// truncateContent returns s truncated to limit characters. A limit of 0 means
+// no truncation. If truncated, "..." is appended (but not counted toward limit).
+func truncateContent(s string, limit int) string {
+	if limit <= 0 || len(s) <= limit {
+		return s
+	}
+	return s[:limit] + "..."
+}
+
 // Classify asks the LLM to assign a category and confidence to the finding.
 func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matchedRules []string) (*classifyResponse, error) {
 	prompt, err := a.renderTemplate("classify", struct {
@@ -270,7 +287,7 @@ func (a *Analyzer) Classify(ctx context.Context, finding *models.Finding, matche
 	}{
 		Source:       finding.Source,
 		SourceName:   finding.SourceName,
-		Content:      finding.Content,
+		Content:      truncateContent(finding.Content, classifyContentLimit),
 		MatchedRules: matchedRules,
 	})
 	if err != nil {
@@ -301,7 +318,7 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 	prompt, err := a.renderTemplate("extract_iocs", struct {
 		Content string
 	}{
-		Content: finding.Content,
+		Content: truncateContent(finding.Content, iocExtractContentLimit),
 	})
 	if err != nil {
 		return nil, err
@@ -453,7 +470,7 @@ func (a *Analyzer) Summarize(ctx context.Context, finding *models.Finding, categ
 	}{
 		Source:     finding.Source,
 		SourceName: finding.SourceName,
-		Content:    finding.Content,
+		Content:    truncateContent(finding.Content, summarizeContentLimit),
 		Category:   category,
 		Severity:   severity.String(),
 		Author:     finding.Author,
