@@ -728,6 +728,13 @@ func (a *Analyzer) TriageURLs(ctx context.Context, urls []string) (*triageRespon
 		if json.Unmarshal([]byte(extracted), &arr) == nil && len(arr) > 0 {
 			return &arr[0], nil
 		}
+		// Fallback: extracted JSON is a plain URL array (e.g. from a
+		// truncated response where ExtractJSON found the inner investigate
+		// list instead of the enclosing object). Treat as investigate-all.
+		var urls []string
+		if json.Unmarshal([]byte(extracted), &urls) == nil && len(urls) > 0 {
+			return &triageResponse{Investigate: urls}, nil
+		}
 		return nil, fmt.Errorf("analyzer: triage parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 	return &result, nil

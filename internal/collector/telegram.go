@@ -594,8 +594,23 @@ func (tc *TelegramCollector) loadDBChannels(ctx context.Context) []config.Channe
 		slog.Error("telegram: failed to load DB channels", "error", err)
 	}
 	for _, src := range sources {
+		// Handle invite hashes stored as telegram_channel type.
+		// These arrive as "+hash", "invite:+hash", or full URLs like
+		// "https://t.me/+hash" / "https://t.me/joinchat/hash".
+		if hash, ok := strings.CutPrefix(src.Identifier, "invite:"); ok {
+			channels = append(channels, config.ChannelConfig{InviteHash: hash})
+			continue
+		}
 		username := extractUsername(src.Identifier)
 		if username == "" {
+			continue
+		}
+		if strings.HasPrefix(username, "+") {
+			channels = append(channels, config.ChannelConfig{InviteHash: username})
+			continue
+		}
+		if hash, ok := strings.CutPrefix(username, "joinchat/"); ok {
+			channels = append(channels, config.ChannelConfig{InviteHash: hash})
 			continue
 		}
 		channels = append(channels, config.ChannelConfig{Username: username})
@@ -607,8 +622,7 @@ func (tc *TelegramCollector) loadDBChannels(ctx context.Context) []config.Channe
 		slog.Error("telegram: failed to load DB groups", "error", err)
 	}
 	for _, src := range groups {
-		if strings.HasPrefix(src.Identifier, "invite:") {
-			hash := strings.TrimPrefix(src.Identifier, "invite:")
+		if hash, ok := strings.CutPrefix(src.Identifier, "invite:"); ok {
 			channels = append(channels, config.ChannelConfig{InviteHash: hash})
 		}
 	}
