@@ -91,6 +91,10 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 					tags := []string{"unclassifiable", "poison_item"}
 					if markErr := e.archive.MarkClassified(ctx, entry.ID, "irrelevant", tags, "info", "", "unknown", CurrentClassificationVersion); markErr != nil {
 						log.Printf("processor: classification worker %d: mark poison error for %s: %v", workerID, entry.ID, markErr)
+					} else {
+						e.classifyFailMu.Lock()
+						delete(e.classifyFailCounts, entry.ID)
+						e.classifyFailMu.Unlock()
 					}
 				}
 				continue
@@ -132,6 +136,11 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 			if category != "irrelevant" {
 				summary, err = e.summarizer.Summarize(ctx, &finding, category, severity)
 				if err != nil {
+					if llm.IsBudgetExhausted(err) {
+						log.Printf("processor: classification worker %d: budget exhausted during summarize: %v", workerID, err)
+						e.budgetExhausted.Store(true)
+						break
+					}
 					log.Printf("processor: classification worker %d: summarize error for %s: %v", workerID, entry.ID, err)
 					summary = ""
 				}
