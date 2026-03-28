@@ -59,7 +59,7 @@ func NewProcessingEngine(
 ) *ProcessingEngine {
 	// Apply defaults for zero-value config fields.
 	if workerCfg.ClassificationWorkers <= 0 {
-		workerCfg.ClassificationWorkers = 8
+		workerCfg.ClassificationWorkers = 4
 	}
 	if workerCfg.EntityExtractionWorkers <= 0 {
 		workerCfg.EntityExtractionWorkers = 2
