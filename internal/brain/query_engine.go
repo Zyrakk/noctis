@@ -181,6 +181,8 @@ RULES:
 	sql = strings.TrimPrefix(sql, "```")
 	sql = strings.TrimSuffix(sql, "```")
 	sql = strings.TrimSpace(sql)
+	sql = strings.TrimRight(sql, ";")
+	sql = strings.TrimSpace(sql)
 
 	return sql, nil
 }
