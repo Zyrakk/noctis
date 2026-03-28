@@ -732,7 +732,7 @@ func (a *Analyzer) TriageURLs(ctx context.Context, urls []string) (*triageRespon
 
 	resp, err := a.client.ChatCompletion(ctx, []llm.Message{
 		{Role: "user", Content: prompt},
-	})
+	}, llm.WithMaxTokens(4096))
 	if err != nil {
 		return nil, fmt.Errorf("analyzer: triage LLM call: %w", err)
 	}
@@ -755,6 +755,14 @@ func (a *Analyzer) TriageURLs(ctx context.Context, urls []string) (*triageRespon
 		var urls []string
 		if json.Unmarshal([]byte(extracted), &urls) == nil && len(urls) > 0 {
 			return &triageResponse{Investigate: urls}, nil
+		}
+		// Fallback: extracted JSON is an array (e.g. [] from a truncated
+		// response) that didn't match any typed fallback above.  Return an
+		// empty result so the batch degrades gracefully — URLs stay pending
+		// for the next cycle instead of the whole batch erroring out.
+		if len(extracted) > 0 && extracted[0] == '[' {
+			log.Printf("analyzer: triage: extracted JSON is a bare array, returning empty result — response starts with: %.100s", resp.Content)
+			return &triageResponse{}, nil
 		}
 		return nil, fmt.Errorf("analyzer: triage parse response %q: %w", truncate(resp.Content, 200), err)
 	}
