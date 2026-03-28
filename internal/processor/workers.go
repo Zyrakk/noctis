@@ -3,9 +3,14 @@ package processor
 import (
 	"context"
 	"log"
+	"time"
 
+	"github.com/Zyrakk/noctis/internal/llm"
 	"github.com/Zyrakk/noctis/internal/models"
 )
+
+// budgetPauseDuration is how long workers pause when a budget limit is hit.
+const budgetPauseDuration = 30 * time.Minute
 
 // classifyPipelineWorker polls for unclassified content and runs it through
 // the Classifier → Summarizer pipeline. Each sub-module tracks its own health.
@@ -42,11 +47,28 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 				return
 			}
 
+			// Circuit breaker: if budget is exhausted, pause all workers.
+			if e.budgetExhausted.Load() {
+				log.Printf("processor: classification worker %d: budget exhausted, pausing %v", workerID, budgetPauseDuration)
+				if !SleepOrCancel(ctx, budgetPauseDuration) {
+					return
+				}
+				e.budgetExhausted.Store(false)
+				log.Printf("processor: classification worker %d: budget pause ended, resuming", workerID)
+			}
+
 			finding := FindingFromRawContent(entry)
 
 			// Classify (fast LLM).
 			classResult, err := e.classifier.Classify(ctx, &finding)
 			if err != nil {
+				// Budget exhausted — trip the circuit breaker for all workers.
+				if llm.IsBudgetExhausted(err) {
+					log.Printf("processor: classification worker %d: budget exhausted: %v", workerID, err)
+					e.budgetExhausted.Store(true)
+					break // exit batch loop; circuit breaker at top will handle pause
+				}
+
 				log.Printf("processor: classification worker %d: classify error for %s: %v", workerID, entry.ID, err)
 
 				e.classifyFailMu.Lock()
@@ -152,11 +174,27 @@ func (e *ProcessingEngine) extractPipelineWorker(ctx context.Context, workerID i
 				return
 			}
 
+			// Circuit breaker: if budget is exhausted, pause all workers.
+			if e.budgetExhausted.Load() {
+				log.Printf("processor: entity extraction worker %d: budget exhausted, pausing %v", workerID, budgetPauseDuration)
+				if !SleepOrCancel(ctx, budgetPauseDuration) {
+					return
+				}
+				e.budgetExhausted.Store(false)
+				log.Printf("processor: entity extraction worker %d: budget pause ended, resuming", workerID)
+			}
+
 			finding := FindingFromRawContent(entry)
 
 			// Extract IOCs (fast LLM).
 			iocs, err := e.iocExtract.Extract(ctx, &finding)
 			if err != nil {
+				if llm.IsBudgetExhausted(err) {
+					log.Printf("processor: entity extraction worker %d: budget exhausted: %v", workerID, err)
+					e.budgetExhausted.Store(true)
+					break
+				}
+
 				log.Printf("processor: entity extraction worker %d: extract error for %s: %v", workerID, entry.ID, err)
 
 				e.extractFailMu.Lock()

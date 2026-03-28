@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Zyrakk/noctis/internal/analyzer"
 	"github.com/Zyrakk/noctis/internal/archive"
@@ -33,6 +34,10 @@ type ProcessingEngine struct {
 	extractFailMu       sync.Mutex
 	librarianFailCounts map[string]int
 	librarianFailMu     sync.Mutex
+
+	// Budget circuit breaker — when any worker hits ErrBudgetExhausted,
+	// all classification workers pause for budgetPauseDuration.
+	budgetExhausted atomic.Bool
 }
 
 // NewProcessingEngine creates the engine with all sub-modules and registers
