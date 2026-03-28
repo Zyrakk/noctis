@@ -93,7 +93,7 @@ func (s *Server) handleIOCs(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	resp, err := querySources(r.Context(), s.pool, q.Get("status"), q.Get("type"),
-		parseIntParam(q.Get("limit"), 50), parseIntParam(q.Get("offset"), 0))
+		parseIntParam(q.Get("limit"), 200), parseIntParam(q.Get("offset"), 0))
 	if err != nil {
 		slog.Error("dashboard: sources", "err", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch sources"})

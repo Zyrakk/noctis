@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import { useApi, apiFetch } from '../hooks/useApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
@@ -31,15 +31,20 @@ const SOURCE_TYPES = [
   { value: 'rss', label: 'RSS Feed' },
 ]
 
-const TYPE_FILTER_OPTIONS = [
-  { value: '', label: 'All Types' },
-  { value: 'web', label: 'Web' },
-  { value: 'telegram_channel', label: 'Telegram Channel' },
-  { value: 'telegram_group', label: 'Telegram Group' },
-  { value: 'forum', label: 'Forum' },
-  { value: 'paste_site', label: 'Paste Site' },
+const TYPE_PILLS = [
+  { value: '', label: 'All' },
   { value: 'rss', label: 'RSS' },
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'web', label: 'Web' },
+  { value: 'other', label: 'Other' },
 ]
+
+function typeCategory(type) {
+  if (type === 'rss') return 'rss'
+  if (type === 'telegram_channel' || type === 'telegram_group') return 'telegram'
+  if (type === 'web') return 'web'
+  return 'other'
+}
 
 const PAGE_SIZE = 50
 
@@ -55,15 +60,18 @@ export default function Sources() {
   const [toast, setToast] = useState(null)
   const [fadingIds, setFadingIds] = useState(new Set())
 
-  const params = new URLSearchParams()
-  params.set('status', tab)
-  if (typeFilter) params.set('type', typeFilter)
-  params.set('limit', PAGE_SIZE)
-  params.set('offset', page * PAGE_SIZE)
+  const { data, loading, refetch } = useApi(`/api/sources?status=${tab}&limit=500`)
+  const allSources = data?.sources || []
 
-  const { data, loading, refetch } = useApi(`/api/sources?${params.toString()}`)
-  const list = data?.sources || []
-  const total = data?.total || 0
+  const typeCounts = useMemo(() => {
+    const counts = { rss: 0, telegram: 0, web: 0, other: 0 }
+    allSources.forEach(s => counts[typeCategory(s.type)]++)
+    return counts
+  }, [allSources])
+
+  const filtered = typeFilter ? allSources.filter(s => typeCategory(s.type) === typeFilter) : allSources
+  const list = tab === 'active' ? filtered : filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const total = filtered.length
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   const handleApprove = useCallback(async (id) => {
@@ -155,14 +163,19 @@ export default function Sources() {
           )
         ),
       ),
-      // Type filter — stacked below tabs on mobile
-      (tab === 'discovered' || tab === 'paused' || tab === 'rejected') && React.createElement('select', {
-        value: typeFilter,
-        onChange: e => { setTypeFilter(e.target.value); setPage(0) },
-        className: 'w-full lg:w-auto px-3 py-2 bg-noctis-bg border border-white/[0.08] rounded text-xs text-noctis-text cursor-pointer focus:outline-none focus:border-noctis-muted/50'
-      },
-        TYPE_FILTER_OPTIONS.map(t =>
-          React.createElement('option', { key: t.value, value: t.value }, t.label)
+      React.createElement('div', { className: 'flex items-center gap-2 flex-wrap' },
+        TYPE_PILLS.map(p =>
+          React.createElement('button', {
+            key: p.value,
+            onClick: () => { setTypeFilter(p.value); setPage(0) },
+            className: `px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors duration-200 ${
+              typeFilter === p.value
+                ? 'bg-noctis-purple/15 text-noctis-purple-light border border-noctis-purple/30'
+                : 'text-noctis-muted hover:text-noctis-text bg-noctis-surface border border-noctis-border hover:border-noctis-border'
+            }`
+          },
+            p.value ? `${p.label} (${typeCounts[p.value]})` : `All (${allSources.length})`
+          )
         ),
       ),
     ),
