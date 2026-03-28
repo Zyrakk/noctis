@@ -57,6 +57,14 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 				log.Printf("processor: classification worker %d: budget pause ended, resuming", workerID)
 			}
 
+			// Skip items already marked as poison by another worker.
+			e.classifyFailMu.Lock()
+			alreadyPoison := e.classifyFailCounts[entry.ID] >= 5
+			e.classifyFailMu.Unlock()
+			if alreadyPoison {
+				continue
+			}
+
 			finding := FindingFromRawContentWithLimit(entry, e.maxContentLength)
 
 			// Classify (fast LLM).
@@ -83,10 +91,6 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 					tags := []string{"unclassifiable", "poison_item"}
 					if markErr := e.archive.MarkClassified(ctx, entry.ID, "irrelevant", tags, "info", "", "unknown", CurrentClassificationVersion); markErr != nil {
 						log.Printf("processor: classification worker %d: mark poison error for %s: %v", workerID, entry.ID, markErr)
-					} else {
-						e.classifyFailMu.Lock()
-						delete(e.classifyFailCounts, entry.ID)
-						e.classifyFailMu.Unlock()
 					}
 				}
 				continue
@@ -116,6 +120,11 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 				} else {
 					severity = sev
 				}
+			}
+
+			// Override: irrelevant content must not have elevated severity.
+			if category == "irrelevant" && severity > models.SeverityInfo {
+				severity = models.SeverityInfo
 			}
 
 			// Summarize (fast LLM) — skip for irrelevant items to save tokens.
