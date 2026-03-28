@@ -13,7 +13,7 @@ export function AuthProvider({ children }) {
     try {
       const res = await fetch('/api/auth/check', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${key}` },
+        headers: { 'X-API-Key': key },
       })
       if (!res.ok) {
         setError('Invalid API key')

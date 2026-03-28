@@ -22,7 +22,7 @@ export function useApi(url, options = {}) {
     try {
       const res = await fetch(url, {
         signal: controller.signal,
-        headers: { 'Authorization': `Bearer ${apiKey}` },
+        headers: { 'X-API-Key': apiKey },
         ...options,
       })
 
@@ -60,7 +60,7 @@ export async function apiFetch(apiKey, url, options = {}) {
   const res = await fetch(url, {
     ...restOptions,
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      'X-API-Key': apiKey,
       'Content-Type': 'application/json',
       ...extraHeaders,
     },

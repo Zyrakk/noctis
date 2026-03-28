@@ -4,20 +4,18 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
-	"strings"
 )
 
-// authMiddleware validates the Bearer token in the Authorization header
-// against the configured API key using constant-time comparison.
+// authMiddleware validates the X-API-Key header against the configured API key
+// using constant-time comparison.
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		if !strings.HasPrefix(auth, "Bearer ") {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid Authorization header"})
+		token := r.Header.Get("X-API-Key")
+		if token == "" {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing X-API-Key header"})
 			return
 		}
 
-		token := strings.TrimPrefix(auth, "Bearer ")
 		if subtle.ConstantTimeCompare([]byte(token), []byte(s.apiKey)) != 1 {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid API key"})
 			return
