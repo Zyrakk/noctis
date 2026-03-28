@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -106,7 +107,7 @@ func (c *OpenAICompatClient) ChatCompletion(ctx context.Context, messages []Mess
 	// Check spending budget before sending.
 	if c.spendingTracker != nil {
 		if err := c.spendingTracker.CheckBudget(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %s", ErrBudgetExhausted, err)
 		}
 	}
 
@@ -188,7 +189,15 @@ func (c *OpenAICompatClient) doRequest(ctx context.Context, url string, payload 
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("llm: unexpected status %d: %s", httpResp.StatusCode, string(respBody))
+		body := string(respBody)
+		// Groq returns 400 with "spend_limit_reached" or "spend_alert" when
+		// the account's spend cap is hit. Wrap as ErrBudgetExhausted so callers
+		// can distinguish budget errors from transient failures.
+		if httpResp.StatusCode == http.StatusBadRequest &&
+			(strings.Contains(body, "spend_limit_reached") || strings.Contains(body, "spend_alert")) {
+			return nil, fmt.Errorf("%w: %s", ErrBudgetExhausted, body)
+		}
+		return nil, fmt.Errorf("llm: unexpected status %d: %s", httpResp.StatusCode, body)
 	}
 
 	var chatResp chatResponse

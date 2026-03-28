@@ -104,6 +104,66 @@ func TestOpenAICompatClient_ErrorResponse(t *testing.T) {
 	}
 }
 
+func TestOpenAICompatClient_SpendLimitReached(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"spend_limit_reached: You've exceeded your spend limit.","type":"error","code":"spend_limit_reached"}}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewOpenAICompatClient(srv.URL, "key", "model")
+
+	_, err := client.ChatCompletion(t.Context(), []llm.Message{
+		{Role: "user", Content: "hello"},
+	})
+	if err == nil {
+		t.Fatal("expected error for spend_limit_reached, got nil")
+	}
+	if !llm.IsBudgetExhausted(err) {
+		t.Errorf("expected IsBudgetExhausted=true, got false; error: %v", err)
+	}
+}
+
+func TestOpenAICompatClient_SpendAlert(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"spend_alert: approaching spend limit","type":"error","code":"spend_alert"}}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewOpenAICompatClient(srv.URL, "key", "model")
+
+	_, err := client.ChatCompletion(t.Context(), []llm.Message{
+		{Role: "user", Content: "hello"},
+	})
+	if err == nil {
+		t.Fatal("expected error for spend_alert, got nil")
+	}
+	if !llm.IsBudgetExhausted(err) {
+		t.Errorf("expected IsBudgetExhausted=true, got false; error: %v", err)
+	}
+}
+
+func TestOpenAICompatClient_Regular400NotBudget(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"invalid model","type":"error","code":"invalid_model"}}`))
+	}))
+	defer srv.Close()
+
+	client := llm.NewOpenAICompatClient(srv.URL, "key", "model")
+
+	_, err := client.ChatCompletion(t.Context(), []llm.Message{
+		{Role: "user", Content: "hello"},
+	})
+	if err == nil {
+		t.Fatal("expected error for 400, got nil")
+	}
+	if llm.IsBudgetExhausted(err) {
+		t.Error("expected IsBudgetExhausted=false for regular 400 error")
+	}
+}
+
 func TestOpenAICompatClient_WithOptions(t *testing.T) {
 	const wantTemp = 0.5
 	const wantMaxTokens = 512
