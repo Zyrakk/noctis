@@ -133,6 +133,23 @@ data:
       discovery:
         enabled: true
         autoApprove: false
+        triageEnabled: true
+        triageBatchSize: 100
+        allowPatterns:
+          - "*.onion"
+          - "pastebin.com"
+          - "ghostbin.*"
+          - "privatebin.*"
+          - "rentry.co"
+        allowDomains:
+          - leakbase.la
+          - breachforums.st
+          - breachforums.ac
+          - breachforums.cx
+          - vx-underground.org
+          - exploit.in
+          - xss.is
+          - ramp4u.io
         domainBlacklist:
           - nvd.nist.gov
           - cwe.mitre.org
@@ -196,6 +213,47 @@ data:
           - onion.as
           - astanahub.com
           - springer.com
+          - xakep.ru
+          - schneider-electric.com
+          - se.com
+          - cisa.gov
+          - ic3.gov
+          - stryker.com
+          - ctek.com
+          - proleit.com
+          - automatedlogic.com
+          - mitsubishielectric.com
+          - oracle.com
+          - windowsforum.com
+          - sourceforge.net
+          - ozon.ru
+          - market.yandex.ru
+          - ya.ru
+          - tass.ru
+          - gazeta.ru
+          - bbc.co.uk
+          - cnn.com
+          - theverge.com
+          - arxiv.org
+          - anthropic.com
+          - openai.com
+          - deskmodder.de
+          - core-jmp.org
+          - mp.weixin.qq.com
+          - acunetix.com
+          - newsroom.accenture.com
+          - anekdot.ru
+          - z.cash
+          - zcashexplorer.app
+          - gitlab.com
+          - vercel.com
+          - etn.se
+          - rutube.ru
+          - protos.com
+          - databricks.com
+          - cbr.ru
+          - postgresql.org
+          - mainframemaster.com
 
       database:
         driver: postgres

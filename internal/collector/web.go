@@ -162,9 +162,21 @@ func (wc *WebCollector) loadDBFeeds(ctx context.Context) []config.WebConfig {
 
 	var feeds []config.WebConfig
 	for _, src := range sources {
+		feedURL := src.Identifier
+
+		// Ensure the URL has an HTTP(S) scheme.
+		if !strings.HasPrefix(feedURL, "http://") && !strings.HasPrefix(feedURL, "https://") {
+			feedURL = "https://" + feedURL
+		}
+
+		if _, err := url.Parse(feedURL); err != nil {
+			log.Printf("[web] skipping invalid DB RSS source %q: %v", src.Identifier, err)
+			continue
+		}
+
 		feeds = append(feeds, config.WebConfig{
 			Name:     src.Name,
-			URL:      src.Identifier,
+			URL:      feedURL,
 			Type:     "rss",
 			Interval: 15 * time.Minute,
 		})

@@ -6,4 +6,6 @@ vendor/
 deploy/secrets.yaml
 web/node_modules/
 docs/noctis-full-context.md
+docs/superpowers/
+noctis
 

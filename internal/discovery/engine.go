@@ -406,6 +406,29 @@ func shouldSkipURL(rawURL string) bool {
 		}
 	}
 
+	// Skip URLs that are clearly not intelligence sources.
+	lowerHost := strings.ToLower(host)
+	skipHosts := []string{
+		"cdn.embedly.com",
+		"www.blogger.com",
+		"safelinks.protection.outlook.com",
+	}
+	for _, h := range skipHosts {
+		if lowerHost == h || strings.HasSuffix(lowerHost, "."+h) {
+			return true
+		}
+	}
+
+	// Skip Microsoft SafeLinks wrappers (any *.safelinks.protection.outlook.com).
+	if strings.HasSuffix(lowerHost, ".safelinks.protection.outlook.com") {
+		return true
+	}
+
+	// Skip URLs with excessively long query strings (tracking tokens, embed params).
+	if len(parsed.RawQuery) > 256 {
+		return true
+	}
+
 	// Skip URLs too short to be meaningful (domain + less than 2 chars of path)
 	path := strings.TrimRight(parsed.Path, "/")
 	if len(path) < 2 && parsed.RawQuery == "" {

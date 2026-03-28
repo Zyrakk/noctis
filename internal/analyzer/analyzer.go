@@ -200,11 +200,16 @@ func ExtractJSON(s string) (string, error) {
 		}
 	}
 
-	// Last resort: scan for the first valid JSON object or array.
-	for i := 0; i < len(s); i++ {
-		if s[i] == '{' || s[i] == '[' {
-			if candidate, ok := extractBalanced(s, i); ok && json.Valid([]byte(candidate)) {
-				return candidate, nil
+	// Last resort: scan for the first valid JSON object, then array.
+	// Prefer objects over arrays because callers usually expect an object,
+	// and greedy extraction from structured responses may find an inner
+	// array (e.g. "investigate": [...]) before the enclosing object.
+	for _, target := range []byte{'{', '['} {
+		for i := 0; i < len(s); i++ {
+			if s[i] == target {
+				if candidate, ok := extractBalanced(s, i); ok && json.Valid([]byte(candidate)) {
+					return candidate, nil
+				}
 			}
 		}
 	}
@@ -718,6 +723,11 @@ func (a *Analyzer) TriageURLs(ctx context.Context, urls []string) (*triageRespon
 
 	var result triageResponse
 	if err := json.Unmarshal([]byte(extracted), &result); err != nil {
+		// Fallback: the LLM sometimes wraps the object in an array.
+		var arr []triageResponse
+		if json.Unmarshal([]byte(extracted), &arr) == nil && len(arr) > 0 {
+			return &arr[0], nil
+		}
 		return nil, fmt.Errorf("analyzer: triage parse response %q: %w", truncate(resp.Content, 200), err)
 	}
 	return &result, nil
