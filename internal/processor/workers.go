@@ -118,11 +118,14 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 				}
 			}
 
-			// Summarize (fast LLM).
-			summary, err := e.summarizer.Summarize(ctx, &finding, category, severity)
-			if err != nil {
-				log.Printf("processor: classification worker %d: summarize error for %s: %v", workerID, entry.ID, err)
-				summary = ""
+			// Summarize (fast LLM) — skip for irrelevant items to save tokens.
+			var summary string
+			if category != "irrelevant" {
+				summary, err = e.summarizer.Summarize(ctx, &finding, category, severity)
+				if err != nil {
+					log.Printf("processor: classification worker %d: summarize error for %s: %v", workerID, entry.ID, err)
+					summary = ""
+				}
 			}
 
 			// Persist classification results.
