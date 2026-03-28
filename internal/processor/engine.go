@@ -23,9 +23,10 @@ type ProcessingEngine struct {
 	librarian    *Librarian
 	iocLifecycle *IOCLifecycleManager
 
-	archive   *archive.Store
-	workerCfg config.CollectionConfig
-	registry  *modules.Registry
+	archive          *archive.Store
+	workerCfg        config.CollectionConfig
+	maxContentLength int
+	registry         *modules.Registry
 
 	// Poison item tracking — shared across workers of the same type.
 	classifyFailCounts  map[string]int
@@ -95,9 +96,10 @@ func NewProcessingEngine(
 		graphBridge: graphBridge,
 		librarian:    librarian,
 		iocLifecycle: iocLifecycle,
-		archive:      archiveStore,
-		workerCfg:   workerCfg,
-		registry:    registry,
+		archive:          archiveStore,
+		workerCfg:        workerCfg,
+		maxContentLength: workerCfg.MaxContentLength,
+		registry:         registry,
 
 		classifyFailCounts:  make(map[string]int),
 		extractFailCounts:   make(map[string]int),

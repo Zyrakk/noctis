@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,5 +134,39 @@ func TestFindingFromRawContent(t *testing.T) {
 	}
 	if f.Timestamp != posted {
 		t.Errorf("Timestamp = %v; want %v", f.Timestamp, posted)
+	}
+}
+
+func TestFindingFromRawContent_TruncatesContent(t *testing.T) {
+	longContent := strings.Repeat("x", 60000)
+	rc := archive.RawContent{
+		ID:          "rc-trunc",
+		SourceType:  "paste",
+		SourceName:  "test",
+		Content:     longContent,
+		CollectedAt: time.Now().UTC(),
+	}
+
+	f := FindingFromRawContentWithLimit(rc, 8192)
+
+	if len(f.Content) > 8195 { // 8192 + len("...")
+		t.Errorf("Content length = %d; want <= 8195", len(f.Content))
+	}
+}
+
+func TestFindingFromRawContent_NoTruncateZeroLimit(t *testing.T) {
+	content := "short content"
+	rc := archive.RawContent{
+		ID:          "rc-notrunc",
+		SourceType:  "paste",
+		SourceName:  "test",
+		Content:     content,
+		CollectedAt: time.Now().UTC(),
+	}
+
+	f := FindingFromRawContentWithLimit(rc, 0)
+
+	if f.Content != content {
+		t.Errorf("Content = %q; want %q", f.Content, content)
 	}
 }

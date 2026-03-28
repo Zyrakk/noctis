@@ -57,7 +57,7 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 				log.Printf("processor: classification worker %d: budget pause ended, resuming", workerID)
 			}
 
-			finding := FindingFromRawContent(entry)
+			finding := FindingFromRawContentWithLimit(entry, e.maxContentLength)
 
 			// Classify (fast LLM).
 			classResult, err := e.classifier.Classify(ctx, &finding)
@@ -187,7 +187,7 @@ func (e *ProcessingEngine) extractPipelineWorker(ctx context.Context, workerID i
 				log.Printf("processor: entity extraction worker %d: budget pause ended, resuming", workerID)
 			}
 
-			finding := FindingFromRawContent(entry)
+			finding := FindingFromRawContentWithLimit(entry, e.maxContentLength)
 
 			// Extract IOCs (fast LLM).
 			iocs, err := e.iocExtract.Extract(ctx, &finding)
@@ -236,7 +236,7 @@ func (e *ProcessingEngine) extractPipelineWorker(ctx context.Context, workerID i
 
 			// LLM entity extraction for non-irrelevant findings.
 			if entry.Category != "" && entry.Category != "irrelevant" {
-				finding2 := FindingFromRawContent(entry)
+				finding2 := FindingFromRawContentWithLimit(entry, e.maxContentLength)
 				result, err := e.entExtract.Extract(ctx, &finding2, entry.Category, entry.SourceName, entry.SourceType, entry.Provenance)
 				if err != nil {
 					log.Printf("processor: entity extraction worker %d: extract entities error for %s: %v", workerID, entry.ID, err)
@@ -306,7 +306,7 @@ func (e *ProcessingEngine) librarianPipelineWorker(ctx context.Context, workerID
 				continue
 			}
 
-			finding := FindingFromRawContent(entry)
+			finding := FindingFromRawContentWithLimit(entry, e.maxContentLength)
 
 			// Gather entity names and IOC values for context.
 			entityNames := e.getEntityNamesForFinding(ctx, entry.ID)

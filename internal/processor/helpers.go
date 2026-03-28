@@ -71,6 +71,16 @@ func FindingFromRawContent(rc archive.RawContent) models.Finding {
 	return f
 }
 
+// FindingFromRawContentWithLimit is like FindingFromRawContent but truncates
+// Content to limit bytes. A limit of 0 means no truncation.
+func FindingFromRawContentWithLimit(rc archive.RawContent, limit int) models.Finding {
+	f := FindingFromRawContent(rc)
+	if limit > 0 && len(f.Content) > limit {
+		f.Content = f.Content[:limit] + "..."
+	}
+	return f
+}
+
 // SleepOrCancel sleeps for d or returns false if ctx is cancelled.
 func SleepOrCancel(ctx context.Context, d time.Duration) bool {
 	select {
