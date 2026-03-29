@@ -1754,6 +1754,33 @@ func queryLatestBrief(ctx context.Context, pool *pgxpool.Pool, briefType string)
 	return &b, nil
 }
 
+func queryBriefByID(ctx context.Context, pool *pgxpool.Pool, id string) (*BriefDetail, error) {
+	var b BriefDetail
+	var sectionsJSON, metricsJSON []byte
+
+	err := pool.QueryRow(ctx, `
+		SELECT id, period_start, period_end, brief_type, title, executive_summary,
+		       content, sections, metrics, model_used, generation_duration_ms, generated_at
+		FROM intelligence_briefs
+		WHERE id = $1`, id).Scan(
+		&b.ID, &b.PeriodStart, &b.PeriodEnd, &b.BriefType, &b.Title,
+		&b.ExecutiveSummary, &b.Content, &sectionsJSON, &metricsJSON,
+		&b.ModelUsed, &b.GenerationDurationMs, &b.GeneratedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("brief by id: %w", err)
+	}
+
+	if len(sectionsJSON) > 0 {
+		json.Unmarshal(sectionsJSON, &b.Sections)
+	}
+	if len(metricsJSON) > 0 {
+		json.Unmarshal(metricsJSON, &b.Metrics)
+	}
+
+	return &b, nil
+}
+
 // --- Vulnerability Intelligence ---
 
 // VulnListItem is a compact vulnerability for list views.

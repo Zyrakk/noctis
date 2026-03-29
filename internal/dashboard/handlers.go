@@ -449,6 +449,26 @@ func (s *Server) handleLatestBrief(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, brief)
 }
 
+func (s *Server) handleBriefByID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing brief id"})
+		return
+	}
+
+	brief, err := queryBriefByID(r.Context(), s.pool, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "brief not found"})
+			return
+		}
+		slog.Error("dashboard: brief by id", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch brief"})
+		return
+	}
+	writeJSON(w, http.StatusOK, brief)
+}
+
 func (s *Server) handleVulnerabilities(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	f := vulnsFilter{

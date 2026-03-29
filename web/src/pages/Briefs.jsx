@@ -23,15 +23,20 @@ const SECTION_TITLES = {
 export default function Briefs() {
   const [view, setView] = useState('latest')
   const [page, setPage] = useState(0)
+  const [selectedBriefId, setSelectedBriefId] = useState(null)
 
   const { data: latestData, loading: latestLoading } = useApi('/api/briefs/latest?type=daily')
+  const { data: selectedData, loading: selectedLoading } = useApi(
+    selectedBriefId ? `/api/briefs/${selectedBriefId}` : null
+  )
   const params = new URLSearchParams()
   params.set('type', 'daily')
   params.set('limit', PAGE_SIZE)
   params.set('offset', page * PAGE_SIZE)
   const { data: listData, loading: listLoading } = useApi(`/api/briefs?${params.toString()}`)
 
-  const brief = latestData
+  const brief = selectedBriefId ? selectedData : latestData
+  const briefLoading = selectedBriefId ? selectedLoading : latestLoading
   const briefs = listData?.briefs || []
   const total = listData?.total || 0
   const totalPages = Math.ceil(total / PAGE_SIZE)
@@ -67,7 +72,7 @@ export default function Briefs() {
         ['latest', 'history'].map(v =>
           React.createElement('button', {
             key: v,
-            onClick: () => setView(v),
+            onClick: () => { setView(v); if (v === 'latest') setSelectedBriefId(null) },
             className: `px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors duration-200 ${
               view === v
                 ? 'bg-noctis-purple/15 text-noctis-purple-light border border-noctis-purple/30'
@@ -80,7 +85,7 @@ export default function Briefs() {
 
     // Latest view
     view === 'latest' && (
-      latestLoading
+      briefLoading
         ? React.createElement('div', { className: 'space-y-4' },
             React.createElement('div', { className: 'skeleton h-8 w-2/3' }),
             React.createElement('div', { className: 'skeleton h-20 w-full' }),
@@ -136,8 +141,8 @@ export default function Briefs() {
           ? briefs.map(b =>
               React.createElement('div', {
                 key: b.id,
-                onClick: () => setView('latest'),
-                className: 'p-4 border border-white/[0.06] rounded-lg cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150'
+                onClick: () => { setSelectedBriefId(b.id); setView('latest') },
+                className: `p-4 border rounded-lg cursor-pointer hover:bg-noctis-surface/50 transition-colors duration-150 ${selectedBriefId === b.id ? 'border-noctis-purple/30 bg-noctis-purple/5' : 'border-white/[0.06]'}`
               },
                 React.createElement('div', { className: 'flex items-center justify-between mb-1' },
                   React.createElement('h3', { className: 'text-sm font-medium text-noctis-text' }, b.title),

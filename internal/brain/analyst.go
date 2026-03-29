@@ -197,22 +197,24 @@ func (a *Analyst) evaluateCandidate(ctx context.Context, cand archive.Correlatio
 			decision.PromotedCorrelationID = &corr.ID
 			a.archive.UpdateCandidateStatus(ctx, cand.ID, "promoted")
 
-			// Write analytical note for each entity.
-			for _, eid := range cand.EntityIDs {
-				eidCopy := eid
-				note := &archive.AnalyticalNote{
-					CorrelationID: &corr.ID,
-					EntityID:      &eidCopy,
-					NoteType:      "correlation_judgment",
-					Title:         fmt.Sprintf("Correlation confirmed: %s", cand.CandidateType),
-					Content:       result.Reasoning,
-					Confidence:    result.Confidence,
-					CreatedBy:     "analyst",
-					ModelUsed:     &modelUsed,
-					Status:        "active",
-				}
-				a.archive.InsertAnalyticalNote(ctx, note)
+			// Write a single analytical note for the correlation.
+			var primaryEntity *string
+			if len(cand.EntityIDs) > 0 {
+				eidCopy := cand.EntityIDs[0]
+				primaryEntity = &eidCopy
 			}
+			note := &archive.AnalyticalNote{
+				CorrelationID: &corr.ID,
+				EntityID:      primaryEntity,
+				NoteType:      "correlation_judgment",
+				Title:         fmt.Sprintf("Correlation confirmed: %s", cand.CandidateType),
+				Content:       result.Reasoning,
+				Confidence:    result.Confidence,
+				CreatedBy:     "analyst",
+				ModelUsed:     &modelUsed,
+				Status:        "active",
+			}
+			a.archive.InsertAnalyticalNote(ctx, note)
 		} else {
 			// Confidence too low to promote — defer instead.
 			decision.Decision = "defer"
@@ -221,20 +223,22 @@ func (a *Analyst) evaluateCandidate(ctx context.Context, cand archive.Correlatio
 	case "reject":
 		a.archive.UpdateCandidateStatus(ctx, cand.ID, "rejected")
 
-		for _, eid := range cand.EntityIDs {
-			eidCopy := eid
-			note := &archive.AnalyticalNote{
-				EntityID:   &eidCopy,
-				NoteType:   "correlation_judgment",
-				Title:      fmt.Sprintf("Correlation rejected: %s", cand.CandidateType),
-				Content:    result.Reasoning,
-				Confidence: result.Confidence,
-				CreatedBy:  "analyst",
-				ModelUsed:  &modelUsed,
-				Status:     "active",
-			}
-			a.archive.InsertAnalyticalNote(ctx, note)
+		var primaryEntity *string
+		if len(cand.EntityIDs) > 0 {
+			eidCopy := cand.EntityIDs[0]
+			primaryEntity = &eidCopy
 		}
+		note := &archive.AnalyticalNote{
+			EntityID:   primaryEntity,
+			NoteType:   "correlation_judgment",
+			Title:      fmt.Sprintf("Correlation rejected: %s", cand.CandidateType),
+			Content:    result.Reasoning,
+			Confidence: result.Confidence,
+			CreatedBy:  "analyst",
+			ModelUsed:  &modelUsed,
+			Status:     "active",
+		}
+		a.archive.InsertAnalyticalNote(ctx, note)
 
 	case "defer":
 		if result.Reasoning != "" {

@@ -381,7 +381,7 @@ export default function SystemStatus() {
     try {
       const res = await fetch('/api/system/status', {
         signal: ctrl.signal,
-        headers: { Authorization: `Bearer ${apiKey}` },
+        headers: { 'X-API-Key': apiKey },
       })
       if (res.status === 401) { logout(); return }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
