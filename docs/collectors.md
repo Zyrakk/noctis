@@ -54,7 +54,7 @@ Collects messages from Telegram channels via the MTProto protocol using the `got
 1. **Session management:** On startup, checks for a valid stored session (`session.FileStorage` at the path given by `sessionFile`). If the session is not authorized, launches an interactive QR login flow.
 2. **QR login:** Prints a `tg://login?token=…` URL to stdout and to the structured log. The URL is also exposed via the health server's `/qr` endpoint (`health.QRAuthState`). The user must scan the URL from Telegram on their phone within 5 minutes.
 3. **2FA:** If the account has a Two-Step Verification password, the collector reads it from `password` in config and submits it automatically via `client.Auth().Password()`.
-4. **Channel resolution:** For channels configured by `username`, resolves via `ContactsResolveUsername` and automatically joins the channel via `ChannelsJoinChannel`. No need to manually join from the phone app. For numeric `id` entries, uses the raw ID with a zero access hash (works for already-joined channels).
+4. **Channel resolution:** For channels configured by `username`, resolves via `ContactsResolveUsername` and automatically joins the channel via `ChannelsJoinChannel`. No need to manually join from the phone app. For numeric `id` entries, uses the raw ID with a zero access hash (works for already-joined channels). For private channels configured by `inviteHash`, resolves via `resolveInviteLink()` which checks whether the user has already joined (`ChatInviteAlready`) and if not, imports the invite to join. Supports both `t.me/+hash` and `t.me/joinchat/hash` URL formats.
 5. **Catchup:** If `catchupMessages > 0`, fetches that many recent messages per channel via `MessagesGetHistory` before entering real-time mode.
 6. **Real-time:** Registers `OnNewChannelMessage` on the update dispatcher. Extracts channel name, author username, forward source, message text, and media caption.
 7. **Deduplication:** SHA-256 of message content, tracked in an in-memory `map[string]bool` guarded by a mutex. Duplicate content is silently dropped.
@@ -65,6 +65,8 @@ The collector accepts an optional `SourceQuerier` interface (the discovery engin
 
 - **On startup:** merges channels from config with all approved/active sources returned by the `SourceQuerier`. Both sets are deduplicated before the collector subscribes.
 - **Every 5 minutes:** polls the `SourceQuerier` for newly added or approved channels (added via `noctis source add` or `noctis source approve`) and subscribes to any that are not already active.
+- **Identifier normalization:** Telegram identifiers are normalized from full URLs (`https://t.me/username`) to bare usernames via `extractUsername()`. This enables reliable matching between config-defined channels and discovered sources, so that `last_collected` timestamp updates and deduplication work correctly regardless of identifier format.
+- **Private channel discovery:** Private channels discovered from content (e.g., `t.me/+hash`, `t.me/joinchat/hash`, or `invite:hash` prefixed identifiers) are stored with their invite hash and resolved via the invite link flow on subscription.
 - **When `nil`** (tests, standalone usage without a database): the collector falls back to config-only behavior. No database queries are made and no runtime polling occurs.
 
 ### Discovery engine filters
@@ -110,6 +112,7 @@ Each entry under `channels`:
 |-----|------|-------------|
 | `username` | string | Public channel username (without `@`) |
 | `id` | int64 | Numeric channel ID (used if `username` is empty) |
+| `inviteHash` | string | Invite hash for private channels/groups (the portion after `t.me/+` or `t.me/joinchat/`) |
 
 ---
 
@@ -219,7 +222,7 @@ Each entry under `sites`:
 
 **File:** `internal/collector/web.go`
 
-Collects from RSS/Atom feeds, scraped web pages, and search engine result pages. Runs one goroutine per feed entry.
+Collects from RSS/Atom feeds, scraped web pages, and search engine result pages. Runs one goroutine per feed entry. Disabled by default in the deployment config (`deploy/configmap.yaml`).
 
 ### Feed types
 
@@ -230,6 +233,10 @@ Collects from RSS/Atom feeds, scraped web pages, and search engine result pages.
 **`search`** — URL template with `{query}` substitution (URL-encoded). For each entry in `queries`, fetches the search results page, extracts all `<a href>` links (capped at 20), fetches each link, and emits the full body text. Deduplication by SHA-256 of the result URL. Default interval is 15 minutes.
 
 All types support Tor routing and User-Agent rotation. Response bodies are capped at 10 MB. The dedup map resets at 100,000 entries.
+
+### Dynamic feed loading
+
+The collector loads approved RSS sources from the `sources` database table at runtime via `loadDBFeeds()`. This allows the discovery system to approve new RSS feeds without requiring redeployment. On startup, all active/approved RSS sources are fetched from the database and started alongside config-defined feeds. A periodic poll (same cadence as the discovery engine) checks for newly approved sources and starts goroutines for any that are not already active. The `last_collected` timestamp is updated in the sources table after each successful collection via `recordCollection()`. When the `SourceQuerier` is `nil`, only config-defined feeds are used.
 
 ### Metadata emitted
 

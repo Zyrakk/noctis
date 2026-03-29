@@ -102,7 +102,9 @@ Collector.Start() emits models.Finding
         │     └── archive.MarkClassified()
         │
         └── discoveryFn(content, findingID) → discovery.Engine.ProcessContent()
-              └── ExtractURLs → classify by heuristic → INSERT INTO sources ON CONFLICT DO NOTHING
+              └── ExtractURLs → filter (blacklist/auto-blacklist/shouldSkipURL)
+                  → classify by heuristic → allowlist check
+                  → INSERT INTO sources (status=discovered or pending_triage) ON CONFLICT DO NOTHING
 
 [background] ProcessingEngine.classifyPipelineWorker (N workers)
   FetchUnclassified() → Classify (fast LLM) → Summarize (fast LLM) → MarkClassified()
@@ -177,14 +179,16 @@ internal/
   config/              YAML config structs and loader
     config.go          All config types, Load(), substituteEnvVars()
   dashboard/           Web dashboard server
-    server.go          dashboard.Server — HTTP mux, auth middleware
+    server.go          dashboard.Server — HTTP mux, spending tracker wiring
+    middleware.go      authMiddleware — X-API-Key header validation (constant-time)
     handlers.go        REST API handlers (/api/findings, /api/iocs, /api/graph, ...)
     queries.go         Complex SQL queries backing dashboard API endpoints
     static/            Embedded React SPA (app.js, index.html, icons/, manifest.json)
   database/            PostgreSQL connection pool
     database.go        Connect(), LoadMigrations(), RunMigrations()
   discovery/           URL extraction and source registry
-    engine.go          discovery.Engine — regex URL extraction, source classification
+    engine.go          discovery.Engine — regex URL extraction, source classification, filtering
+    triage.go          TriageWorker — AI-powered URL triage with auto-blacklist learning
   dispatcher/          Prometheus metrics
     prometheus.go      PrometheusMetrics — RecordFinding, RecordMatcherMatch, ...
   enrichment/          IOC external enrichment pipeline
@@ -199,6 +203,9 @@ internal/
     pipeline_test.go   Unit tests
   llm/                 OpenAI-compatible LLM client
     client.go          LLMClient interface and OpenAICompatClient implementation
+    openai_compat.go   OpenAICompatClient HTTP transport, Groq spend_limit_reached detection
+    spending.go        SpendingTracker — per-model monthly spend tracking and budget enforcement
+    errors.go          ErrBudgetExhausted sentinel, IsBudgetExhausted helper
   matcher/             Keyword and regex rule evaluation
     matcher.go         Matcher.Match() — evaluates all rules, returns MatchResult
   models/              Shared domain types
@@ -299,7 +306,7 @@ The registry is constructed before any modules so it can be passed to every cons
 dashServer = dashboard.NewServer(fmt.Sprintf(":%d", dashPort), pool, cfg.Dashboard.APIKey, registry)
 go dashServer.ListenAndServe()
 ```
-Starts before processing engines so the dashboard is visible during warmup.
+Starts before processing engines so the dashboard is visible during warmup. Authentication uses the `X-API-Key` header (validated via `authMiddleware` with constant-time comparison). All `/api/*` endpoints except `/api/public-stats` and `/api/public-recent` require the key. SpendingTracker instances for both the brain LLM and fast (Groq) LLM are wired into the dashboard via `SetSpendingTracker` and `SetFastSpendingTracker`, surfaced as `gemini_spending` and `groq_spending` in the `/api/system/status` response.
 
 **7. LLM clients**
 
@@ -311,7 +318,7 @@ Three clients are constructed in single-mode or dual-mode depending on config:
 | `classifyClient` (fast) | `llmFast` | Classification, Summarization, IOC extraction — falls back to `fullClient` if `llmFast.model` is empty |
 | `brainClient` | `llmBrain` | Correlator evaluation, Brief Generator, Query Engine — falls back to `fullClient` |
 
-All three use `llm.NewOpenAICompatClient(baseURL, apiKey, model)`, an OpenAI-compatible HTTP client.
+All three use `llm.NewOpenAICompatClient(baseURL, apiKey, model)`, an OpenAI-compatible HTTP client. Each client may have a `SpendingTracker` attached via `SetSpendingTracker()` for monthly budget enforcement. The tracker monitors per-model cumulative token usage and estimated cost using configurable `inputCostPer1M` and `outputCostPer1M` rates against `monthlyBudgetUSD`. Counters auto-reset at the start of each calendar month. When the budget is exhausted, `ErrBudgetExhausted` is returned; the Groq provider's `spend_limit_reached` API error is also wrapped as `ErrBudgetExhausted`. Budget fields are available on both `LLMConfig` and `LLMFastConfig`.
 
 **8. Analyzers from prompt templates**
 ```go
@@ -332,14 +339,15 @@ The discovery engine uses a three-tier filtering system (evaluated in order in `
 
 1. `isBlacklisted` (config `domainBlacklist`) — skip
 2. `isAutoBlacklisted` (learned from triage decisions) — skip
-3. `shouldSkipURL` (structural filters: private IPs, FUZZ, localhost, image URLs like `.png`/`.jpg`/`.gif`/`.svg`/`.webp`/`.ico`/`.bmp`) — skip
+3. `shouldSkipURL` (structural filters: private IPs, FUZZ, localhost, truncated IPs like `45.76.155`, image/media URLs like `.png`/`.jpg`/`.gif`/`.svg`/`.webp`/`.ico`/`.bmp`, CDN/metadata hosts like `embedly.com`/`safelinks.protection.outlook.com`/`t.co`/`bit.ly`/`tinyurl.com`/`goo.gl`/`player.vimeo.com`, overly long query strings >256 chars, URLs too short to be meaningful) — skip
 4. `matchesAllowlist` (config `allowPatterns` + `allowDomains`) — status `discovered`
 5. else — status `pending_triage`
 
-**AI triage worker:** Runs every 5 minutes, checks the `pending_triage` count. When count >= `triageBatchSize` (default 100), fetches a batch and sends the URL list to the fast LLM (Groq/llmFast) with `triage.tmpl` prompt. Decisions:
+**AI triage worker** (`TriageWorker` in `internal/discovery/triage.go`): Runs every 5 minutes, checks the `pending_triage` count. When count >= `batchSize` (default 30), fetches a batch ordered by `created_at ASC` and sends the URL list to the fast LLM (Groq/llmFast) with `triage.tmpl` prompt. The LLM response is fuzzy-matched against original identifiers using `normalizeURLForMatch` (lowercase, trim slashes, URL-decode). Decisions:
 - `investigate` — promoted to status `discovered`
 - `trash` — hard deleted from `sources` table
-- All decisions are logged to `source_triage_log` table
+- URLs not classified by the LLM increment a per-identifier attempt counter; after `maxTriageAttempts` (3) they are auto-trashed
+- All decisions are logged to `source_triage_log` table with `batch_id` and `model_used`
 
 **Auto-blacklist learning:** The `discovered_blacklist` table tracks domains of trashed sources. After 3+ trash decisions for a domain, it is auto-added to the runtime blacklist. The auto-blacklist is loaded on startup and refreshed after each triage batch. Auto-blacklisted domains cannot override `allowDomains` or `allowPatterns`.
 
@@ -452,7 +460,7 @@ On `SIGINT`/`SIGTERM`:
 
 ### ModuleID Constants
 
-All 22 module IDs defined in `internal/modules/status.go`:
+All 23 module IDs defined in `internal/modules/status.go`:
 
 | ModuleID | Category | Description |
 |---|---|---|
@@ -479,6 +487,7 @@ All 22 module IDs defined in `internal/modules/status.go`:
 | `infra.discovery` | infra | URL extraction and source discovery |
 | `infra.source_analyzer` | infra | Per-source quality metrics computation |
 | `infra.vuln_ingestor` | infra | NVD/EPSS/KEV vulnerability intelligence |
+| `infra.source_triage` | infra | AI-powered URL triage for source discovery |
 
 ### ModuleStatus struct
 
@@ -557,8 +566,9 @@ The `WaitGroup` in `CollectorManager.Run` waits for all goroutines before return
 - On start: optionally fetches the last N messages via `MessagesGetHistory` for catch-up
 - Message handler: `OnNewChannelMessage` — SHA-256 dedup in-memory, converts to `models.Finding`
 - Channel discovery: telegram-specific messages are passed through `discoveryEngine` for new channel extraction
-- Private invite links (`t.me/+` format) are skipped since they cannot be resolved via `ResolveUsername`
-- The collector merges config channels with DB sources of type `telegram_channel` (`status='active'`)
+- Private invite links (`t.me/+` format) are supported via the `InviteHash` field on `ChannelConfig`. The `resolveInviteLink` method first calls `MessagesCheckChatInvite` to check if already joined (`ChatInviteAlready`), and if not, calls `MessagesImportChatInvite` to join the channel/group. Invite hash channels bypass the `ChannelsJoinChannel` path used for public channels.
+- Identifier normalization: the `extractUsername` helper converts URLs (`https://t.me/channelname`, `t.me/channelname`) and `@channelname` references to bare usernames. DB source identifiers stored as `invite:+hash`, `+hash`, or `t.me/joinchat/hash` are all normalized to `ChannelConfig{InviteHash: hash}`.
+- The collector merges config channels with DB sources of type `telegram_channel` and `telegram_group` (`status='approved'` or `'active'`). Deduplication uses `channelKey()` — `invite:+hash` for invite channels, bare username for public channels, `id:N` for numeric IDs.
 
 **PasteCollector** (`collector.paste`)
 - Two sub-goroutines per `Start` call: one polls the Pastebin `scrape.pastebin.com` API (limit 50), one polls each custom scraper URL
@@ -575,7 +585,7 @@ The `WaitGroup` in `CollectorManager.Run` waits for all goroutines before return
 
 **WebCollector / RSS** (`collector.rss`)
 - One goroutine per feed in `cfg.Sources.Web.Feeds`
-- In addition to config feeds, the RSS collector loads feeds from the `sources` table (`type='rss'`, `status='active'`). DB sources are refreshed every 30 minutes.
+- In addition to config feeds, the RSS collector dynamically loads feeds from the `sources` table (`type='rss'`, `status='active'`). DB sources are refreshed every 30 minutes, so newly approved sources begin collection without a restart.
 - `sources.last_collected` is updated after each collection cycle for both config and DB-sourced feeds.
 - Three feed types:
   - `rss`: parsed via `gofeed`, each item becomes a finding
@@ -615,15 +625,20 @@ Runs N times concurrently. Each iteration:
 ```
 FetchUnclassified(ctx, batchSize)   [ORDER BY collected_at ASC, WHERE classified=false]
   for each entry:
+    [check budgetExhausted flag → pause 30min if set]
+    [skip if already poisoned by another worker]
+    FindingFromRawContentWithLimit(entry, maxContentLength)
     Classifier.Classify(ctx, finding)
       → category, confidence, severity, provenance
+      [on ErrBudgetExhausted → set budgetExhausted flag, break batch]
     if confidence < 0.80 → tags += "needs_review"
-    Summarizer.Summarize(ctx, finding, category, severity)
-      → summary text (fast LLM, summarize.tmpl)
+    if category != "irrelevant":
+      Summarizer.Summarize(ctx, finding, category, severity)
+        → summary text (fast LLM, summarize.tmpl)
     archive.MarkClassified(ctx, id, category, tags, severity, summary, provenance, version=3)
 ```
 
-Each LLM call is guarded by a `ConcurrencyLimiter` (buffered channel semaphore). Workers sleep `WorkerIdleInterval` (30s) when the queue is empty.
+Each LLM call is guarded by a `ConcurrencyLimiter` (buffered channel semaphore). Workers sleep `WorkerIdleInterval` (30s) when the queue is empty. Summarization is skipped for `irrelevant` items to save LLM tokens.
 
 ### extractPipelineWorker
 
@@ -696,9 +711,21 @@ func (c *ConcurrencyLimiter) Release() { <-c.sem }
 
 Each sub-module (Classifier, Summarizer, IOCExtractor, EntityExtractor, Librarian) has its own independent `ConcurrencyLimiter` sized from `classifyConcurrency` or `extractConcurrency` config.
 
-### Poison Item Skip
+### Budget Circuit Breaker
 
-Classification and entity extraction workers track consecutive failures per content ID. After 5 consecutive failures, the item is marked as `unclassifiable` and skipped. This prevents single bad items from blocking the entire pipeline.
+When any LLM call returns `ErrBudgetExhausted` (either from the local `SpendingTracker` budget or from a Groq `spend_limit_reached` API error), the worker sets the `budgetExhausted` atomic flag on the engine. All classify and extract workers check this flag before each item. When set, workers pause for `budgetPauseDuration` (30 minutes), then clear the flag and resume. This prevents burning through retry budgets when a provider's spend cap is hit.
+
+### Content Truncation
+
+All workers use `FindingFromRawContentWithLimit(entry, maxContentLength)` to cap content before LLM calls. The `maxContentLength` field is set from `cfg.Collection.MaxContentLength`. This prevents excessively long items from blowing token budgets or hitting provider context limits.
+
+### Summarization Skip
+
+The classify pipeline skips summarization for items classified as `irrelevant` to save LLM tokens. The summary field is left empty and the item is still marked as classified.
+
+### Poison Item Tracking
+
+Classification and entity extraction workers track consecutive failures per content ID. After 5 consecutive failures, the item is marked as `unclassifiable` (tagged `["unclassifiable", "poison_item"]`, category `irrelevant`) and skipped. The failure counter for that ID is cleaned up after a successful mark to prevent unbounded map growth. This prevents single bad items from blocking the entire pipeline.
 
 ### Graph Bridge Entity ID Format
 
@@ -1071,6 +1098,8 @@ main goroutine
   │
   ├── enricher.Run goroutine (ticker, default 30m)
   │
+  ├── triageWorker.Run goroutine (ticker, 5m)
+  │
   └── collectorMgr.Run goroutine
         ├── [per collector] producer goroutine (blocks in collector.Start)
         │     TelegramCollector.Start
@@ -1108,8 +1137,9 @@ main goroutine
 - 1 source value analyzer ticker
 - 1 vuln ingestor ticker
 - 1 enrichment ticker
+- 1 source triage ticker
 - 4 collector producers (1 per collector type)
 - 4 collector consumers (1 per collector type)
 - N sub-goroutines inside PasteCollector (1 + scrapers), ForumCollector (1 per site), WebCollector (1 per feed)
 
-Minimum at steady state with all default workers and 1 of each collector type: approximately 27 goroutines before accounting for sub-collector goroutines driven by site/feed configuration.
+Minimum at steady state with all default workers and 1 of each collector type: approximately 28 goroutines before accounting for sub-collector goroutines driven by site/feed configuration.

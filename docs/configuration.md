@@ -83,6 +83,9 @@ Primary LLM client — GLM-5-Turbo. Used for entity extraction and sub-classific
 | `maxConcurrent` | int | `2` | Maximum simultaneous in-flight LLM requests. Used as the extraction concurrency cap and as the fallback for `llmFast.maxConcurrency` when that field is unset. |
 | `requestsPerMinute` | int | — | Rate limit cap for outbound requests. |
 | `tokensPerMinute` | int | — | Token-bucket rate limiter: maximum tokens per minute. The rate limiter (`internal/llm/ratelimit.go`) tracks consumption and delays requests when the budget is exhausted. 429 responses trigger exponential backoff (2s/4s/8s) with Retry-After header parsing. |
+| `monthlyBudgetUSD` | float64 | — | Monthly spending budget in USD. Uses the same spending tracker as `llmBrain` (`internal/llm/spending.go`), estimating cost from token counts using `inputCostPer1M` and `outputCostPer1M` rates. When the budget is reached, LLM calls are skipped until the next calendar month. |
+| `inputCostPer1M` | float64 | — | Cost per 1M input tokens in USD, used for budget tracking. |
+| `outputCostPer1M` | float64 | — | Cost per 1M output tokens in USD, used for budget tracking. |
 
 ---
 
@@ -100,6 +103,9 @@ system falls back to `llm` for classification (single-LLM mode).
 | `maxConcurrency` | int | — | Maximum concurrent in-flight classification requests. Falls back to `llm.maxConcurrent` when unset. |
 | `tokensPerMinute` | int | — | Token-bucket rate limiter: maximum tokens per minute. |
 | `tokensPerDay` | int | `0` | Daily token budget. `0` disables the daily limit. |
+| `monthlyBudgetUSD` | float64 | — | Monthly spending budget in USD. Uses the same spending tracker as `llm` and `llmBrain`, estimating cost from token counts. When the budget is reached, fast LLM calls are skipped until the next calendar month. |
+| `inputCostPer1M` | float64 | — | Cost per 1M input tokens in USD, used for budget tracking (e.g. `0.11` for Groq). |
+| `outputCostPer1M` | float64 | — | Cost per 1M output tokens in USD, used for budget tracking (e.g. `0.34` for Groq). |
 
 ---
 
@@ -138,11 +144,11 @@ Controls archive-everything behavior and processing pipeline worker counts.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `archiveAll` | bool | `false` | When `true`, store every ingested item regardless of rule matches. |
-| `classificationWorkers` | int | `8` | Goroutines running the Classifier → Summarizer pipeline. |
+| `classificationWorkers` | int | `4` | Goroutines running the Classifier → Summarizer pipeline. |
 | `entityExtractionWorkers` | int | `1` | Goroutines running the IOC Extractor → Entity Extractor → Graph Bridge pipeline. |
 | `librarianWorkers` | int | `1` | Goroutines running the Librarian (sub-classification) pipeline. |
 | `classificationBatchSize` | int | `10` | Maximum items fetched per poll by classification workers. |
-| `maxContentLength` | int | `0` | Truncate ingested content to this byte length before storage and LLM calls. `0` means no limit. |
+| `maxContentLength` | int | `8192` | Maximum content length in bytes before truncation. Content is truncated at different thresholds depending on the pipeline stage: 4K for classification, 6K for summarization, 8K for IOC extraction. `0` disables truncation. |
 
 ---
 
@@ -245,7 +251,7 @@ references from ingested content, filters them through a three-tier system
 | `enabled` | bool | `false` | Enable the discovery engine. |
 | `autoApprove` | bool | `false` | Automatically add discovered sources without manual review. When `false`, sources enter `discovered` status and require approval via `noctis source approve`. |
 | `triageEnabled` | bool | `false` | Enable the AI batch triage worker. When enabled, URLs that don't match the allowlist or blacklist enter `pending_triage` status and are periodically evaluated by the fast LLM. |
-| `triageBatchSize` | int | `100` | Number of pending URLs that must accumulate before the AI triage worker fires a batch. |
+| `triageBatchSize` | int | `30` | Number of pending URLs to classify per triage batch. The AI triage worker fires when this many URLs have accumulated in `pending_triage` status. |
 | `allowPatterns` | []string | — | Glob patterns for instant-approve. URLs matching these patterns bypass triage and go directly to `discovered` status. Example: `"*.onion"`, `"pastebin.com"`, `"ghostbin.*"`. Patterns are normalized to lowercase for case-insensitive matching. |
 | `allowDomains` | []string | — | Exact domain names that bypass triage. Example: `breachforums.st`, `exploit.in`, `xss.is`. |
 | `domainBlacklist` | []string | — | Domains that the discovery engine will never propose as sources. Checked first in the filtering pipeline. |
@@ -293,7 +299,7 @@ and JSON API on a dedicated port, separate from the health/metrics server.
 |-------|------|---------|-------------|
 | `enabled` | bool | `false` | Enable the web dashboard. |
 | `port` | int | `3000` | Port on which the dashboard server listens. |
-| `apiKey` | string | — | Bearer token required for all `/api/*` endpoints. Use `${NOCTIS_DASHBOARD_API_KEY}`. |
+| `apiKey` | string | — | API key required for all `/api/*` endpoints, sent via the `X-API-Key` request header. Use `${NOCTIS_DASHBOARD_API_KEY}`. |
 
 When `enabled` is `false`, no dashboard server is started and no port is bound.
 
@@ -334,8 +340,9 @@ Configures the Telegram MTProto source (via `gotd/td`).
 |-------|------|-------------|
 | `username` | string | Public channel username, without the leading `@`. |
 | `id` | int64 | Numeric channel ID. |
+| `inviteHash` | string | Invite hash for private channels or groups. Extracted from `t.me/+<hash>` or `t.me/joinchat/<hash>` invite links. When set, the collector will attempt to join the channel using this hash before subscribing to updates. |
 
-At least one of `username` or `id` must be provided.
+At least one of `username`, `id`, or `inviteHash` must be provided.
 
 ---
 
@@ -480,6 +487,9 @@ noctis:
     retries: 2
     maxConcurrent: 4
     requestsPerMinute: 60
+    monthlyBudgetUSD: 25.0
+    inputCostPer1M: 0.50
+    outputCostPer1M: 1.00
 
   llmFast:
     provider: groq
@@ -487,6 +497,10 @@ noctis:
     model: meta-llama/llama-4-scout-17b-16e-instruct
     apiKey: ${NOCTIS_GROQ_API_KEY}
     maxConcurrency: 8
+    tokensPerDay: 10000000
+    monthlyBudgetUSD: 10.0
+    inputCostPer1M: 0.11
+    outputCostPer1M: 0.34
 
   llmBrain:
     provider: gemini
@@ -498,14 +512,17 @@ noctis:
     timeout: 120s
     retries: 2
     maxConcurrent: 1
+    monthlyBudgetUSD: 50.0
+    inputCostPer1M: 1.25
+    outputCostPer1M: 10.00
 
   collection:
     archiveAll: true
-    classificationWorkers: 8
+    classificationWorkers: 4
     entityExtractionWorkers: 1
     librarianWorkers: 1
     classificationBatchSize: 10
-    maxContentLength: 65536
+    maxContentLength: 8192
 
   correlation:
     enabled: true
@@ -545,7 +562,7 @@ noctis:
     enabled: true
     autoApprove: false
     triageEnabled: true
-    triageBatchSize: 100
+    triageBatchSize: 30
     allowPatterns:
       - "*.onion"
       - "pastebin.com"
@@ -577,6 +594,7 @@ noctis:
       channels:
         - username: somedarkchannel
         - id: -1001234567890
+        - inviteHash: AbCdEfGhIjK
 
     paste:
       enabled: true

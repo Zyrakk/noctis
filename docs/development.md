@@ -45,6 +45,16 @@ make lint            # golangci-lint run ./...
 
 Tests run with the race detector enabled (`-race`) and cache disabled (`-count=1`).
 
+Test files follow Go convention (`*_test.go` alongside source). Key test files:
+
+- `internal/discovery/triage_test.go` — triage worker unit tests
+- `internal/discovery/engine_test.go` — discovery engine, allow-patterns, invite hash extraction
+- `internal/collector/telegram_test.go` — invite hash resolution, identifier normalization
+- `internal/llm/openai_compat_test.go` — LLM client tests
+- `internal/llm/errors_test.go` — budget error sentinel tests
+- `internal/processor/helpers_test.go` — processor helper functions
+- `internal/analyzer/truncate_test.go` — content truncation logic
+
 ## Docker Build
 
 ### Using the Makefile
@@ -111,6 +121,9 @@ internal/
   database/                 — PostgreSQL connection pool and migration runner
   discovery/                — Source discovery engine (URL extraction, three-tier
                               filtering, AI triage worker, auto-blacklist learning)
+    engine.go               — URL extraction, filtering, allow-patterns/domains
+    triage.go               — TriageWorker: AI-powered URL classification,
+                              auto-blacklist learning, audit logging
   dispatcher/               — Prometheus metrics recording
   enrichment/               — IOC enrichment pipeline: AbuseIPDB, VirusTotal,
                               crt.sh providers
@@ -118,7 +131,7 @@ internal/
   ingest/                   — Real-time ingest pipeline (matching + alert path)
   llm/                      — OpenAI-compatible LLM client, token-bucket rate
                               limiter (ratelimit.go), Gemini spending tracker
-                              (spending.go)
+                              (spending.go), budget error sentinel (errors.go)
   matcher/                  — Keyword/regex pattern matching engine
   models/                   — Finding, IOC, Severity, Category, ActorProfile, Canary
   modules/                  — StatusTracker, ModuleStatus, Registry (system-wide
@@ -129,7 +142,12 @@ internal/
   vuln/                     — Vulnerability intelligence: NVD, EPSS, KEV ingestors
 
 migrations/                 — PostgreSQL DDL (numbered, applied in order)
+  001_init.sql .. 009_enrichment.sql
+  010_triage.sql            — source_triage_log + discovered_blacklist tables
+  011_normalize_telegram_identifiers.sql — URL-to-bare-username migration
+  012_purge_legacy_embedly_urls.sql — cleanup broken pending_triage URLs
 prompts/                    — LLM prompt templates (*.tmpl, Go text/template)
+  triage.tmpl               — batch URL classification for source triage
 deploy/                     — Kubernetes manifests
 testdata/                   — Config test fixtures
 ```

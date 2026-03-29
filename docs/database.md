@@ -2,7 +2,7 @@
 
 ## Overview
 
-Noctis uses PostgreSQL 16 (`postgres:16-alpine` in production) with a pgx/v5 connection pool. The schema is applied through 11 sequential migration files run automatically at startup via `database.RunMigrations` in `serve.go`. No manual steps required.
+Noctis uses PostgreSQL 16 (`postgres:16-alpine` in production) with a pgx/v5 connection pool. The schema is applied through 12 sequential migration files run automatically at startup via `database.RunMigrations` in `serve.go`. No manual steps required.
 
 Connection is configured via the `DATABASE_URL` environment variable (see `docs/configuration.md`). All queries use parameterized SQL via `pgxpool.Pool`.
 
@@ -148,6 +148,24 @@ SET identifier = regexp_replace(identifier, '^(https?://)?t\.me/', ''),
     updated_at = NOW()
 WHERE type = 'telegram_channel'
   AND identifier ~ '(^https?://t\.me/|^t\.me/)';
+```
+
+---
+
+### 012_purge_legacy_embedly_urls.sql — Legacy Embedly/Redirect URL Purge
+
+A data-only migration (no schema changes). Removes problematic URLs from `sources` where `status = 'pending_triage'` and the identifier matches embedly.com, Outlook safelinks, Blogger video widgets, Vimeo player embeds, or t.co shortlinks. These URLs produced responses exceeding the LLM output token limit, causing truncated JSON and batch failures in the triage worker.
+
+```sql
+DELETE FROM sources
+WHERE status = 'pending_triage'
+  AND (
+    identifier LIKE '%embedly.com%'
+    OR identifier LIKE '%safelinks.protection.outlook.com%'
+    OR identifier LIKE '%blogger.com/video.g%'
+    OR identifier LIKE '%player.vimeo.com%'
+    OR identifier LIKE '%t.co/%'
+  );
 ```
 
 ---

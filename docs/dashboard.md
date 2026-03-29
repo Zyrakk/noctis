@@ -7,7 +7,7 @@ Noctis includes a built-in web dashboard for browsing findings, exploring IOCs, 
 No external web server, reverse proxy, or separate frontend deployment is required. The dashboard starts alongside the main Noctis daemon and reads directly from PostgreSQL via `pgxpool`.
 
 **Architecture:**
-- **Go API backend** — `internal/dashboard/` — HTTP server with parameterized SQL queries, Bearer-token auth middleware, and static file server for the embedded frontend. Routes registered in `server.go`, handlers in `handlers.go`, query logic in `queries.go`.
+- **Go API backend** — `internal/dashboard/` — HTTP server with parameterized SQL queries, `X-API-Key` auth middleware (constant-time comparison), and static file server for the embedded frontend. Routes registered in `server.go`, handlers in `handlers.go`, query logic in `queries.go`.
 - **React frontend** — `web/` — Single-page application built with Vite into embedded static files. Client-side routing via `window.history.pushState` (no react-router dependency). React, recharts, lucide-react, and Tailwind CSS loaded from CDN at runtime.
 
 ---
@@ -60,7 +60,7 @@ Paginated IOC browser (50 per page). Type filter tabs: All, IPs, Domains, MD5, S
 
 ### `/dashboard/sources` — Sources
 
-Source management interface. Tabs: Active, Discovered, Paused, Rejected. Each tab fetches `GET /api/sources?status=<tab>`. Shows source type icon, identifier, name, status, last collected timestamp, error count, and content count. Discovered sources have Approve / Reject action buttons (`POST /api/sources/{id}/approve`, `POST /api/sources/{id}/reject`). Add Source form at the top (`POST /api/sources`) accepts type and identifier.
+Source management interface. Tabs: Active, Discovered, Paused, Rejected. Each tab fetches `GET /api/sources?status=<tab>&limit=500` (default limit increased to 500 for client-side filtering). Type filter pills below the tabs: All, RSS, Telegram, Web, Other. Type categorization groups sources by family (e.g., `telegram_channel` and `telegram_group` both map to Telegram). Shows source type icon, identifier, name, status, last collected timestamp, error count, and content count. Discovered sources have Approve / Reject action buttons (`POST /api/sources/{id}/approve`, `POST /api/sources/{id}/reject`). Add Source form at the top (`POST /api/sources`) accepts type and identifier.
 
 ### `/dashboard/graph` — Graph
 
@@ -645,6 +645,8 @@ The generated SQL is read-only (SELECT only). The query engine includes schema c
 
 ## Authentication
 
-All authenticated endpoints use a simple shared-secret scheme. The middleware checks the `X-API-Key` header against the configured `apiKey` value. There is no session management, token expiry, or role system — the single key grants full read/write access to all API endpoints.
+All authenticated endpoints use a simple shared-secret scheme. The middleware checks the `X-API-Key` header against the configured `apiKey` value using constant-time comparison to prevent timing attacks. There is no session management, token expiry, or role system — the single key grants full read/write access to all API endpoints.
+
+The dashboard server wires a SpendingTracker for both the brain LLM and the fast (Groq) LLM, providing budget visibility across all LLM-powered endpoints (query engine, briefs, correlation decisions, etc.).
 
 For production deployments, place a reverse proxy in front of the dashboard and restrict network access to trusted clients.

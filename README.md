@@ -44,13 +44,14 @@ Vulnerability intelligence arrives from NVD, EPSS, and CISA KEV feeds and is sco
 +------------------v--------------------------------------------------------+
 | Layer 2: ProcessingEngine (background workers)                            |
 |                                                                           |
-|  Classifier        Groq / llama-4-scout      (category, severity)        |
-|  Summarizer        Groq / llama-4-scout      (abstractive summary)       |
-|  IOC Extractor     Groq / llama-4-scout      (IPs, domains, hashes, CVEs)|
-|  Entity Extractor  GLM-5-Turbo               (actors, orgs, malware)     |
-|  Graph Bridge                                 (entity -> graph write)     |
-|  Librarian         GLM-5-Turbo               (sub-classification)        |
-|  IOC Lifecycle                                (exponential score decay)   |
+|  Classifier        Groq / llama-4-scout      (category, severity)         |
+|  Summarizer        Groq / llama-4-scout      (abstractive summary)        |
+|  IOC Extractor     Groq / llama-4-scout      (IPs, domains, hashes, CVEs) |
+|  Entity Extractor  GLM-5-Turbo               (actors, orgs, malware)      |
+|  Graph Bridge                                 (entity -> graph write)      |
+|  Librarian         GLM-5-Turbo               (sub-classification)         |
+|  IOC Lifecycle                                (exponential score decay)    |
+|  Content truncation: 4K classify, 6K summarize, 8K IOC extraction         |
 +------------------+--------------------------------------------------------+
                    |
 +------------------v--------------------------------------------------------+
@@ -69,16 +70,17 @@ Vulnerability intelligence arrives from NVD, EPSS, and CISA KEV feeds and is sco
 |  Source Value Analyzer                                                    |
 |  Enrichment Pipeline AbuseIPDB / VirusTotal / crt.sh                     |
 |  Discovery Engine    URL extraction -> pending source queue               |
+|  Triage Worker       LLM-powered URL classification (investigate/trash)  |
 +------------------+--------------------------------------------------------+
                    |
 +------------------v--------------------------------------------------------+
 | Layer 5: Dashboard                                                        |
 |                                                                           |
 |  React SPA embedded in binary   14 pages   25+ API endpoints             |
-|  Bearer-token auth on all data routes                                     |
+|  X-API-Key auth on all data routes                                        |
 +--------------------------------------------------------------------------+
 
-Shared data store: PostgreSQL (18 tables, 11 migrations)
+Shared data store: PostgreSQL (20 tables, 12 migrations)
 Metrics: Prometheus /metrics, /healthz, /readyz (health port, default 8080)
 ```
 
@@ -88,17 +90,17 @@ Metrics: Prometheus /metrics, /healthz, /readyz (health port, default 8080)
 
 ### Collection
 
-- **Telegram MTProto** — Connects to channels and groups via [gotd/td](https://github.com/gotd/td). Joins public channels automatically. Replays configurable backlog on reconnect. Session survives pod restarts via PVC.
+- **Telegram MTProto** — Connects to channels and groups via [gotd/td](https://github.com/gotd/td). Joins public channels automatically. Supports private invite links (`t.me/+hash` and `t.me/joinchat/hash` formats) via the `inviteHash` channel config field. Identifier normalization converts URLs to bare usernames. Replays configurable backlog on reconnect. Session survives pod restarts via PVC.
 - **Paste sites** — Scrapes Pastebin and custom paste targets via configurable HTTP scrapers.
 - **Dark web forums** — CSS-selector-based scraping with per-forum authentication, pagination, and Tor proxy support.
-- **RSS / web feeds** — Polls RSS, Atom, and scrapeable web pages on configurable intervals. RSS feeds are loaded from both the config file and the `sources` table (type `rss`, status `active`), refreshed from the database every 30 minutes. The `sources.last_collected` timestamp is updated after each collection cycle.
+- **RSS / web feeds** — Polls RSS, Atom, and scrapeable web pages on configurable intervals. RSS feeds are loaded from both the config file and the `sources` table (type `rss`, status `active`), refreshed from the database every 30 minutes. Discovery can approve new feeds at runtime without redeployment. The `sources.last_collected` timestamp is updated after each collection cycle.
 - **Autonomous source discovery** — Extracts URLs from ingested content and filters them through a three-tier pipeline: configurable blacklist, allowlist (glob patterns + exact domains), and AI-powered batch triage. Allowlisted URLs are instantly queued; unknown URLs enter `pending_triage` status and are periodically evaluated by the fast LLM. Domains that accumulate repeated trash decisions are auto-blacklisted.
 
 ### Processing
 
-- **LLM classification** — Groq (llama-4-scout) classifies each finding into category, severity, and sub-category on the alert path, optimized for throughput.
-- **Summarization** — Groq (llama-4-scout) generates abstractive summaries of raw collected content.
-- **IOC extraction** — Groq (llama-4-scout) extracts IPs, domains, URLs, file hashes (MD5/SHA-1/SHA-256), CVEs, and email addresses with source context.
+- **LLM classification** — Groq (llama-4-scout) classifies each finding into category, severity, and sub-category on the alert path, optimized for throughput. Content is truncated to 4K bytes before classification.
+- **Summarization** — Groq (llama-4-scout) generates abstractive summaries of raw collected content (truncated to 6K bytes). Summarization is skipped for items classified as irrelevant.
+- **IOC extraction** — Groq (llama-4-scout) extracts IPs, domains, URLs, file hashes (MD5/SHA-1/SHA-256), CVEs, and email addresses with source context. Content is truncated to 8K bytes before extraction.
 - **Entity extraction** — GLM-5-Turbo identifies named actors, organizations, malware families, and tools, written to the knowledge graph.
 - **Graph bridge** — Connects extracted entities and IOCs with typed relationships across findings.
 - **Librarian** — GLM-5-Turbo applies fine-grained sub-classification after initial categorization.
@@ -109,7 +111,7 @@ Metrics: Prometheus /metrics, /healthz, /readyz (health port, default 8080)
 - **Correlation engine** — Detects cross-source patterns using shared IOCs, entity co-occurrence, and temporal proximity. Produces structured correlation candidates.
 - **LLM Analyst** — Gemini 3.1 Pro reviews each correlation candidate and issues a confirmed or rejected decision with a rationale, stored as an analytical note.
 - **Daily brief generator** — Gemini 3.1 Pro synthesizes the prior 24-hour collection window into a structured intelligence brief.
-- **Natural language query engine** — Gemini 3.1 Pro translates human questions into SQL and executes them against the live archive.
+- **Natural language query engine** — Gemini 3.1 Pro translates human questions into SQL and executes them against the live archive. Trailing semicolons are stripped from LLM-generated SQL before execution.
 
 ### Enrichment and Vulnerability Intelligence
 
@@ -119,6 +121,8 @@ Metrics: Prometheus /metrics, /healthz, /readyz (health port, default 8080)
 
 ### Infrastructure
 
+- **LLM budget management** — Monthly spending limits per LLM provider via `monthlyBudgetUSD`. A `SpendingTracker` monitors cumulative token usage and estimated cost using configurable `inputCostPer1M` and `outputCostPer1M` rates. When a provider's budget is exhausted, a circuit breaker pauses all workers using that provider for 30 minutes. Groq budget defaults to $10/mo.
+- **Content truncation** — A configurable `maxContentLength` (default 8192 bytes) truncates content before LLM calls. Each processing stage applies its own limit: 4K for classification, 6K for summarization, 8K for IOC extraction.
 - **Single binary** — The entire platform, including the React dashboard, compiles to one Go binary. No sidecar processes required.
 - **Auto-migration** — Runs PostgreSQL migrations at startup.
 - **Prometheus metrics** — Exposes collector throughput, LLM call rates, and error counters on a dedicated scrape endpoint.
@@ -228,7 +232,7 @@ The config file requires a top-level `noctis:` key. Environment variable substit
 | `NOCTIS_LLM_API_KEY` | Z.ai GLM-5-Turbo API key |
 | `NOCTIS_GROQ_API_KEY` | Groq API key (Dev tier recommended) |
 | `NOCTIS_GEMINI_API_KEY` | Google Gemini API key |
-| `NOCTIS_DASHBOARD_API_KEY` | Dashboard Bearer token |
+| `NOCTIS_DASHBOARD_API_KEY` | Dashboard API key (sent via `X-API-Key` header) |
 | `NOCTIS_DB_DSN` | PostgreSQL connection string |
 
 **Telegram (required if Telegram enabled):**
@@ -271,6 +275,9 @@ noctis:
     maxConcurrent: 2
     requestsPerMinute: 20
     tokensPerMinute: 1500
+    monthlyBudgetUSD: 5.0        # monthly spending limit (0 = unlimited)
+    inputCostPer1M: 0.50         # cost per 1M input tokens
+    outputCostPer1M: 1.00        # cost per 1M output tokens
 
   # Groq / llama-4-scout: classification, summarization, IOC extraction
   llmFast:
@@ -280,7 +287,10 @@ noctis:
     apiKey: "${NOCTIS_GROQ_API_KEY}"
     maxConcurrency: 5
     tokensPerMinute: 300000
-    tokensPerDay: 0
+    tokensPerDay: 10000000       # 10M tokens/day
+    monthlyBudgetUSD: 10.0       # monthly spending limit ($10/mo for Groq)
+    inputCostPer1M: 0.11         # cost per 1M input tokens
+    outputCostPer1M: 0.34        # cost per 1M output tokens
 
   # Gemini 3.1 Pro: analytical reasoning (correlations, briefs, NL queries)
   llmBrain:
@@ -305,6 +315,7 @@ noctis:
       channels:
         - username: "RalfHackerChannel"
         - username: "zer0day1ab"
+        - inviteHash: "abc123def"    # private channel via t.me/+abc123def
 
     paste:
       enabled: false
@@ -382,11 +393,11 @@ noctis:
 
   collection:
     archiveAll: true              # archive every item, not just matched ones
-    classificationWorkers: 8
+    classificationWorkers: 4
     entityExtractionWorkers: 1
     librarianWorkers: 1
     classificationBatchSize: 10
-    maxContentLength: 50000
+    maxContentLength: 8192        # bytes; truncated per-stage (4K/6K/8K)
 
   # --- Correlation Engine ---
 
@@ -513,7 +524,7 @@ The session file is written to the path configured in `sources.telegram.sessionF
 ./noctis source add --type telegram_channel --identifier "channelname"
 ```
 
-The Telegram collector merges config channels with DB sources of type `telegram_channel` and polls the database every 5 minutes, subscribing to newly added channels automatically. Public channels are joined via `ChannelsJoinChannel` — no manual join from the phone app is needed. Private invite links (`t.me/+` format) are skipped since they cannot be resolved via `ResolveUsername`.
+The Telegram collector merges config channels with DB sources of type `telegram_channel` and polls the database every 5 minutes, subscribing to newly added channels automatically. Public channels are joined via `ChannelsJoinChannel` — no manual join from the phone app is needed. Private channels are supported via the `inviteHash` field, which accepts `t.me/+hash` and `t.me/joinchat/hash` formats. Telegram identifier URLs are normalized to bare usernames before storage.
 
 QR authentication is also available via the `/auth/qr` endpoint on the health port.
 
@@ -533,7 +544,7 @@ kubectl port-forward deployment/noctis -n noctis 3000:3000
 # Standalone — accessible at http://localhost:3000
 ```
 
-Authentication uses a Bearer token (`Authorization: Bearer <api-key>`). The login page accepts the key set in `dashboard.apiKey`. Two public endpoints expose safe aggregate data without authentication.
+Authentication uses the `X-API-Key` header instead of Bearer tokens. The login page accepts the key set in `dashboard.apiKey`. Key comparison uses constant-time evaluation for timing attack protection. Two public endpoints expose safe aggregate data without authentication.
 
 ### Pages
 
@@ -545,7 +556,7 @@ Authentication uses a Bearer token (`Authorization: Bearer <api-key>`). The logi
 | Intelligence Overview | Cross-source intelligence picture: active IOCs, correlations, entity counts, brief status |
 | Findings | Filterable table of all archived findings with category, severity, source, and full detail panel |
 | IOC Explorer | IOC browser with type/active/enriched filters, threat score, enrichment data, CSV export |
-| Sources | Source registry: approve, reject, and add new sources; displays source value scores |
+| Sources | Source registry: approve, reject, and add new sources; type filter pills (All, RSS, Telegram, Web, Other); displays source value scores |
 | Entity Graph | Force-directed visualization of the knowledge graph with entity type and relationship filters |
 | Analytical Notes | LLM Analyst decisions on correlation candidates with rationale |
 | Correlations | Correlation candidates and confirmed correlations with evidence summaries |
@@ -556,7 +567,7 @@ Authentication uses a Bearer token (`Authorization: Bearer <api-key>`). The logi
 
 ### API Endpoints
 
-All endpoints except public ones require `Authorization: Bearer <api-key>`.
+All endpoints except public ones require the `X-API-Key` header.
 
 **GET (authenticated):**
 `/api/stats`, `/api/findings`, `/api/findings/{id}`, `/api/iocs`, `/api/sources`, `/api/categories`, `/api/subcategories`, `/api/timeline`, `/api/entities`, `/api/graph`, `/api/correlations`, `/api/correlation-decisions`, `/api/notes`, `/api/actors/{id}/profile`, `/api/sources/value`, `/api/system/status`, `/api/intelligence/overview`, `/api/briefs`, `/api/briefs/latest`, `/api/vulnerabilities`, `/api/vulnerabilities/{cve}`
@@ -600,7 +611,8 @@ PostgreSQL is the single shared data store. Migrations run automatically at star
 | 008\_phase3 | IOC lifecycle columns, `intelligence_briefs`, `vulnerabilities` |
 | 009\_enrichment | IOC enrichment columns on `iocs` |
 | 010\_triage | `source_triage_log`, `discovered_blacklist` |
-| 011\_normalize\_telegram | Telegram identifier URL→username normalization |
+| 011\_normalize\_telegram\_identifiers | Telegram identifier URL-to-username normalization |
+| 012\_purge\_legacy\_embedly\_urls | Purge legacy Embedly URLs from discovered sources |
 
 ---
 
@@ -611,27 +623,27 @@ cmd/noctis/              CLI entry point (serve, telegram-auth, source, search, 
 internal/
   analyzer/              LLM wrapper: Classify, Summarize, ExtractIOCs, ExtractEntities,
                            SubClassify, EvaluateCorrelation, GenerateBrief, RawCompletion
-  archive/               PostgreSQL persistence: 16 tables, IOC lifecycle, brief metrics,
+  archive/               PostgreSQL persistence: 20 tables, IOC lifecycle, brief metrics,
                            vulnerability methods
   brain/                 Intelligence layer: Correlator, Analyst, BriefGenerator, QueryEngine
   collector/             Telegram, Paste, Forum, Web collectors + CollectorManager
                            + SourceValueAnalyzer
   config/                Full config struct with 20+ sections; ${ENV_VAR} substitution
-  dashboard/             25+ API handlers, embedded React SPA, Bearer-token auth middleware
+  dashboard/             25+ API handlers, embedded React SPA, X-API-Key auth middleware
   database/              pgxpool connection + migration runner
-  discovery/             Source discovery engine (URL extraction, blacklist, queue)
+  discovery/             Source discovery engine (URL extraction, blacklist, queue, AI triage)
   dispatcher/            Prometheus metrics
   enrichment/            AbuseIPDB, VirusTotal, crt.sh providers + Enricher
   health/                /healthz, /readyz, QR auth state
   ingest/                IngestPipeline: dedup, keyword/regex matching, archive, alert path
-  llm/                   OpenAI-compatible HTTP client
+  llm/                   OpenAI-compatible HTTP client, SpendingTracker, budget circuit breaker
   matcher/               Keyword and regex rule engine
   models/                Finding, IOC, Severity, Category types
   modules/               ModuleStatus, StatusTracker, Registry
   processor/             ProcessingEngine: Classifier, Summarizer, IOCExtractor,
                            EntityExtractor, GraphBridge, Librarian, IOCLifecycleManager
   vuln/                  NVD, EPSS, CISA KEV ingestion + priority scoring
-migrations/              001 through 011 (SQL files, applied in order)
+migrations/              001 through 012 (SQL files, applied in order)
 prompts/                 10 LLM prompt templates (classify, classify_detail, extract_iocs,
                            extract_entities, severity, summarize, evaluate_correlation,
                            daily_brief, stylometry, triage)

@@ -83,6 +83,7 @@ multiple JSON fragments.
 | `summarize` | llmFast (Groq) | `Source`, `SourceName`, `Content`, `Category`, `Severity`, `Author`, `Timestamp` | plain text paragraph |
 | `evaluate_correlation` | llmBrain (Gemini) | `CandidateType`, `SignalCount`, `Evidence`, `Findings[]`, `Entities[]`, `Notes[]` | `{"decision", "confidence", "reasoning", "missing_evidence"}` |
 | `daily_brief` | llmBrain (Gemini) | metrics snapshot, top findings, entity trends, source health | `{"title", "executive_summary", "sections": {...}}` |
+| `triage` | llmFast (Groq) | `URLs` | `{"investigate": [...], "trash": [...]}` |
 | `stylometry` | any | `Author`, `Source`, `Content` | stylometric feature JSON object |
 
 ---
@@ -172,8 +173,11 @@ Runs `classificationWorkers` goroutines, each looping:
 
 1. `FetchUnclassified(ctx, batchSize)` — entries not yet classified.
 2. `Classifier.Classify` — assigns category, confidence, severity, provenance (llmFast).
-3. `Summarizer.Summarize` — produces analyst-readable paragraph (llm).
-4. `MarkClassified` — persists category, severity, summary, provenance, classification version.
+3. Severity override: items classified as `irrelevant` are clamped to `info` severity
+   regardless of the LLM's response.
+4. `Summarizer.Summarize` — produces analyst-readable paragraph (llmFast). Skipped
+   entirely for `irrelevant` items to save tokens.
+5. `MarkClassified` — persists category, severity, summary, provenance, classification version.
 
 ### Extraction pipeline worker
 
@@ -228,15 +232,66 @@ Collector → ingest pipeline → archive (raw_content)
                                fully enriched entry
 ```
 
-### Poison Item Skip
+### Poison Item Handling
 
-Classification and entity extraction workers track consecutive failures per
-content ID. After 5 consecutive LLM failures on the same item, the worker
-marks the item as "unclassifiable" (category set to `irrelevant`, tags include
-`poison_skip`) and advances to the next item. This prevents a single
-malformed or adversarial item from permanently blocking pipeline progress.
-The failure counter resets when a different content ID is processed
-successfully.
+All three pipeline stages (classification, extraction, librarian) maintain
+separate failure counters per content ID (`classifyFailCounts`,
+`extractFailCounts`, `librarianFailCounts`). After 5 consecutive LLM failures
+on the same item, the worker marks it as poison and advances:
+
+- **Classification:** marked as `irrelevant` with tags `unclassifiable`,
+  `poison_item`.
+- **Extraction:** marked as entities-extracted (skips remaining extraction).
+- **Librarian:** marked as sub-classified with sub-category `unclassifiable`.
+
+Poison map entries are cleaned up after an item is successfully processed,
+preventing unbounded map growth. This ensures a single malformed or
+adversarial item cannot permanently block pipeline progress.
+
+### Budget Circuit Breaker
+
+Processing workers check the budget before each LLM call via
+`SpendingTracker` (`internal/llm/spending.go`). The tracker monitors
+per-model monthly spend against the `monthlyBudgetUSD` config limit, estimating
+cost from token counts using `inputCostPer1M` and `outputCostPer1M` rates.
+When `ErrBudgetExhausted` is returned, the `budgetExhausted` atomic flag is
+set on the engine and all workers of that pipeline stage pause for 30 minutes
+(`budgetPauseDuration`). After the pause, the flag is cleared and workers
+resume. The OpenAI-compatible client also detects Groq's `spend_limit_reached`
+and `spend_alert` HTTP 400 errors and maps them to `ErrBudgetExhausted`, so
+provider-side spend caps trigger the same circuit breaker.
+
+### Content Truncation
+
+The `maxContentLength` config (default 8192 bytes) caps content passed to
+pipeline workers via `FindingFromRawContentWithLimit`. Additionally, the
+analyzer applies per-stage limits before rendering prompt templates:
+
+| Stage | Limit | Constant |
+|-------|-------|----------|
+| Classification | 4096 chars | `classifyContentLimit` |
+| Summarization | 6144 chars | `summarizeContentLimit` |
+| IOC extraction | 8192 chars | `iocExtractContentLimit` |
+
+This prevents token waste and LLM failures on long content. Classification
+needs minimal context; IOC extraction receives the most.
+
+---
+
+## Triage Analysis (Discovery)
+
+**Package:** `internal/discovery`
+
+The `TriageURLs()` method on `Analyzer` batch-classifies discovered URLs as
+`"investigate"` or `"trash"` using the `triage.tmpl` prompt template
+(llmFast). The response is a JSON object with two string arrays. JSON
+extraction uses `ExtractJSON` with multiple fallbacks for malformed LLM output:
+
+1. Standard `triageResponse` object parse.
+2. Array-of-objects fallback (LLM wraps result in an array).
+3. Bare string-array fallback (treated as all-investigate).
+4. Empty bare-array fallback (degrades gracefully; URLs stay pending for the
+   next cycle).
 
 ---
 
@@ -297,10 +352,13 @@ natural language query.
 2. Constructs a prompt that includes the full database schema context (table
    names, column names, types, enums) and the user question.
 3. Sends to brain LLM, which generates a PostgreSQL `SELECT` statement.
-4. Validates the generated SQL: rejects non-SELECT statements, statements
+4. Strips trailing semicolons from the generated SQL (LLMs frequently append
+   them). The subsequent semicolon check then enforces single-statement
+   queries — any remaining `;` causes rejection.
+5. Validates the generated SQL: rejects non-SELECT statements, statements
    referencing disallowed tables, and statements exceeding a size limit.
-5. Executes the validated SQL against the live database with a query timeout.
-6. Returns `QueryResult{Query, SQL, Columns, Rows, RowCount, Duration}` to the
+6. Executes the validated SQL against the live database with a query timeout.
+7. Returns `QueryResult{Query, SQL, Columns, Rows, RowCount, Duration}` to the
    dashboard.
 
 Schema context tables available to the query engine: `raw_content`, `iocs`,

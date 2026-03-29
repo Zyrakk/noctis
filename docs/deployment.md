@@ -84,6 +84,11 @@ Edit `deploy/configmap.yaml` to configure your sources and matching rules before
 - `sources.web.feeds` — RSS/Atom feeds to collect
 - `matching.rules` — keyword and regex rules for alert matching
 - `llm.provider` / `llm.model` — LLM backend settings
+- `llm.budget.monthlyBudgetUSD` / `llm.budget.inputCostPer1M` / `llm.budget.outputCostPer1M` — budget limits and per-token costs for LLM usage tracking
+- `triage.triageEnabled` — enable the triage pre-filter before full LLM analysis
+- `triage.triageBatchSize` — number of items per triage batch
+- `triage.allowPatterns` / `triage.allowDomains` — patterns and domains that bypass triage and are always processed
+- `maxContentLength` — maximum content length (in characters) accepted by the pipeline; longer content is truncated
 - `discovery.domainBlacklist` — domains to exclude from auto-discovery
 - `dashboard.enabled` / `dashboard.apiKey` — enable the web dashboard (see [Dashboard](dashboard.md))
 
@@ -229,7 +234,7 @@ The `noctis-metrics` Service exposes two ports:
 | 8080 | `/auth/qr` | Telegram QR authentication page |
 | 9090 | `/metrics` | Prometheus-format metrics |
 | 3000 | `/` | Web dashboard (when `dashboard.enabled: true`) |
-| 3000 | `/api/*` | Dashboard JSON API (Bearer token required) |
+| 3000 | `/api/*` | Dashboard JSON API (`X-API-Key` header required) |
 
 Port-forward to access locally:
 
@@ -264,7 +269,11 @@ kubectl apply -f deploy/noctis.yaml
 kubectl rollout restart deployment/noctis -n noctis
 ```
 
-Database migrations run automatically when the pod starts — no manual migration step required.
+Database migrations run automatically when the pod starts — no manual migration step required. Recent migrations include:
+
+- `010_triage.sql` — creates tables and indexes for the triage subsystem
+- `011_normalize_telegram_identifiers.sql` — normalizes existing Telegram identifiers from full URLs to bare usernames
+- `012_purge_legacy_embedly_urls.sql` — removes legacy embedly URLs that are no longer needed
 
 ---
 
@@ -342,6 +351,14 @@ DELETE FROM iocs WHERE type = 'ip' AND (
   value LIKE '172.18.%' OR value LIKE '192.168.%' OR value LIKE '127.%'
 );
 ```
+
+**Budget exhaustion — workers pause for 30 minutes**
+
+When the monthly LLM budget (`llm.budget.monthlyBudgetUSD`) is exceeded, all LLM workers pause for 30 minutes and log a warning. No findings are processed during this window. To resume immediately, increase the budget in the ConfigMap, apply it, and restart the pod. To check current spend, query the `llm_usage` table or check the `/metrics` endpoint for the `noctis_llm_cost_total` gauge.
+
+**Triage batch failures from truncated JSON on long URLs**
+
+When triage batches contain items with very long embedly or tracking URLs, the LLM response may be truncated, producing invalid JSON. The triage worker logs a parse error and retries the batch with the failing items excluded. If this happens frequently, increase `maxContentLength` to allow the LLM more room, or add the noisy URL domains to `triage.allowDomains` to bypass triage for those items entirely. Migration `012_purge_legacy_embedly_urls.sql` cleans up historical data affected by this issue.
 
 **Config not mounted / changes not picked up**
 

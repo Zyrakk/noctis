@@ -56,6 +56,7 @@ Environment variable substitution is supported: `apiHash: "${TG_API_HASH}"`.
 | `sessionFile` | string | Path where the session file is stored |
 | `catchupMessages` | int | Messages to fetch per channel on startup (0 = skip) |
 | `channels` | list | Channels to monitor — see [Channel Management](#4-channel-management) |
+| `channels[].inviteHash` | string | Invite link hash for private channels (`t.me/+hash` or `t.me/joinchat/hash`) |
 
 ---
 
@@ -173,6 +174,7 @@ either a `username` or a numeric `id` — not both.
 channels:
   - username: somePublicChannel   # public channel, resolved by @username
   - id: -1001234567890            # private or already-joined channel by ID
+  - inviteHash: "abc123def456"    # private channel via invite link hash
 ```
 
 **Public channels by username** are resolved via the `ContactsResolveUsername`
@@ -183,6 +185,19 @@ subscribing, so you do not need to join them manually in the app first.
 **Private or already-joined channels by ID** use the raw numeric channel ID
 with a zero access hash. This works only for channels the account is already
 a member of.
+
+**Private channels by invite hash** use the `inviteHash` field. Noctis accepts
+hashes extracted from both `t.me/+hash` and `t.me/joinchat/hash` invite link
+formats. Provide only the hash portion, not the full URL. On startup, Noctis
+calls `MessagesCheckChatInvite` to inspect the invite, then joins the channel
+via `MessagesImportChatInvite` if the account is not already a member.
+
+Example with a full invite link `https://t.me/+abc123def456`:
+
+```yaml
+channels:
+  - inviteHash: "abc123def456"    # from t.me/+abc123def456
+```
 
 Channel names in logs and findings use the username if available, otherwise
 `channel:<id>`.
@@ -275,7 +290,10 @@ Noctis can discover new Telegram channels passively from collected content:
 
 - **Forwarded messages** carry source channel metadata. The collector records
   the originating channel name in the finding's `forward_from` metadata field.
-- The discovery engine scans all collected content for `t.me/` links.
+- The discovery engine scans all collected content for `t.me/` links, including
+  private invite links (`t.me/+hash` and `t.me/joinchat/hash`). Private
+  channels discovered this way are stored with their invite hash so they can
+  be joined later upon approval.
 - Newly discovered channels appear as `discovered` entries in the sources
   table with source type `telegram`.
 
@@ -377,3 +395,18 @@ the channel type in the Telegram app.
 Either the session is already valid (no auth needed), the collector has not
 started yet, or it is not enabled in config. Check logs and confirm
 `enabled: true` in the telegram config block.
+
+---
+
+## 10. Identifier Normalization
+
+Telegram identifiers (channel usernames, invite links) are normalized to bare
+usernames for reliable matching and deduplication. Full URLs such as
+`https://t.me/channelname` or `https://t.me/+hash` are stripped down to the
+username or hash portion before storage and comparison.
+
+Migration `011_normalize_telegram_identifiers.sql` retroactively normalizes
+all existing Telegram identifiers in the database. This migration runs
+automatically on startup and is idempotent. After it runs, all source
+identifiers use the bare form (e.g., `channelname` instead of
+`https://t.me/channelname`).
