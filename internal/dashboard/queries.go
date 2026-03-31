@@ -475,8 +475,9 @@ func queryIOCs(ctx context.Context, pool *pgxpool.Pool, f iocsFilter) (*IOCsResp
 
 // SourcesResponse wraps paginated sources.
 type SourcesResponse struct {
-	Sources []SourceItem `json:"sources"`
-	Total   int64        `json:"total"`
+	Sources    []SourceItem   `json:"sources"`
+	Total      int64          `json:"total"`
+	TypeCounts map[string]int `json:"typeCounts"`
 }
 
 func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType string, limit, offset int) (*SourcesResponse, error) {
@@ -502,10 +503,28 @@ func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType st
 		// awaiting AI classification and should not appear in the UI.
 		conditions = append(conditions, "s.status != 'pending_triage'")
 	}
+	// Type counts (status-filtered only, before adding type filter).
+	statusWhere := ""
+	if len(conditions) > 0 {
+		statusWhere = "WHERE " + strings.Join(conditions, " AND ")
+	}
+	typeCounts, err := querySourceTypeCounts(ctx, pool, statusWhere, args)
+	if err != nil {
+		return nil, err
+	}
+
+	// Type category filter.
 	if sourceType != "" {
-		p := nextArg()
-		conditions = append(conditions, fmt.Sprintf("s.type = %s", p))
-		args = append(args, sourceType)
+		switch sourceType {
+		case "telegram":
+			conditions = append(conditions, "s.type IN ('telegram_channel', 'telegram_group')")
+		case "other":
+			conditions = append(conditions, "s.type NOT IN ('rss', 'telegram_channel', 'telegram_group', 'web')")
+		default:
+			p := nextArg()
+			conditions = append(conditions, fmt.Sprintf("s.type = %s", p))
+			args = append(args, sourceType)
+		}
 	}
 
 	where := ""
@@ -515,7 +534,7 @@ func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType st
 
 	// Count total
 	var total int64
-	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM sources s "+where, args...).Scan(&total)
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM sources s "+where, args...).Scan(&total)
 	if err != nil {
 		return nil, fmt.Errorf("sources count: %w", err)
 	}
@@ -571,7 +590,37 @@ func querySources(ctx context.Context, pool *pgxpool.Pool, status, sourceType st
 		sources = []SourceItem{}
 	}
 
-	return &SourcesResponse{Sources: sources, Total: total}, nil
+	return &SourcesResponse{Sources: sources, Total: total, TypeCounts: typeCounts}, nil
+}
+
+func querySourceTypeCounts(ctx context.Context, pool *pgxpool.Pool, where string, args []interface{}) (map[string]int, error) {
+	rows, err := pool.Query(ctx, fmt.Sprintf(`
+		SELECT
+			CASE
+				WHEN s.type = 'rss' THEN 'rss'
+				WHEN s.type IN ('telegram_channel', 'telegram_group') THEN 'telegram'
+				WHEN s.type = 'web' THEN 'web'
+				ELSE 'other'
+			END AS category,
+			COUNT(*)
+		FROM sources s
+		%s
+		GROUP BY category`, where), args...)
+	if err != nil {
+		return nil, fmt.Errorf("type counts: %w", err)
+	}
+	defer rows.Close()
+
+	counts := map[string]int{"rss": 0, "telegram": 0, "web": 0, "other": 0}
+	for rows.Next() {
+		var cat string
+		var cnt int
+		if err := rows.Scan(&cat, &cnt); err != nil {
+			return nil, fmt.Errorf("type counts scan: %w", err)
+		}
+		counts[cat] = cnt
+	}
+	return counts, rows.Err()
 }
 
 func approveSource(ctx context.Context, pool *pgxpool.Pool, id string) error {

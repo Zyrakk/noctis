@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useApi, apiFetch } from '../hooks/useApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
@@ -60,19 +60,18 @@ export default function Sources() {
   const [toast, setToast] = useState(null)
   const [fadingIds, setFadingIds] = useState(new Set())
 
-  const { data, loading, refetch } = useApi(`/api/sources?status=${tab}&limit=500`)
+  const isActive = tab === 'active'
+  const apiUrl = isActive
+    ? `/api/sources?status=${tab}&limit=500`
+    : `/api/sources?status=${tab}&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}${typeFilter ? `&type=${typeFilter}` : ''}`
+  const { data, loading, refetch } = useApi(apiUrl)
+
+  const typeCounts = data?.typeCounts || { rss: 0, telegram: 0, web: 0, other: 0 }
   const allSources = data?.sources || []
 
-  const typeCounts = useMemo(() => {
-    const counts = { rss: 0, telegram: 0, web: 0, other: 0 }
-    allSources.forEach(s => counts[typeCategory(s.type)]++)
-    return counts
-  }, [allSources])
-
-  const filtered = typeFilter ? allSources.filter(s => typeCategory(s.type) === typeFilter) : allSources
-  const list = tab === 'active' ? filtered : filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-  const total = filtered.length
-  const totalPages = Math.ceil(total / PAGE_SIZE)
+  const list = isActive && typeFilter ? allSources.filter(s => typeCategory(s.type) === typeFilter) : allSources
+  const total = isActive ? list.length : (data?.total || 0)
+  const totalPages = isActive ? 1 : Math.ceil(total / PAGE_SIZE)
 
   const handleApprove = useCallback(async (id) => {
     try {
@@ -174,7 +173,7 @@ export default function Sources() {
                 : 'text-noctis-muted hover:text-noctis-text bg-noctis-surface border border-noctis-border hover:border-noctis-border'
             }`
           },
-            p.value ? `${p.label} (${typeCounts[p.value]})` : `All (${allSources.length})`
+            p.value ? `${p.label} (${typeCounts[p.value]})` : `All (${typeCounts.rss + typeCounts.telegram + typeCounts.web + typeCounts.other})`
           )
         ),
       ),
