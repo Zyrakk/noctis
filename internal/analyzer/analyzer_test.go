@@ -171,7 +171,7 @@ func TestAnalyzer_ExtractIOCs(t *testing.T) {
 	client := &mockLLMClient{
 		responses: map[string]string{
 			// extract_iocs.tmpl contains the word "Extract"
-			"Extract": `[{"type":"ip","value":"192.168.1.100","context":"C2 server","malicious":true}]`,
+			"Extract": `[{"type":"ip","value":"45.33.32.156","context":"C2 server","malicious":true}]`,
 		},
 	}
 
@@ -186,8 +186,8 @@ func TestAnalyzer_ExtractIOCs(t *testing.T) {
 	if iocs[0].Type != "ip" {
 		t.Errorf("IOC.Type = %q; want %q", iocs[0].Type, "ip")
 	}
-	if iocs[0].Value != "192.168.1.100" {
-		t.Errorf("IOC.Value = %q; want %q", iocs[0].Value, "192.168.1.100")
+	if iocs[0].Value != "45.33.32.156" {
+		t.Errorf("IOC.Value = %q; want %q", iocs[0].Value, "45.33.32.156")
 	}
 }
 
@@ -225,7 +225,7 @@ func TestAnalyzer_ExtractIOCs_FiltersMalicious(t *testing.T) {
 func TestAnalyzer_ExtractIOCs_WrappedObject(t *testing.T) {
 	client := &mockLLMClient{
 		responses: map[string]string{
-			"Extract": `{"iocs": [{"type":"ip","value":"10.0.0.1","context":"C2","malicious":true}]}`,
+			"Extract": `{"iocs": [{"type":"hash_sha256","value":"e3b0c44298fc1c149afbf4c8996fb924","context":"malware hash","malicious":true}]}`,
 		},
 	}
 
@@ -237,8 +237,8 @@ func TestAnalyzer_ExtractIOCs_WrappedObject(t *testing.T) {
 	if len(iocs) != 1 {
 		t.Fatalf("len(IOCs) = %d; want 1", len(iocs))
 	}
-	if iocs[0].Value != "10.0.0.1" {
-		t.Errorf("IOC.Value = %q; want %q", iocs[0].Value, "10.0.0.1")
+	if iocs[0].Value != "e3b0c44298fc1c149afbf4c8996fb924" {
+		t.Errorf("IOC.Value = %q; want %q", iocs[0].Value, "e3b0c44298fc1c149afbf4c8996fb924")
 	}
 }
 

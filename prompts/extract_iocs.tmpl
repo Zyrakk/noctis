@@ -21,6 +21,11 @@ DO NOT extract:
 - Domains hosting the blog post or research report — only extract domains that are part of the ATTACK INFRASTRUCTURE
 - Private/reserved IP addresses (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, ::1, fe80::)
 - Example or placeholder values (example.com, example.org, test.local, foo.bar, *.example.*, *.test, *.invalid, *.localhost)
+- Generic/placeholder attacker domains (attacker-controlled.com, attacker-controlled-domain.com, c2.example.com, phish.example.com)
+- Descriptive pseudo-URLs that are not real addresses (e.g., "http://C2 server URL", "http://*.zip", "http://output.log")
+- Defanged example URLs from report narratives (e.g., gamaredon[.]com/update, evil[.]com/payload)
+- URLs containing wildcard characters (*) or spaces
+- Bare filenames disguised as URLs (e.g., http://2025.bin, http://trx38.zip)
 - Git commit hashes — only extract file hashes of actual malicious binaries or samples
 - Version numbers, build identifiers, or other non-IOC hex strings
 - Legitimate tool domains (github.com, pypi.org, npmjs.com, docker.io, hub.docker.com)

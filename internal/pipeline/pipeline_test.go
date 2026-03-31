@@ -96,7 +96,7 @@ func TestPipeline_EndToEnd(t *testing.T) {
 			// classify.tmpl contains "Classify"
 			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party"}`,
 			// extract_iocs.tmpl contains "Extract"
-			"Extract": `[{"type":"domain","value":"example.com","context":"leaked creds","malicious":true}]`,
+			"Extract": `[{"type":"hash_sha256","value":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4","context":"leaked creds","malicious":true}]`,
 			// severity.tmpl contains "Assess"
 			"Assess": `{"severity":"critical","reasoning":"Active credentials exposed"}`,
 			// summarize.tmpl contains "Write"
@@ -147,8 +147,8 @@ func TestPipeline_EndToEnd(t *testing.T) {
 	if len(ef.IOCs) != 1 {
 		t.Fatalf("IOCs count = %d; want 1", len(ef.IOCs))
 	}
-	if ef.IOCs[0].Value != "example.com" {
-		t.Errorf("IOC value = %q; want %q", ef.IOCs[0].Value, "example.com")
+	if ef.IOCs[0].Value != "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4" {
+		t.Errorf("IOC value = %q; want %q", ef.IOCs[0].Value, "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4")
 	}
 	if ef.LLMAnalysis == "" {
 		t.Error("LLMAnalysis is empty; want non-empty summary")

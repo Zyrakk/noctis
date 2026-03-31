@@ -115,7 +115,7 @@ func makeFakeLLM() *fakeLLMClient {
 	return &fakeLLMClient{
 		responses: map[string]string{
 			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party","severity":"critical","reasoning":"Active credentials exposed"}`,
-			"Extract":  `[{"type":"domain","value":"example.com","context":"leaked creds","malicious":true}]`,
+			"Extract":  `[{"type":"hash_sha256","value":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4","context":"leaked creds","malicious":true}]`,
 			"Assess the severity":   `{"severity":"critical","reasoning":"Active credentials exposed"}`,
 			"Write":    "Credentials for example.com were leaked on Telegram.",
 		},
@@ -229,8 +229,8 @@ func TestIngestPipeline_ArchiveAndAlert(t *testing.T) {
 	if ef.Severity != models.SeverityCritical {
 		t.Errorf("Severity = %v; want SeverityCritical", ef.Severity)
 	}
-	if len(ef.IOCs) != 1 || ef.IOCs[0].Value != "example.com" {
-		t.Errorf("IOCs = %v; want [{domain example.com ...}]", ef.IOCs)
+	if len(ef.IOCs) != 1 || ef.IOCs[0].Value != "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4" {
+		t.Errorf("IOCs = %v; want [{hash_sha256 a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4 ...}]", ef.IOCs)
 	}
 	if ef.LLMAnalysis == "" {
 		t.Error("LLMAnalysis is empty; want non-empty summary")

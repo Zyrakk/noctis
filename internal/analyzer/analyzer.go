@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/Zyrakk/noctis/internal/llm"
 	"github.com/Zyrakk/noctis/internal/models"
@@ -104,8 +105,9 @@ type iocEntry struct {
 
 // Analyzer uses an LLM client to classify, enrich, and summarise findings.
 type Analyzer struct {
-	client    llm.LLMClient
-	templates map[string]*template.Template
+	client       llm.LLMClient
+	templates    map[string]*template.Template
+	iocValidator *IOCValidator
 }
 
 // New constructs an Analyzer that loads all *.tmpl files from promptsDir.
@@ -114,8 +116,9 @@ type Analyzer struct {
 // load successfully.
 func New(client llm.LLMClient, promptsDir string) *Analyzer {
 	a := &Analyzer{
-		client:    client,
-		templates: make(map[string]*template.Template),
+		client:       client,
+		templates:    make(map[string]*template.Template),
+		iocValidator: NewIOCValidator(3 * time.Second),
 	}
 
 	entries, err := os.ReadDir(promptsDir)
@@ -372,6 +375,10 @@ func (a *Analyzer) ExtractIOCs(ctx context.Context, finding *models.Finding) ([]
 			Context: e.Context,
 		})
 	}
+
+	// Post-LLM validation: filter out placeholder/fake IOCs.
+	iocs = a.iocValidator.FilterValidIOCs(ctx, iocs)
+
 	return iocs, nil
 }
 
