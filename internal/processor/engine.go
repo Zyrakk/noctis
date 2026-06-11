@@ -12,6 +12,12 @@ import (
 	"github.com/Zyrakk/noctis/internal/modules"
 )
 
+// JunkGateMetrics records junk-gate hits. Satisfied by
+// dispatcher.PrometheusMetrics. A nil value disables recording.
+type JunkGateMetrics interface {
+	RecordJunkGate()
+}
+
 // ProcessingEngine orchestrates the classification and extraction pipelines.
 // Each sub-module has its own StatusTracker registered with the module registry.
 type ProcessingEngine struct {
@@ -27,6 +33,7 @@ type ProcessingEngine struct {
 	workerCfg        config.CollectionConfig
 	maxContentLength int
 	registry         *modules.Registry
+	junkMetrics      JunkGateMetrics
 
 	// Poison item tracking — shared across workers of the same type.
 	classifyFailCounts  map[string]int
@@ -56,6 +63,7 @@ func NewProcessingEngine(
 	classifyConcurrency int,
 	extractConcurrency int,
 	iocLifecycleCfg config.IOCLifecycleConfig,
+	junkMetrics JunkGateMetrics,
 ) *ProcessingEngine {
 	// Apply defaults for zero-value config fields.
 	if workerCfg.ClassificationWorkers <= 0 {
@@ -100,6 +108,7 @@ func NewProcessingEngine(
 		workerCfg:        workerCfg,
 		maxContentLength: workerCfg.MaxContentLength,
 		registry:         registry,
+		junkMetrics:      junkMetrics,
 
 		classifyFailCounts:  make(map[string]int),
 		extractFailCounts:   make(map[string]int),

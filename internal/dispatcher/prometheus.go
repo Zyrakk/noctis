@@ -27,6 +27,7 @@ type PrometheusMetrics struct {
 	networkPolicyActive  prometheus.Gauge
 	graphEntitiesTotal   *prometheus.GaugeVec
 	graphEdgesTotal      *prometheus.GaugeVec
+	junkGateTotal        prometheus.Counter
 }
 
 // NewPrometheusMetrics creates and registers all noctis_* metrics with the
@@ -121,6 +122,11 @@ func NewPrometheusMetrics(reg prometheus.Registerer) *PrometheusMetrics {
 		Help: "Total number of edges in the knowledge graph, by relationship.",
 	}, []string{"relationship"})
 
+	m.junkGateTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "noctis_junk_gate_total",
+		Help: "Total number of items short-circuited as junk before LLM classification.",
+	})
+
 	reg.MustRegister(
 		m.findingsTotal,
 		m.collectorLastSuccess,
@@ -139,6 +145,7 @@ func NewPrometheusMetrics(reg prometheus.Registerer) *PrometheusMetrics {
 		m.networkPolicyActive,
 		m.graphEntitiesTotal,
 		m.graphEdgesTotal,
+		m.junkGateTotal,
 	)
 
 	return m
@@ -202,4 +209,9 @@ func (m *PrometheusMetrics) RecordLLMRequest(provider, task string, latencySecon
 // RecordLLMError increments the llmErrorsTotal counter for the given provider.
 func (m *PrometheusMetrics) RecordLLMError(provider string) {
 	m.llmErrorsTotal.WithLabelValues(provider).Inc()
+}
+
+// RecordJunkGate increments the junkGateTotal counter.
+func (m *PrometheusMetrics) RecordJunkGate() {
+	m.junkGateTotal.Inc()
 }

@@ -256,6 +256,7 @@ func newServeCmd() *cobra.Command {
 				classifyConcurrency,
 				extractConcurrency,
 				cfg.IOCLifecycle,
+				metrics,
 			)
 
 			// Brain analyzer — Gemini 3.1 Pro for analytical reasoning (falls back to full LLM).

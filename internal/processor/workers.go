@@ -71,6 +71,8 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 			if isJunk(entry.Content) {
 				if err := e.archive.MarkClassified(ctx, entry.ID, "irrelevant", []string{"junk_gate"}, "info", "", "unknown", CurrentClassificationVersion); err != nil {
 					log.Printf("processor: classification worker %d: junk gate mark error for %s: %v", workerID, entry.ID, err)
+				} else if e.junkMetrics != nil {
+					e.junkMetrics.RecordJunkGate()
 				}
 				continue
 			}

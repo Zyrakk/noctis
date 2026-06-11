@@ -65,6 +65,19 @@ func TestPrometheusMetrics_RecordFinding(t *testing.T) {
 	}
 }
 
+// TestPrometheusMetrics_RecordJunkGate verifies that RecordJunkGate
+// increments the junk gate counter.
+func TestPrometheusMetrics_RecordJunkGate(t *testing.T) {
+	m := newIsolatedMetrics()
+
+	m.RecordJunkGate()
+	m.RecordJunkGate()
+
+	if got := testutil.ToFloat64(m.junkGateTotal); got != 2 {
+		t.Errorf("junkGateTotal = %v; want 2", got)
+	}
+}
+
 // TestPrometheusMetrics_RecordMatcherResult verifies that RecordMatcherMatch
 // and RecordMatcherDrop update their respective counters correctly.
 func TestPrometheusMetrics_RecordMatcherResult(t *testing.T) {
