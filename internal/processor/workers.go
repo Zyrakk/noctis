@@ -65,6 +65,16 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 				continue
 			}
 
+			// Junk gate: rule-based pre-filter — obvious garbage is marked
+			// irrelevant without an LLM call. IOC-bearing content is rescued
+			// inside isJunk.
+			if isJunk(entry.Content) {
+				if err := e.archive.MarkClassified(ctx, entry.ID, "irrelevant", []string{"junk_gate"}, "info", "", "unknown", CurrentClassificationVersion); err != nil {
+					log.Printf("processor: classification worker %d: junk gate mark error for %s: %v", workerID, entry.ID, err)
+				}
+				continue
+			}
+
 			finding := FindingFromRawContentWithLimit(entry, e.maxContentLength)
 
 			// Classify (fast LLM).
