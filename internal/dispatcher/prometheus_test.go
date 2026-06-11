@@ -78,6 +78,19 @@ func TestPrometheusMetrics_RecordJunkGate(t *testing.T) {
 	}
 }
 
+// TestPrometheusMetrics_RecordExtractionSkipped verifies that
+// RecordExtractionSkipped increments the extraction skip counter.
+func TestPrometheusMetrics_RecordExtractionSkipped(t *testing.T) {
+	m := newIsolatedMetrics()
+
+	m.RecordExtractionSkipped()
+	m.RecordExtractionSkipped()
+
+	if got := testutil.ToFloat64(m.extractionSkippedTotal); got != 2 {
+		t.Errorf("extractionSkippedTotal = %v; want 2", got)
+	}
+}
+
 // TestPrometheusMetrics_RecordMatcherResult verifies that RecordMatcherMatch
 // and RecordMatcherDrop update their respective counters correctly.
 func TestPrometheusMetrics_RecordMatcherResult(t *testing.T) {

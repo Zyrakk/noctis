@@ -10,24 +10,25 @@ import (
 // PrometheusMetrics holds all noctis_* Prometheus counters, gauges, and
 // histograms. Create one instance per process via NewPrometheusMetrics.
 type PrometheusMetrics struct {
-	findingsTotal        *prometheus.CounterVec
-	collectorLastSuccess *prometheus.GaugeVec
-	collectorErrorsTotal *prometheus.CounterVec
-	matcherMatchedTotal  *prometheus.CounterVec
-	matcherDroppedTotal  prometheus.Counter
-	llmRequestsTotal     *prometheus.CounterVec
-	llmLatencySeconds    *prometheus.HistogramVec
-	llmErrorsTotal       *prometheus.CounterVec
-	canaryActiveTotal    prometheus.Gauge
-	canaryTriggeredTotal prometheus.Counter
-	channelMessagesTotal *prometheus.CounterVec
-	actorPostsTotal      *prometheus.CounterVec
-	actorSeverityScore   *prometheus.GaugeVec
-	iocExtractedTotal    *prometheus.CounterVec
-	networkPolicyActive  prometheus.Gauge
-	graphEntitiesTotal   *prometheus.GaugeVec
-	graphEdgesTotal      *prometheus.GaugeVec
-	junkGateTotal        prometheus.Counter
+	findingsTotal          *prometheus.CounterVec
+	collectorLastSuccess   *prometheus.GaugeVec
+	collectorErrorsTotal   *prometheus.CounterVec
+	matcherMatchedTotal    *prometheus.CounterVec
+	matcherDroppedTotal    prometheus.Counter
+	llmRequestsTotal       *prometheus.CounterVec
+	llmLatencySeconds      *prometheus.HistogramVec
+	llmErrorsTotal         *prometheus.CounterVec
+	canaryActiveTotal      prometheus.Gauge
+	canaryTriggeredTotal   prometheus.Counter
+	channelMessagesTotal   *prometheus.CounterVec
+	actorPostsTotal        *prometheus.CounterVec
+	actorSeverityScore     *prometheus.GaugeVec
+	iocExtractedTotal      *prometheus.CounterVec
+	networkPolicyActive    prometheus.Gauge
+	graphEntitiesTotal     *prometheus.GaugeVec
+	graphEdgesTotal        *prometheus.GaugeVec
+	junkGateTotal          prometheus.Counter
+	extractionSkippedTotal prometheus.Counter
 }
 
 // NewPrometheusMetrics creates and registers all noctis_* metrics with the
@@ -127,6 +128,11 @@ func NewPrometheusMetrics(reg prometheus.Registerer) *PrometheusMetrics {
 		Help: "Total number of items short-circuited as junk before LLM classification.",
 	})
 
+	m.extractionSkippedTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "noctis_extraction_skipped_total",
+		Help: "Total number of irrelevant items skipped before LLM IOC/entity extraction.",
+	})
+
 	reg.MustRegister(
 		m.findingsTotal,
 		m.collectorLastSuccess,
@@ -146,6 +152,7 @@ func NewPrometheusMetrics(reg prometheus.Registerer) *PrometheusMetrics {
 		m.graphEntitiesTotal,
 		m.graphEdgesTotal,
 		m.junkGateTotal,
+		m.extractionSkippedTotal,
 	)
 
 	return m
@@ -214,4 +221,9 @@ func (m *PrometheusMetrics) RecordLLMError(provider string) {
 // RecordJunkGate increments the junkGateTotal counter.
 func (m *PrometheusMetrics) RecordJunkGate() {
 	m.junkGateTotal.Inc()
+}
+
+// RecordExtractionSkipped increments the extractionSkippedTotal counter.
+func (m *PrometheusMetrics) RecordExtractionSkipped() {
+	m.extractionSkippedTotal.Inc()
 }
