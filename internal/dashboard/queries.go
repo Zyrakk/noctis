@@ -2094,18 +2094,23 @@ func queryIntelligenceOverview(ctx context.Context, pool *pgxpool.Pool) (*Intell
 	pool.QueryRow(ctx, `SELECT COUNT(*) FROM vulnerabilities`).Scan(&overview.Metrics.TrackedVulns)
 	pool.QueryRow(ctx, `SELECT COUNT(*) FROM vulnerabilities WHERE kev_listed = TRUE`).Scan(&overview.Metrics.KEVCount)
 
-	// 2. Active threat actors
+	// 2. Active threat actors — fetch a buffer of 40, keep up to 10 that
+	// show actual activity (BC3); dismissed actors are filtered at source.
 	actorRows, err := pool.Query(ctx, `
 		SELECT e.id, COALESCE(e.properties->>'name', e.id),
 		       COALESCE(e.properties->>'threat_level', 'unknown'),
 		       COALESCE(e.updated_at, e.created_at)
 		FROM entities e
 		WHERE e.type = 'threat_actor'
+		  AND e.dismissed = FALSE
 		ORDER BY COALESCE(e.updated_at, e.created_at) DESC
-		LIMIT 10`)
+		LIMIT 40`)
 	if err == nil {
 		defer actorRows.Close()
 		for actorRows.Next() {
+			if len(overview.ActiveActors) >= 10 {
+				break
+			}
 			var a ActorSummary
 			if err := actorRows.Scan(&a.EntityID, &a.Name, &a.ThreatLevel, &a.LastSeen); err != nil {
 				continue
@@ -2144,6 +2149,12 @@ func queryIntelligenceOverview(ctx context.Context, pool *pgxpool.Pool) (*Intell
 				FROM edges ed
 				JOIN entities e2 ON e2.id = ed.target_id
 				WHERE ed.source_id = $1 AND e2.type IN ('ip', 'domain')`, a.EntityID).Scan(&a.LinkedInfra)
+
+			// Drop actors with no recent findings and no linked context —
+			// they render as empty ghost cards (BC3).
+			if a.RecentFindings == 0 && len(a.LinkedMalware) == 0 && a.LinkedInfra == 0 {
+				continue
+			}
 
 			// Latest note
 			var noteContent string
