@@ -248,29 +248,6 @@ export default function Intelligence({ navigate }) {
               : React.createElement('p', { className: 'text-xs text-noctis-dim py-4 text-center' }, 'No tracked vulnerabilities.'),
           ),
         ),
-
-        // Recent Notes
-        React.createElement('div', null,
-          React.createElement('h2', { className: 'text-sm font-medium text-noctis-dim uppercase tracking-wider mb-3' }, 'Recent Analytical Notes'),
-          React.createElement('div', { className: 'space-y-2' },
-            overview.recentNotes?.length > 0
-              ? overview.recentNotes.slice(0, 5).map(n =>
-                  React.createElement('div', {
-                    key: n.id,
-                    className: 'p-2 border border-white/[0.06] rounded'
-                  },
-                    React.createElement('div', { className: 'flex items-center gap-2 mb-0.5' },
-                      React.createElement('span', {
-                        className: 'text-[10px] px-1.5 py-0.5 bg-noctis-surface rounded text-noctis-dim'
-                      }, n.noteType),
-                      React.createElement('span', { className: 'text-[10px] text-noctis-dim' }, n.createdBy),
-                    ),
-                    React.createElement('p', { className: 'text-xs text-noctis-text line-clamp-1' }, n.title),
-                  )
-                )
-              : React.createElement('p', { className: 'text-xs text-noctis-dim py-4 text-center' }, 'No analytical notes.'),
-          ),
-        ),
       ),
     ),
   )
