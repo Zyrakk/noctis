@@ -164,6 +164,7 @@ entity clusters. Results are stored as `correlation_candidates`.
 | `intervalMinutes` | int | `15` | How often the correlation engine runs (in minutes). |
 | `minEvidenceThreshold` | int | `3` | Minimum number of signals required to emit a candidate correlation. |
 | `temporalWindowHours` | int | `48` | Look-back window (in hours) used for temporal overlap detection. |
+| `actor_blacklist` | []string | `[]` | Handles never promoted to `threat_actor` entities by the correlator (case-insensitive exact match). Built-in rules also drop `*_bot` handles, names shorter than 3 visible characters, and generic names (admin, support, bot, info, news, channel). |
 
 ---
 

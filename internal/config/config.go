@@ -80,10 +80,11 @@ type DashboardConfig struct {
 
 // CorrelationConfig controls the rule-based correlation engine.
 type CorrelationConfig struct {
-	Enabled              bool `yaml:"enabled"`
-	IntervalMinutes      int  `yaml:"intervalMinutes"`
-	MinEvidenceThreshold int  `yaml:"minEvidenceThreshold"`
-	TemporalWindowHours  int  `yaml:"temporalWindowHours"`
+	Enabled              bool     `yaml:"enabled"`
+	IntervalMinutes      int      `yaml:"intervalMinutes"`
+	MinEvidenceThreshold int      `yaml:"minEvidenceThreshold"`
+	TemporalWindowHours  int      `yaml:"temporalWindowHours"`
+	ActorBlacklist       []string `yaml:"actor_blacklist"`
 }
 
 // AnalystConfig controls the LLM-based correlation analyst.

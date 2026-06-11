@@ -7,6 +7,8 @@ import (
 	"log"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Zyrakk/noctis/internal/archive"
 	"github.com/Zyrakk/noctis/internal/config"
@@ -44,22 +46,69 @@ var toolWhitelist = map[string]bool{
 	"phishing": true,
 }
 
+// actorStoplist contains generic role/handle names that must never be
+// promoted to threat_actor entities. Mirrors the toolWhitelist pattern:
+// lowercase exact match.
+var actorStoplist = map[string]bool{
+	"admin": true, "support": true, "bot": true,
+	"info": true, "news": true, "channel": true,
+}
+
+// stripInvisible removes whitespace, control, and zero-width/format runes so
+// length checks operate on what a human actually sees.
+func stripInvisible(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.IsSpace(r) || unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 // Correlator is the correlation sub-module with its own status tracking.
 type Correlator struct {
-	store  CorrelationStore
-	cfg    config.CorrelationConfig
-	status *modules.StatusTracker
+	store          CorrelationStore
+	cfg            config.CorrelationConfig
+	actorBlacklist map[string]bool
+	status         *modules.StatusTracker
 }
 
 // NewCorrelator creates a correlator bound to the given store and config.
 func NewCorrelator(store CorrelationStore, cfg config.CorrelationConfig) *Correlator {
+	blacklist := make(map[string]bool, len(cfg.ActorBlacklist))
+	for _, h := range cfg.ActorBlacklist {
+		blacklist[strings.ToLower(strings.TrimSpace(h))] = true
+	}
 	c := &Correlator{
-		store:  store,
-		cfg:    cfg,
-		status: modules.NewStatusTracker(modules.ModCorrelator, "Correlator", "brain"),
+		store:          store,
+		cfg:            cfg,
+		actorBlacklist: blacklist,
+		status:         modules.NewStatusTracker(modules.ModCorrelator, "Correlator", "brain"),
 	}
 	c.status.SetEnabled(cfg.Enabled)
 	return c
+}
+
+// isGarbageActorHandle reports whether a handle must not become a
+// threat_actor entity: bot accounts, configured blacklist entries, names that
+// are invisible or too short once zero-width/control characters are stripped,
+// and generic role names (BC1).
+func (c *Correlator) isGarbageActorHandle(handle string) bool {
+	stripped := stripInvisible(handle)
+	if utf8.RuneCountInString(stripped) < 3 {
+		return true // covers whitespace/zero-width-only and ultra-short handles
+	}
+	strippedLower := strings.ToLower(stripped)
+	if strings.HasSuffix(strippedLower, "_bot") {
+		return true
+	}
+	trimmedLower := strings.ToLower(strings.TrimSpace(handle))
+	if c.actorBlacklist[trimmedLower] || c.actorBlacklist[strippedLower] {
+		return true
+	}
+	return actorStoplist[trimmedLower] || actorStoplist[strippedLower]
 }
 
 // Run starts the correlation engine on a periodic interval and blocks until
@@ -226,6 +275,11 @@ func (c *Correlator) correlateHandleReuse(ctx context.Context) (correlations, ca
 	}
 
 	for _, r := range results {
+		// BC1: never promote bot/garbage handles to threat_actor entities.
+		if c.isGarbageActorHandle(r.Author) {
+			continue
+		}
+
 		signalCount := r.SourceCount
 		authorID := r.AuthorID
 		if authorID == "" {

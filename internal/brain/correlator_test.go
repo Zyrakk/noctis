@@ -185,6 +185,67 @@ func TestCorrelateHandleReuse_AboveThreshold(t *testing.T) {
 	}
 }
 
+func TestIsGarbageActorHandle(t *testing.T) {
+	c := NewCorrelator(newMockCorrStore(), config.CorrelationConfig{
+		ActorBlacklist: []string{"KnownSpamBot", "Канал Новостей"},
+	})
+
+	tests := []struct {
+		name   string
+		handle string
+		want   bool
+	}{
+		{"legit latin handle", "IntelBroker", false},
+		{"legit cyrillic handle", "ПродавецДоступов", false},
+		{"legit short-ish cyrillic", "Иван", false},
+		{"bot suffix", "feed_bot", true},
+		{"bot suffix uppercase", "FEED_BOT", true},
+		{"bot suffix with trailing zero-width", "feed_bot\u200b", true},
+		{"config blacklist case-insensitive", "knownspambot", true},
+		{"config blacklist cyrillic", "канал новостей", true},
+		{"stoplist admin", "Admin", true},
+		{"stoplist support", "support", true},
+		{"stoplist bot", "bot", true},
+		{"stoplist info", "info", true},
+		{"stoplist news", "News", true},
+		{"stoplist channel", "Channel", true},
+		{"too short latin", "ab", true},
+		{"too short cyrillic", "Ив", true},
+		{"two visible runes padded with zero-width", "a\u200b\u200cb", true},
+		{"whitespace only", "   ", true},
+		{"zero-width only", "\u200b\u200d\ufeff", true},
+		{"empty", "", true},
+		{"control chars only", "\x01\x02\x03", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := c.isGarbageActorHandle(tt.handle); got != tt.want {
+				t.Errorf("isGarbageActorHandle(%q) = %v, want %v", tt.handle, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCorrelateHandleReuse_SkipsGarbageHandles(t *testing.T) {
+	mock := newMockCorrStore()
+	mock.handleReuse = []archive.HandleReuseResult{
+		{Author: "spam_bot", AuthorID: "b1", Sources: []string{"a", "b", "c"}, FindingIDs: []string{"f1", "f2", "f3"}, SourceCount: 3},
+		{Author: "IntelBroker", AuthorID: "ib", Sources: []string{"a", "b", "c"}, FindingIDs: []string{"f4", "f5", "f6"}, SourceCount: 3},
+	}
+	c := makeTestCorrelator(mock)
+
+	corrs, cands := c.correlateHandleReuse(context.Background())
+	if corrs != 1 || cands != 0 {
+		t.Errorf("got %d correlations, %d candidates; want 1, 0", corrs, cands)
+	}
+	if _, ok := mock.upsertedEntities["entity:threat_actor:spam_bot"]; ok {
+		t.Error("garbage handle spam_bot was upserted as threat_actor")
+	}
+	if _, ok := mock.upsertedEntities["entity:threat_actor:intelbroker"]; !ok {
+		t.Error("legit handle IntelBroker was not upserted")
+	}
+}
+
 func TestCorrelateTemporalOverlap_AboveThreshold(t *testing.T) {
 	mock := newMockCorrStore()
 	mock.temporalOverlap = []archive.TemporalOverlapResult{
