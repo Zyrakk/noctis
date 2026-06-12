@@ -1,0 +1,3 @@
+# Line-ending (CRLF→LF) + gofmt normalization — no functional changes.
+# git blame ignores these revisions by default. See commit message.
+9229a8da0e753b17fb69dba31a4443a882f5f3eb
