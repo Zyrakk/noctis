@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/Zyrakk/noctis/internal/archive"
 	"github.com/Zyrakk/noctis/internal/llm"
 	"github.com/Zyrakk/noctis/internal/models"
 )
@@ -71,8 +72,8 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 			if isJunk(entry.Content) {
 				if err := e.archive.MarkClassified(ctx, entry.ID, "irrelevant", []string{"junk_gate"}, "info", "", "unknown", CurrentClassificationVersion); err != nil {
 					log.Printf("processor: classification worker %d: junk gate mark error for %s: %v", workerID, entry.ID, err)
-				} else if e.junkMetrics != nil {
-					e.junkMetrics.RecordJunkGate()
+				} else if e.pipelineMetrics != nil {
+					e.pipelineMetrics.RecordJunkGate()
 				}
 				continue
 			}
@@ -172,6 +173,32 @@ func (e *ProcessingEngine) classifyPipelineWorker(ctx context.Context, workerID 
 	}
 }
 
+// entityExtractionMarker is the subset of archive.Store needed to take an
+// item out of the extraction queue. Narrowed for testability.
+type entityExtractionMarker interface {
+	MarkEntitiesExtracted(ctx context.Context, id string) error
+}
+
+// skipIrrelevantExtraction short-circuits the extraction pipeline for
+// irrelevant items (junk-gated and LLM-classified alike): they are marked
+// entities_extracted so they leave the queue, without spending the IOC or
+// entity extraction LLM calls. Returns true when the entry was handled.
+// On a mark error the entry is still reported handled (no LLM calls); it
+// stays in the queue and the mark is retried on the next fetch.
+func skipIrrelevantExtraction(ctx context.Context, workerID int, entry archive.RawContent, store entityExtractionMarker, metrics PipelineMetrics) bool {
+	if entry.Category != "irrelevant" {
+		return false
+	}
+	if err := store.MarkEntitiesExtracted(ctx, entry.ID); err != nil {
+		log.Printf("processor: entity extraction worker %d: extraction skip mark error for %s: %v", workerID, entry.ID, err)
+		return true
+	}
+	if metrics != nil {
+		metrics.RecordExtractionSkipped()
+	}
+	return true
+}
+
 // extractPipelineWorker polls for classified-but-not-extracted content and runs
 // IOCExtractor → GraphBridge → EntityExtractor → GraphBridge pipeline.
 func (e *ProcessingEngine) extractPipelineWorker(ctx context.Context, workerID int) {
@@ -205,6 +232,13 @@ func (e *ProcessingEngine) extractPipelineWorker(ctx context.Context, workerID i
 		for _, entry := range entries {
 			if ctx.Err() != nil {
 				return
+			}
+
+			// Extraction skip: irrelevant items never reach the IOC/entity
+			// extraction LLMs. Runs before the budget breaker so the
+			// irrelevant backlog keeps draining during budget pauses.
+			if skipIrrelevantExtraction(ctx, workerID, entry, e.archive, e.pipelineMetrics) {
+				continue
 			}
 
 			// Circuit breaker: if budget is exhausted, pause all workers.
