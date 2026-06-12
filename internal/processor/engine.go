@@ -23,11 +23,11 @@ type PipelineMetrics interface {
 // ProcessingEngine orchestrates the classification and extraction pipelines.
 // Each sub-module has its own StatusTracker registered with the module registry.
 type ProcessingEngine struct {
-	classifier  *Classifier
-	summarizer  *Summarizer
-	iocExtract  *IOCExtractor
-	entExtract  *EntityExtractor
-	graphBridge *GraphBridge
+	classifier   *Classifier
+	summarizer   *Summarizer
+	iocExtract   *IOCExtractor
+	entExtract   *EntityExtractor
+	graphBridge  *GraphBridge
 	librarian    *Librarian
 	iocLifecycle *IOCLifecycleManager
 
@@ -99,13 +99,13 @@ func NewProcessingEngine(
 	registry.Register(iocLifecycle.status)
 
 	return &ProcessingEngine{
-		classifier:  classifier,
-		summarizer:  summarizer,
-		iocExtract:  iocExtract,
-		entExtract:  entExtract,
-		graphBridge: graphBridge,
-		librarian:    librarian,
-		iocLifecycle: iocLifecycle,
+		classifier:       classifier,
+		summarizer:       summarizer,
+		iocExtract:       iocExtract,
+		entExtract:       entExtract,
+		graphBridge:      graphBridge,
+		librarian:        librarian,
+		iocLifecycle:     iocLifecycle,
 		archive:          archiveStore,
 		workerCfg:        workerCfg,
 		maxContentLength: workerCfg.MaxContentLength,

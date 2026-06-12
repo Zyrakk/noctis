@@ -19,24 +19,24 @@ import (
 // RawContent is the archive-specific representation of a collected item.
 // It mirrors the raw_content table schema from 003_pivot.sql.
 type RawContent struct {
-	ID                string
-	SourceType        string
-	SourceID          string
-	SourceName        string
-	Content           string
-	ContentHash       string
-	Author            string
-	AuthorID          string
-	URL               string
-	Language          string
-	CollectedAt       time.Time
-	PostedAt          *time.Time
-	Metadata          map[string]interface{}
-	Classified        bool
-	Category          string
-	Tags              []string
-	Severity          string
-	Summary           string
+	ID                    string
+	SourceType            string
+	SourceID              string
+	SourceName            string
+	Content               string
+	ContentHash           string
+	Author                string
+	AuthorID              string
+	URL                   string
+	Language              string
+	CollectedAt           time.Time
+	PostedAt              *time.Time
+	Metadata              map[string]interface{}
+	Classified            bool
+	Category              string
+	Tags                  []string
+	Severity              string
+	Summary               string
 	EntitiesExtracted     bool
 	Provenance            string
 	ClassificationVersion int

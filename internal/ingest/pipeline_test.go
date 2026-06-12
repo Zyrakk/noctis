@@ -114,10 +114,10 @@ func makeTestRules() []config.RuleConfig {
 func makeFakeLLM() *fakeLLMClient {
 	return &fakeLLMClient{
 		responses: map[string]string{
-			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party","severity":"critical","reasoning":"Active credentials exposed"}`,
-			"Extract":  `[{"type":"hash_sha256","value":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4","context":"leaked creds","malicious":true}]`,
-			"Assess the severity":   `{"severity":"critical","reasoning":"Active credentials exposed"}`,
-			"Write":    "Credentials for example.com were leaked on Telegram.",
+			"Classify":            `{"category":"credential_leak","confidence":0.95,"provenance":"first_party","severity":"critical","reasoning":"Active credentials exposed"}`,
+			"Extract":             `[{"type":"hash_sha256","value":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4","context":"leaked creds","malicious":true}]`,
+			"Assess the severity": `{"severity":"critical","reasoning":"Active credentials exposed"}`,
+			"Write":               "Credentials for example.com were leaked on Telegram.",
 		},
 	}
 }
@@ -317,4 +317,3 @@ func TestIngestPipeline_Dedup(t *testing.T) {
 		t.Errorf("archive entry count = %d; want 1 (dedup failed)", fa.entryCount())
 	}
 }
-

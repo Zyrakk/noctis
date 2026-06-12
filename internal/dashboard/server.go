@@ -35,11 +35,11 @@ type NLQueryResult struct {
 
 // Server serves the Noctis web dashboard and API.
 type Server struct {
-	pool            *pgxpool.Pool
-	apiKey          string
-	registry        *modules.Registry
-	mux             *http.ServeMux
-	httpSrv         *http.Server
+	pool                *pgxpool.Pool
+	apiKey              string
+	registry            *modules.Registry
+	mux                 *http.ServeMux
+	httpSrv             *http.Server
 	queryEngine         NLQueryEngine
 	spendingTracker     *llm.SpendingTracker
 	fastSpendingTracker *llm.SpendingTracker

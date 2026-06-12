@@ -23,7 +23,7 @@ func NewCRTShProvider() *CRTShProvider {
 	}
 }
 
-func (p *CRTShProvider) Name() string            { return "crtsh" }
+func (p *CRTShProvider) Name() string             { return "crtsh" }
 func (p *CRTShProvider) SupportedTypes() []string { return []string{"domain"} }
 func (p *CRTShProvider) RateLimit() time.Duration { return 5 * time.Second }
 

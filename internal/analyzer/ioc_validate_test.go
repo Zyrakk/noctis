@@ -210,9 +210,9 @@ func TestRejectByPattern(t *testing.T) {
 
 func TestFilterByDNS(t *testing.T) {
 	dns := map[string][]string{
-		"real-c2.xyz":     {"93.184.216.34"},
-		"legit-evil.com":  {"1.2.3.4"},
-		"deadsite.onion":  {}, // shouldn't matter — .onion is skipped
+		"real-c2.xyz":    {"93.184.216.34"},
+		"legit-evil.com": {"1.2.3.4"},
+		"deadsite.onion": {}, // shouldn't matter — .onion is skipped
 	}
 	v := newTestValidator(dns)
 	ctx := context.Background()
@@ -283,15 +283,15 @@ func TestFilterValidIOCs_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	input := []models.IOC{
-		{Type: models.IOCTypeDomain, Value: "real-c2.xyz"},              // pass both layers
-		{Type: models.IOCTypeDomain, Value: "example.com"},             // rejected by pattern
-		{Type: models.IOCTypeURL, Value: "http://C2 server URL"},       // rejected by pattern (spaces)
-		{Type: models.IOCTypeDomain, Value: "nxdomain-fake-9999.xyz"},  // pass pattern, fail DNS
-		{Type: models.IOCTypeIP, Value: "127.0.0.1"},                   // rejected by pattern (loopback)
-		{Type: models.IOCTypeHashSHA256, Value: "aabbccdd"},            // pass (no checks for hashes beyond pattern)
-		{Type: models.IOCTypeDomain, Value: "gamaredon[.]com"},         // rejected by pattern (defanged)
-		{Type: models.IOCTypeURL, Value: "http://*.zip"},               // rejected by pattern (wildcard)
-		{Type: models.IOCTypeDomain, Value: "secret.onion"},            // pass pattern, DNS skipped (.onion)
+		{Type: models.IOCTypeDomain, Value: "real-c2.xyz"},            // pass both layers
+		{Type: models.IOCTypeDomain, Value: "example.com"},            // rejected by pattern
+		{Type: models.IOCTypeURL, Value: "http://C2 server URL"},      // rejected by pattern (spaces)
+		{Type: models.IOCTypeDomain, Value: "nxdomain-fake-9999.xyz"}, // pass pattern, fail DNS
+		{Type: models.IOCTypeIP, Value: "127.0.0.1"},                  // rejected by pattern (loopback)
+		{Type: models.IOCTypeHashSHA256, Value: "aabbccdd"},           // pass (no checks for hashes beyond pattern)
+		{Type: models.IOCTypeDomain, Value: "gamaredon[.]com"},        // rejected by pattern (defanged)
+		{Type: models.IOCTypeURL, Value: "http://*.zip"},              // rejected by pattern (wildcard)
+		{Type: models.IOCTypeDomain, Value: "secret.onion"},           // pass pattern, DNS skipped (.onion)
 	}
 
 	result := v.FilterValidIOCs(ctx, input)

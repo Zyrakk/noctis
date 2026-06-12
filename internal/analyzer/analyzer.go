@@ -400,7 +400,7 @@ type RelationshipEntry struct {
 
 // EntityExtractionResult holds the parsed result of the extract_entities prompt.
 type EntityExtractionResult struct {
-	Entities      []EntityEntry      `json:"entities"`
+	Entities      []EntityEntry       `json:"entities"`
 	Relationships []RelationshipEntry `json:"relationships"`
 }
 

@@ -16,7 +16,7 @@ type RateLimiter struct {
 	maxTokens    float64
 	refillRate   float64 // tokens per second
 	lastRefill   time.Time
-	dailyLimit   int64     // 0 = no daily limit
+	dailyLimit   int64 // 0 = no daily limit
 	dailyUsed    int64
 	dailyResetAt time.Time // next midnight UTC
 }

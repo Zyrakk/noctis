@@ -44,11 +44,11 @@ type Source struct {
 type Engine struct {
 	pool              *pgxpool.Pool
 	config            config.DiscoveryConfig
-	urlRegexes        []*regexp.Regexp     // compiled URL extraction patterns
-	blacklistDomains  map[string]struct{}  // domains to skip during discovery
-	allowDomains      map[string]struct{}  // domains that bypass triage
-	monitoredChannels map[string]struct{}  // telegram usernames already in config (lowercase)
-	autoBlacklist     map[string]struct{}  // learned blacklist from triage trash decisions
+	urlRegexes        []*regexp.Regexp    // compiled URL extraction patterns
+	blacklistDomains  map[string]struct{} // domains to skip during discovery
+	allowDomains      map[string]struct{} // domains that bypass triage
+	monitoredChannels map[string]struct{} // telegram usernames already in config (lowercase)
+	autoBlacklist     map[string]struct{} // learned blacklist from triage trash decisions
 }
 
 // NewEngine creates a discovery Engine with pre-compiled URL extraction

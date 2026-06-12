@@ -14,14 +14,14 @@ import (
 
 // StatsResponse holds aggregate counts for the overview dashboard.
 type StatsResponse struct {
-	TotalContent   int64            `json:"totalContent"`
-	Classified     int64            `json:"classified"`
-	TotalIOCs      int64            `json:"totalIocs"`
-	ActiveSources  int64            `json:"activeSources"`
-	DiscoveredSrc  int64            `json:"discoveredSources"`
-	PausedSources  int64            `json:"pausedSources"`
-	BySource       map[string]int64 `json:"bySource"`
-	BySeverity     map[string]int64 `json:"bySeverity"`
+	TotalContent  int64            `json:"totalContent"`
+	Classified    int64            `json:"classified"`
+	TotalIOCs     int64            `json:"totalIocs"`
+	ActiveSources int64            `json:"activeSources"`
+	DiscoveredSrc int64            `json:"discoveredSources"`
+	PausedSources int64            `json:"pausedSources"`
+	BySource      map[string]int64 `json:"bySource"`
+	BySeverity    map[string]int64 `json:"bySeverity"`
 }
 
 // FindingSummary is a compact representation for list views.
@@ -79,15 +79,15 @@ type IOCsResponse struct {
 
 // SourceItem represents a source in API responses.
 type SourceItem struct {
-	ID                 string     `json:"id"`
-	Type               string     `json:"type"`
-	Identifier         string     `json:"identifier"`
-	Name               *string    `json:"name"`
-	Status             string     `json:"status"`
-	LastCollected      *time.Time `json:"lastCollected"`
-	ErrorCount         int        `json:"errorCount"`
-	CreatedAt          time.Time  `json:"createdAt"`
-	ContentCount       int64      `json:"contentCount"`
+	ID            string     `json:"id"`
+	Type          string     `json:"type"`
+	Identifier    string     `json:"identifier"`
+	Name          *string    `json:"name"`
+	Status        string     `json:"status"`
+	LastCollected *time.Time `json:"lastCollected"`
+	ErrorCount    int        `json:"errorCount"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	ContentCount  int64      `json:"contentCount"`
 }
 
 // CategoryCount holds a category name and its count.
@@ -943,10 +943,10 @@ func queryPublicStats(ctx context.Context, pool *pgxpool.Pool) (*PublicStats, er
 
 // PublicFinding is a sanitized finding for unauthenticated display.
 type PublicFinding struct {
-	Category   *string   `json:"category"`
-	Severity   *string   `json:"severity"`
-	SourceType string    `json:"sourceType"`
-	Summary    string    `json:"summary"`
+	Category    *string   `json:"category"`
+	Severity    *string   `json:"severity"`
+	SourceType  string    `json:"sourceType"`
+	Summary     string    `json:"summary"`
 	CollectedAt time.Time `json:"collectedAt"`
 }
 
@@ -1116,11 +1116,11 @@ type ActorProfile struct {
 	Aliases    []string       `json:"aliases"`
 	Properties map[string]any `json:"properties"`
 
-	Malware        []LinkedEntity       `json:"malware"`
-	Tools          []LinkedEntity       `json:"tools"`
-	Infrastructure []LinkedEntity       `json:"infrastructure"`
-	Targets        []LinkedEntity       `json:"targets"`
-	Campaigns      []LinkedEntity       `json:"campaigns"`
+	Malware        []LinkedEntity `json:"malware"`
+	Tools          []LinkedEntity `json:"tools"`
+	Infrastructure []LinkedEntity `json:"infrastructure"`
+	Targets        []LinkedEntity `json:"targets"`
+	Campaigns      []LinkedEntity `json:"campaigns"`
 
 	RecentFindings  []ActorFindingSummary `json:"recentFindings"`
 	FindingCount    int                   `json:"findingCount"`
@@ -1396,18 +1396,18 @@ func queryActorProfile(ctx context.Context, pool *pgxpool.Pool, id string) (*Act
 
 // SourceValueItem represents a source with its computed value metrics.
 type SourceValueItem struct {
-	ID                      string     `json:"id"`
-	Type                    string     `json:"type"`
-	Identifier              string     `json:"identifier"`
-	Name                    *string    `json:"name"`
-	Status                  string     `json:"status"`
-	UniqueIOCs              int        `json:"uniqueIocs"`
-	CorrelationContributions int       `json:"correlationContributions"`
-	AvgSeverity             float64    `json:"avgSeverity"`
-	SignalToNoise           float64    `json:"signalToNoise"`
-	ValueScore              float64    `json:"valueScore"`
-	ValueComputedAt         *time.Time `json:"valueComputedAt"`
-	ContentCount            int        `json:"contentCount"`
+	ID                       string     `json:"id"`
+	Type                     string     `json:"type"`
+	Identifier               string     `json:"identifier"`
+	Name                     *string    `json:"name"`
+	Status                   string     `json:"status"`
+	UniqueIOCs               int        `json:"uniqueIocs"`
+	CorrelationContributions int        `json:"correlationContributions"`
+	AvgSeverity              float64    `json:"avgSeverity"`
+	SignalToNoise            float64    `json:"signalToNoise"`
+	ValueScore               float64    `json:"valueScore"`
+	ValueComputedAt          *time.Time `json:"valueComputedAt"`
+	ContentCount             int        `json:"contentCount"`
 }
 
 // SourceValueResponse wraps source value results.

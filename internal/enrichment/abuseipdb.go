@@ -26,7 +26,7 @@ func NewAbuseIPDBProvider(apiKey string) *AbuseIPDBProvider {
 	}
 }
 
-func (p *AbuseIPDBProvider) Name() string            { return "abuseipdb" }
+func (p *AbuseIPDBProvider) Name() string             { return "abuseipdb" }
 func (p *AbuseIPDBProvider) SupportedTypes() []string { return []string{"ip"} }
 func (p *AbuseIPDBProvider) RateLimit() time.Duration { return 2 * time.Second }
 
