@@ -1,0 +1,8 @@
+# Fase 1 tooling (Python 3.11+). Install in a venv:
+#   python3 -m venv .venv && . .venv/bin/activate
+#   pip install -r tools/requirements.txt
+psycopg[binary]>=3.1     # DB reads (validate_relabel.py, build_dataset.py)
+scikit-learn>=1.3        # TF-IDF baseline (train_baseline.py)
+pandas>=2.0              # CSV/parquet wrangling
+pyarrow>=14.0            # parquet engine for pandas
+joblib>=1.3              # model persistence (also a sklearn dependency)

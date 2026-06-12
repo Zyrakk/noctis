@@ -9,3 +9,6 @@ docs/noctis-full-context.md
 docs/superpowers/
 noctis
 changes.md
+__pycache__/
+tools/data/
+tools/out/
