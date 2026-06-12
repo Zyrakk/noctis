@@ -24,8 +24,8 @@ func TestExtractURLs_TelegramLinks(t *testing.T) {
 	urls := e.ExtractURLs(content)
 
 	want := map[string]bool{
-		"https://t.me/darkleaks":    false,
-		"t.me/joinchat/abc123xyz":   false,
+		"https://t.me/darkleaks":  false,
+		"t.me/joinchat/abc123xyz": false,
 	}
 
 	for _, u := range urls {
@@ -346,10 +346,10 @@ func TestNormalizeTelegramURL_StripMessageID(t *testing.T) {
 		{"https://t.me/darkleaks/456", "darkleaks"},
 		{"https://t.me/darkleaks/123456", "darkleaks"},
 		{"t.me/darkleaks/99", "darkleaks"},
-		{"https://t.me/darkleaks", "darkleaks"},       // no message ID
-		{"https://t.me/darkleaks/", "darkleaks"},      // trailing slash only
+		{"https://t.me/darkleaks", "darkleaks"},                          // no message ID
+		{"https://t.me/darkleaks/", "darkleaks"},                         // trailing slash only
 		{"https://t.me/joinchat/abc123", "https://t.me/joinchat/abc123"}, // invite link unchanged
-		{"https://t.me/+xyz789", "https://t.me/+xyz789"},           // group invite unchanged
+		{"https://t.me/+xyz789", "https://t.me/+xyz789"},                 // group invite unchanged
 	}
 
 	for _, tt := range tests {
@@ -396,7 +396,7 @@ func TestNormalizeTelegramURL_SkipMonitored(t *testing.T) {
 		{"https://t.me/ad_poheque", ""},
 		{"https://t.me/ad_poheque/123", ""},
 		{"https://t.me/RalfHackerChannel", ""},
-		{"https://t.me/ralfhackerchannel/456", ""},  // case-insensitive
+		{"https://t.me/ralfhackerchannel/456", ""},    // case-insensitive
 		{"https://t.me/newchannel", "newchannel"},     // not monitored — keep
 		{"https://t.me/newchannel/789", "newchannel"}, // not monitored — strip msg ID
 	}
@@ -490,8 +490,8 @@ func TestProcessContent_StatusDetermination(t *testing.T) {
 
 	// Blacklisted URL — should be blocked
 	eBlack := NewEngine(nil, config.DiscoveryConfig{
-		Enabled:     true,
-		AllowPatterns: []string{"*.onion"},
+		Enabled:         true,
+		AllowPatterns:   []string{"*.onion"},
 		DomainBlacklist: []string{"google.com"},
 	})
 	if !eBlack.isBlacklisted("https://google.com/search") {
@@ -502,8 +502,8 @@ func TestProcessContent_StatusDetermination(t *testing.T) {
 func TestIsAutoBlacklisted(t *testing.T) {
 	e := newTestEngine()
 	e.autoBlacklist = map[string]struct{}{
-		"spam-domain.com":  {},
-		"trash-forum.net":  {},
+		"spam-domain.com": {},
+		"trash-forum.net": {},
 	}
 
 	blocked := []string{
@@ -574,9 +574,9 @@ func TestExtractInviteHash(t *testing.T) {
 		{"https://t.me/joinchat/abc123xyz", "+abc123xyz"},
 		{"t.me/joinchat/XYZ789", "+XYZ789"},
 		{"https://t.me/joinchat/abc123/", "+abc123"},
-		{"https://t.me/publicchannel", ""},       // not an invite link
-		{"https://example.com/page", ""},          // not a t.me link
-		{"https://t.me/+rZSKK/extra", "+rZSKK"},  // strip trailing path — TrimSuffix only trims /
+		{"https://t.me/publicchannel", ""},      // not an invite link
+		{"https://example.com/page", ""},        // not a t.me link
+		{"https://t.me/+rZSKK/extra", "+rZSKK"}, // strip trailing path — TrimSuffix only trims /
 	}
 
 	for _, tt := range tests {

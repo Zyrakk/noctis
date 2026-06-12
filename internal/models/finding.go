@@ -73,22 +73,22 @@ func ParseSeverity(s string) (Severity, error) {
 type Category string
 
 const (
-	CategoryCredentialLeak    Category = "credential_leak"
-	CategoryMalwareSample     Category = "malware_sample"
-	CategoryThreatActorComms  Category = "threat_actor_comms"
-	CategoryAccessBroker      Category = "access_broker"
-	CategoryDataDump          Category = "data_dump"
-	CategoryVulnerability     Category = "vulnerability"
-	CategoryCanaryHit         Category = "canary_hit"
-	CategoryIrrelevant        Category = "irrelevant"
+	CategoryCredentialLeak   Category = "credential_leak"
+	CategoryMalwareSample    Category = "malware_sample"
+	CategoryThreatActorComms Category = "threat_actor_comms"
+	CategoryAccessBroker     Category = "access_broker"
+	CategoryDataDump         Category = "data_dump"
+	CategoryVulnerability    Category = "vulnerability"
+	CategoryCanaryHit        Category = "canary_hit"
+	CategoryIrrelevant       Category = "irrelevant"
 )
 
 // Finding is the raw, un-enriched record captured from a source channel.
 type Finding struct {
 	ID          string            `json:"id"`
-	Source      string            `json:"source"`       // e.g. "telegram", "paste"
-	SourceID    string            `json:"source_id"`    // channel / paste ID
-	SourceName  string            `json:"source_name"`  // human-readable name
+	Source      string            `json:"source"`      // e.g. "telegram", "paste"
+	SourceID    string            `json:"source_id"`   // channel / paste ID
+	SourceName  string            `json:"source_name"` // human-readable name
 	Content     string            `json:"content"`
 	ContentHash string            `json:"content_hash"`
 	Author      string            `json:"author,omitempty"`
@@ -134,13 +134,13 @@ type CanaryHit struct {
 type EnrichedFinding struct {
 	Finding
 
-	MatchType    string       `json:"match_type,omitempty"`
-	MatchedRules []string     `json:"matched_rules,omitempty"`
-	Severity     Severity     `json:"severity"`
-	Category     Category     `json:"category"`
-	IOCs         []IOC        `json:"iocs,omitempty"`
+	MatchType    string        `json:"match_type,omitempty"`
+	MatchedRules []string      `json:"matched_rules,omitempty"`
+	Severity     Severity      `json:"severity"`
+	Category     Category      `json:"category"`
+	IOCs         []IOC         `json:"iocs,omitempty"`
 	ActorProfile *ActorProfile `json:"actor_profile,omitempty"`
-	CanaryHit    *CanaryHit   `json:"canary_hit,omitempty"`
-	LLMAnalysis  string       `json:"llm_analysis,omitempty"`
-	Confidence   float64      `json:"confidence"`
+	CanaryHit    *CanaryHit    `json:"canary_hit,omitempty"`
+	LLMAnalysis  string        `json:"llm_analysis,omitempty"`
+	Confidence   float64       `json:"confidence"`
 }

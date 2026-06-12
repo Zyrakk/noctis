@@ -19,24 +19,24 @@ type wrapper struct {
 
 // Config is the top-level configuration structure.
 type Config struct {
-	LogLevel    string          `yaml:"logLevel"`
-	MetricsPort int             `yaml:"metricsPort"`
-	HealthPort  int             `yaml:"healthPort"`
-	Sources     SourcesConfig   `yaml:"sources"`
-	Matching    MatchingConfig  `yaml:"matching"`
-	LLM         LLMConfig       `yaml:"llm"`
-	LLMFast     LLMFastConfig   `yaml:"llmFast"`
-	Profiling   ProfilingConfig `yaml:"profiling"`
-	Canary      CanaryConfig    `yaml:"canary"`
-	Dispatch    DispatchConfig  `yaml:"dispatch"`
-	Database    DatabaseConfig  `yaml:"database"`
-	Graph       GraphConfig     `yaml:"graph"`
-	Collection  CollectionConfig `yaml:"collection"`
-	Discovery   DiscoveryConfig  `yaml:"discovery"`
-	Storage     StorageConfig    `yaml:"storage"`
-	Dashboard   DashboardConfig  `yaml:"dashboard"`
-	Correlation CorrelationConfig `yaml:"correlation"`
-	Analyst      AnalystConfig      `yaml:"analyst"`
+	LogLevel       string             `yaml:"logLevel"`
+	MetricsPort    int                `yaml:"metricsPort"`
+	HealthPort     int                `yaml:"healthPort"`
+	Sources        SourcesConfig      `yaml:"sources"`
+	Matching       MatchingConfig     `yaml:"matching"`
+	LLM            LLMConfig          `yaml:"llm"`
+	LLMFast        LLMFastConfig      `yaml:"llmFast"`
+	Profiling      ProfilingConfig    `yaml:"profiling"`
+	Canary         CanaryConfig       `yaml:"canary"`
+	Dispatch       DispatchConfig     `yaml:"dispatch"`
+	Database       DatabaseConfig     `yaml:"database"`
+	Graph          GraphConfig        `yaml:"graph"`
+	Collection     CollectionConfig   `yaml:"collection"`
+	Discovery      DiscoveryConfig    `yaml:"discovery"`
+	Storage        StorageConfig      `yaml:"storage"`
+	Dashboard      DashboardConfig    `yaml:"dashboard"`
+	Correlation    CorrelationConfig  `yaml:"correlation"`
+	Analyst        AnalystConfig      `yaml:"analyst"`
 	IOCLifecycle   IOCLifecycleConfig `yaml:"iocLifecycle"`
 	BriefGenerator BriefConfig        `yaml:"briefGenerator"`
 	Vuln           VulnConfig         `yaml:"vuln"`
@@ -320,9 +320,9 @@ type WebhookConfig struct {
 
 // CRDConfig configures Kubernetes CRD persistence.
 type CRDConfig struct {
-	Enabled        bool   `yaml:"enabled"`
-	Namespace      string `yaml:"namespace"`
-	GCStaleAfterDays int  `yaml:"gcStaleAfterDays"`
+	Enabled          bool   `yaml:"enabled"`
+	Namespace        string `yaml:"namespace"`
+	GCStaleAfterDays int    `yaml:"gcStaleAfterDays"`
 }
 
 // NetworkPolicyConfig configures automatic NetworkPolicy generation.

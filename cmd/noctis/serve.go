@@ -22,12 +22,12 @@ import (
 	"github.com/Zyrakk/noctis/internal/database"
 	"github.com/Zyrakk/noctis/internal/discovery"
 	"github.com/Zyrakk/noctis/internal/dispatcher"
+	"github.com/Zyrakk/noctis/internal/enrichment"
 	"github.com/Zyrakk/noctis/internal/health"
 	"github.com/Zyrakk/noctis/internal/ingest"
 	"github.com/Zyrakk/noctis/internal/llm"
 	"github.com/Zyrakk/noctis/internal/models"
 	"github.com/Zyrakk/noctis/internal/modules"
-	"github.com/Zyrakk/noctis/internal/enrichment"
 	"github.com/Zyrakk/noctis/internal/processor"
 	"github.com/Zyrakk/noctis/internal/vuln"
 )

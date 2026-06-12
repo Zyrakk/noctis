@@ -31,28 +31,28 @@ const (
 	ModEnrichment      ModuleID = "processor.enrichment"
 
 	// Brain sub-modules
-	ModCorrelator ModuleID = "brain.correlator"
-	ModAnalyst        ModuleID = "brain.analyst"    // future: LLM correlation confirmation
+	ModCorrelator     ModuleID = "brain.correlator"
+	ModAnalyst        ModuleID = "brain.analyst" // future: LLM correlation confirmation
 	ModBriefGenerator ModuleID = "brain.brief_generator"
 	ModQueryEngine    ModuleID = "brain.query_engine"
 	ModAttributor     ModuleID = "brain.attributor" // future: actor attribution
 
 	// Infrastructure
-	ModDashboard       ModuleID = "infra.dashboard"
-	ModDiscovery       ModuleID = "infra.discovery"
-	ModSourceAnalyzer  ModuleID = "infra.source_analyzer"
-	ModVulnIngestor    ModuleID = "infra.vuln_ingestor"
-	ModSourceTriage    ModuleID = "infra.source_triage"
+	ModDashboard      ModuleID = "infra.dashboard"
+	ModDiscovery      ModuleID = "infra.discovery"
+	ModSourceAnalyzer ModuleID = "infra.source_analyzer"
+	ModVulnIngestor   ModuleID = "infra.vuln_ingestor"
+	ModSourceTriage   ModuleID = "infra.source_triage"
 )
 
 // ModuleStatus is the universal health report for any module or sub-module.
 // Every component in the system implements this same structure.
 type ModuleStatus struct {
-	ID       ModuleID `json:"id"`
-	Name     string   `json:"name"`     // Human-readable name
-	Category string   `json:"category"` // "collector", "processor", "brain", "infra"
-	Running  bool     `json:"running"`
-	Enabled  bool     `json:"enabled"` // Configured to run (might not be running yet)
+	ID        ModuleID  `json:"id"`
+	Name      string    `json:"name"`     // Human-readable name
+	Category  string    `json:"category"` // "collector", "processor", "brain", "infra"
+	Running   bool      `json:"running"`
+	Enabled   bool      `json:"enabled"` // Configured to run (might not be running yet)
 	StartedAt time.Time `json:"started_at,omitzero"`
 	StoppedAt time.Time `json:"stopped_at,omitzero"`
 

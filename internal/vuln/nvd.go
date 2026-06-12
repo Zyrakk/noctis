@@ -17,9 +17,9 @@ const nvdBaseURL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
 // nvdResponse is the top-level NVD API response.
 type nvdResponse struct {
-	TotalResults   int              `json:"totalResults"`
-	StartIndex     int              `json:"startIndex"`
-	ResultsPerPage int              `json:"resultsPerPage"`
+	TotalResults    int              `json:"totalResults"`
+	StartIndex      int              `json:"startIndex"`
+	ResultsPerPage  int              `json:"resultsPerPage"`
 	Vulnerabilities []nvdVulnWrapper `json:"vulnerabilities"`
 }
 
