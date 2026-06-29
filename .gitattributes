@@ -30,3 +30,4 @@ Dockerfile text eol=lf
 # Built dashboard bundles are committed artifacts — opaque to diff/merge,
 # never normalized.
 internal/dashboard/static/assets/* binary
+*.csv text eol=lf
