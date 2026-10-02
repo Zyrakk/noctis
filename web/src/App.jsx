@@ -15,6 +15,7 @@ import SystemStatus from './pages/SystemStatus.jsx'
 import Vulnerabilities from './pages/Vulnerabilities.jsx'
 import Query from './pages/Query.jsx'
 import Intelligence from './pages/Intelligence.jsx'
+import Presentation from './presentation/Presentation.jsx'
 
 // Simple client-side router (avoids react-router CDN version issues)
 function useRouter() {
@@ -49,6 +50,11 @@ function ProtectedRoute({ children, navigate }) {
 
 function AppRoutes() {
   const { path, navigate } = useRouter()
+
+  // Presentation mode is intentionally public and isolated from the protected dashboard.
+  if (path === '/presentation' || path.startsWith('/presentation/')) {
+    return React.createElement(Presentation, { path, navigate })
+  }
 
   // Public routes
   if (path === '/' || path === '/index.html') {
