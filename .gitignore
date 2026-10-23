@@ -6,7 +6,9 @@ bin/
 vendor/
 deploy/secrets.yaml
 web/node_modules/
-noctis
+/noctis
+web/test-results/
+web/playwright-report/
 __pycache__/
 tools/data/
 tools/out/
