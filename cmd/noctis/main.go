@@ -12,17 +12,12 @@ var version = "dev"
 func main() {
 	root := &cobra.Command{
 		Use:     "noctis",
-		Short:   "Kubernetes-native threat intelligence daemon",
+		Short:   "Private evidence intelligence; v2 runtime and historical inspection",
 		Version: version,
 	}
 
-	root.AddCommand(newServeCmd())
-	root.AddCommand(newConfigCmd())
-	root.AddCommand(newSourceCmd())
-	root.AddCommand(newSearchCmd())
-	root.AddCommand(newStatsCmd())
-	root.AddCommand(newTelegramAuthCmd())
-	root.AddCommand(newIOCCmd())
+	root.AddCommand(newV2Cmd())
+	root.AddCommand(newLegacyInspectCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
