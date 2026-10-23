@@ -1,0 +1,126 @@
+# Preparation only. Every workload is paused. Replace image digest, origin and
+# externally provisioned Secret names; no Secret data belongs in this file.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: noctis-v2-api
+  namespace: noctis-v2
+spec:
+  replicas: 0
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: noctis-v2-api}}
+  template:
+    metadata: {labels: {app: noctis-v2-api}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        - name: private-master-key
+          image: busybox@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/bin/sh, -ec, 'umask 077; cp /source/master.json /private/master.json; chmod 600 /private/master.json']
+          securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 10m, memory: 8Mi}, limits: {cpu: 100m, memory: 32Mi}}
+          volumeMounts:
+            - {name: master-source, mountPath: /source, readOnly: true}
+            - {name: ai, mountPath: /private}
+      containers:
+        - name: api
+          image: ghcr.io/zyrakk/noctis@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          args: [v2, --database-secret-file, /run/db/database, serve, --mode, api, --listen, '0.0.0.0:8081', --origin, 'https://noctis.invalid', --admin-secret-file, /run/auth/admin, --tls-cert-file, /run/tls/tls.crt, --tls-key-file, /run/tls/tls.key, --ai-master-key-file, /run/ai/master.json]
+          securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          ports: [{containerPort: 8081, name: https}]
+          livenessProbe: {httpGet: {path: /livez, port: https, scheme: HTTPS}, initialDelaySeconds: 10, periodSeconds: 10}
+          readinessProbe: {httpGet: {path: /readyz, port: https, scheme: HTTPS}, periodSeconds: 5}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: '1', memory: 512Mi}}
+          volumeMounts:
+            - {name: db, mountPath: /run/db, readOnly: true}
+            - {name: auth, mountPath: /run/auth, readOnly: true}
+            - {name: tls, mountPath: /run/tls, readOnly: true}
+            - {name: ai, mountPath: /run/ai, readOnly: true}
+      volumes:
+        - {name: db, secret: {secretName: noctis-v2-api-database, defaultMode: 0440}}
+        - {name: auth, secret: {secretName: noctis-v2-admin, defaultMode: 0440}}
+        - {name: tls, secret: {secretName: noctis-v2-tls, defaultMode: 0440}}
+        - {name: master-source, secret: {secretName: noctis-v2-ai-master, defaultMode: 0440}}
+        - {name: ai, emptyDir: {medium: Memory, sizeLimit: 1Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: noctis-v2-worker, namespace: noctis-v2}
+spec:
+  replicas: 0
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: noctis-v2-worker}}
+  template:
+    metadata: {labels: {app: noctis-v2-worker}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        - name: private-master-key
+          image: busybox@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/bin/sh, -ec, 'umask 077; cp /source/master.json /private/master.json; chmod 600 /private/master.json']
+          securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 10m, memory: 8Mi}, limits: {cpu: 100m, memory: 32Mi}}
+          volumeMounts:
+            - {name: master-source, mountPath: /source, readOnly: true}
+            - {name: ai, mountPath: /private}
+      containers:
+        - name: worker
+          image: ghcr.io/zyrakk/noctis@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          args: [v2, --database-secret-file, /run/db/database, serve, --mode, worker, --ai-master-key-file, /run/ai/master.json]
+          securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 500m, memory: 256Mi}, limits: {cpu: '2', memory: 1Gi}}
+          volumeMounts:
+            - {name: db, mountPath: /run/db, readOnly: true}
+            - {name: ai, mountPath: /run/ai, readOnly: true}
+      volumes:
+        - {name: db, secret: {secretName: noctis-v2-worker-database, defaultMode: 0440}}
+        - {name: master-source, secret: {secretName: noctis-v2-ai-master, defaultMode: 0440}}
+        - {name: ai, emptyDir: {medium: Memory, sizeLimit: 1Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: noctis-v2-collector, namespace: noctis-v2}
+spec:
+  replicas: 0
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: noctis-v2-collector}}
+  template:
+    metadata: {labels: {app: noctis-v2-collector}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: collector
+          image: ghcr.io/zyrakk/noctis@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          args: [v2, --database-secret-file, /run/db/database, serve, --mode, collector]
+          securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 200m, memory: 128Mi}, limits: {cpu: '1', memory: 512Mi}}
+          volumeMounts: [{name: db, mountPath: /run/db, readOnly: true}]
+      volumes:
+        - {name: db, secret: {secretName: noctis-v2-collector-database, defaultMode: 0440}}
+---
+apiVersion: batch/v1
+kind: Job
+metadata: {name: noctis-v2-migrate, namespace: noctis-v2}
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: migrate
+          image: ghcr.io/zyrakk/noctis@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          args: [v2, --database-secret-file, /run/db/database, migrate]
+          securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: '1', memory: 512Mi}}
+          volumeMounts: [{name: db, mountPath: /run/db, readOnly: true}]
+      volumes:
+        - {name: db, secret: {secretName: noctis-v2-migration-database, defaultMode: 0440}}

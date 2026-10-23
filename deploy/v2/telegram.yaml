@@ -1,0 +1,42 @@
+# Preparation only. No apply, no authentication, no automatic source enabling.
+# The independent serve --mode collector workload handles RSS, not Telegram.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: noctis-v2-telegram, namespace: noctis-v2}
+spec:
+  replicas: 0
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: noctis-v2-telegram}}
+  template:
+    metadata: {labels: {app: noctis-v2-telegram}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
+      terminationGracePeriodSeconds: 60
+      initContainers:
+        - name: protected-api-credentials
+          image: busybox@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/bin/sh, -ec, 'umask 077; test ! -L /session; test -d /session; test "$(stat -c %u /session)" = 65532; test ! -L /session/collector.session; test -f /session/collector.session; test "$(stat -c %u /session/collector.session)" = 65532; chmod 700 /session; chmod 600 /session/collector.session; chmod 700 /private; cp /source/credentials.json /private/credentials.json; cp /policy-source/capture-policy.json /private/capture-policy.json; chmod 600 /private/credentials.json /private/capture-policy.json']
+          securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 10m, memory: 8Mi}, limits: {cpu: 100m, memory: 32Mi}}
+          volumeMounts:
+            - {name: credential-source, mountPath: /source, readOnly: true}
+            - {name: policy-source, mountPath: /policy-source, readOnly: true}
+            - {name: credentials, mountPath: /private}
+            - {name: session, mountPath: /session}
+      containers:
+        - name: telegram
+          image: ghcr.io/zyrakk/noctis@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          args: [v2, --database-secret-file, /run/db/database, telegram, --credential-file, /run/telegram/credentials.json, --session-file, /session/collector.session, --capture-policy-file, /run/telegram/capture-policy.json, collect]
+          securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 200m, memory: 128Mi}, limits: {cpu: '1', memory: 512Mi}}
+          volumeMounts:
+            - {name: db, mountPath: /run/db, readOnly: true}
+            - {name: credentials, mountPath: /run/telegram, readOnly: true}
+            - {name: session, mountPath: /session}
+      volumes:
+        - {name: db, secret: {secretName: noctis-v2-telegram-database, defaultMode: 0440}}
+        - {name: credential-source, secret: {secretName: noctis-v2-telegram-api, defaultMode: 0440}}
+        - {name: policy-source, secret: {secretName: noctis-v2-telegram-capture-policy, defaultMode: 0440}}
+        - {name: credentials, emptyDir: {medium: Memory, sizeLimit: 1Mi}}
+        - {name: session, persistentVolumeClaim: {claimName: noctis-v2-telegram-private-session}}
