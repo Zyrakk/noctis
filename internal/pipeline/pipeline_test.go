@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -41,8 +42,7 @@ func (f *fakeCollector) Start(ctx context.Context, out chan<- models.Finding) er
 var _ collector.Collector = (*fakeCollector)(nil)
 
 // ---------------------------------------------------------------------------
-// fakeLLMClient returns canned responses based on substring matching the
-// combined prompt text.
+// fakeLLMClient returns canned responses based on the combined prompt prefix.
 // ---------------------------------------------------------------------------
 
 type fakeLLMClient struct {
@@ -57,16 +57,48 @@ func (f *fakeLLMClient) ChatCompletion(_ context.Context, messages []llm.Message
 	prompt := combined.String()
 
 	for key, resp := range f.responses {
-		if strings.Contains(prompt, key) {
+		if strings.HasPrefix(prompt, key) {
 			return &llm.Response{Content: resp}, nil
 		}
 	}
-	return &llm.Response{Content: ""}, nil
+	return nil, fmt.Errorf("fakeLLMClient: unrecognized prompt header")
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+func TestFakeLLMClient_PromptPrefixRouting(t *testing.T) {
+	responses := map[string]string{
+		"You are a cyber threat intelligence analyst. Classify": "classification",
+		"You are a cyber threat intelligence analyst. Extract":  "indicators",
+		"You are a cyber threat intelligence analyst. Assess":   "severity",
+		"You are a cyber threat intelligence analyst. Write":    "summary",
+	}
+	client := &fakeLLMClient{responses: responses}
+	var body strings.Builder
+	for prefix := range responses {
+		body.WriteString("\n")
+		body.WriteString(prefix)
+	}
+	for prefix, want := range responses {
+		t.Run(want, func(t *testing.T) {
+			response, err := client.ChatCompletion(context.Background(), []llm.Message{{Content: prefix + body.String()}})
+			if err != nil {
+				t.Fatalf("ChatCompletion() error: %v", err)
+			}
+			if response.Content != want {
+				t.Errorf("Content = %q; want %q", response.Content, want)
+			}
+		})
+	}
+	t.Run("unknown header", func(t *testing.T) {
+		response, err := client.ChatCompletion(context.Background(), []llm.Message{{Content: "Unknown task" + body.String()}})
+		if err == nil || response != nil {
+			t.Fatalf("ChatCompletion() = %v, %v; want nil response and error", response, err)
+		}
+	})
+}
 
 func TestPipeline_EndToEnd(t *testing.T) {
 	findings := []models.Finding{
@@ -93,14 +125,10 @@ func TestPipeline_EndToEnd(t *testing.T) {
 
 	llmClient := &fakeLLMClient{
 		responses: map[string]string{
-			// classify.tmpl contains "Classify"
-			"Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party"}`,
-			// extract_iocs.tmpl contains "Extract"
-			"Extract": `[{"type":"hash_sha256","value":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4","context":"leaked creds","malicious":true}]`,
-			// severity.tmpl contains "Assess"
-			"Assess": `{"severity":"critical","reasoning":"Active credentials exposed"}`,
-			// summarize.tmpl contains "Write"
-			"Write": "Credentials for example.com were leaked on Telegram.",
+			"You are a cyber threat intelligence analyst. Classify": `{"category":"credential_leak","confidence":0.95,"provenance":"first_party"}`,
+			"You are a cyber threat intelligence analyst. Extract":  `[{"type":"hash_sha256","value":"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4","context":"leaked creds","malicious":true}]`,
+			"You are a cyber threat intelligence analyst. Assess":   `{"severity":"critical","reasoning":"Active credentials exposed"}`,
+			"You are a cyber threat intelligence analyst. Write":    "Credentials for example.com were leaked on Telegram.",
 		},
 	}
 
