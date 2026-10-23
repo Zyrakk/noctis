@@ -1,0 +1,9 @@
+{
+  "001_initial.sql": "44380766a83a7264038b0fecf7eb8b4cbd7fb2a70f73e40dc2ed2d24cea543a1",
+  "002_product.sql": "f9fef2e37fe510a581af8687f421058788ddd81f0d140e1c9e75a7ed5d9c7e77",
+  "003_channels_domain.sql": "4c3862b3a46fbba78a717b277a3ff61c02d382a58e2472fb9e74e88c6e472a9c",
+  "004_inference.sql": "9cc89e05062b2267b37871dc5de61dbfc5ee20b52167865427942ba271d45155",
+  "005_operations.sql": "9843477ed13ebf6cf8f1466de699217f5b9980e66e686cc987accce98f087189",
+  "006_native_capture_budget.sql": "abf256d884fd564880b83cd423d7bd6fc24de193a293742bca75e34c65689ab1",
+  "007_production_capture_onboarding.sql": "b91b42e63dd27e47417d855fd779d3cdf247324304cc3aa4f0d6465785c876d7"
+}

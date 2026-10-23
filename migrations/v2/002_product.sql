@@ -1,0 +1,11 @@
+ALTER TABLE noctis_v2.sources ADD COLUMN name text NOT NULL DEFAULT '', ADD COLUMN epoch uuid, ADD COLUMN activated_at timestamptz, ADD COLUMN last_success_at timestamptz, ADD COLUMN last_error text, ADD COLUMN coverage text NOT NULL DEFAULT 'unknown';
+CREATE TABLE noctis_v2.batch_receipts(batch_id uuid PRIMARY KEY,digest text NOT NULL,receipt jsonb NOT NULL);
+CREATE TABLE noctis_v2.policies(version text PRIMARY KEY,terms jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp());
+CREATE TABLE noctis_v2.analyses(observation_id uuid PRIMARY KEY REFERENCES noctis_v2.observations(id),policy_version text NOT NULL,gate text NOT NULL,observables jsonb NOT NULL);
+CREATE TABLE noctis_v2.intelligence_cases(id uuid PRIMARY KEY,group_key text UNIQUE NOT NULL,title text NOT NULL,revision bigint NOT NULL DEFAULT 0,updated_at timestamptz NOT NULL DEFAULT clock_timestamp());
+CREATE TABLE noctis_v2.case_revisions(case_id uuid NOT NULL REFERENCES noctis_v2.intelligence_cases(id),revision bigint NOT NULL,body jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),PRIMARY KEY(case_id,revision));
+CREATE TABLE noctis_v2.case_changes(id uuid PRIMARY KEY,case_id uuid NOT NULL REFERENCES noctis_v2.intelligence_cases(id),observation_id uuid NOT NULL UNIQUE REFERENCES noctis_v2.observations(id),body jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp());
+CREATE TABLE noctis_v2.outbox(id uuid PRIMARY KEY,delivery_key text UNIQUE NOT NULL,body jsonb NOT NULL,state text NOT NULL CHECK(state IN ('queued','sending','delivered','uncertain')),created_at timestamptz NOT NULL DEFAULT clock_timestamp());
+CREATE TABLE noctis_v2.briefs(period text NOT NULL,policy_version text NOT NULL,body jsonb NOT NULL,PRIMARY KEY(period,policy_version));
+CREATE TABLE noctis_v2.sessions(token_hash text PRIMARY KEY,username text NOT NULL,csrf text NOT NULL,expires_at timestamptz NOT NULL,revoked boolean NOT NULL DEFAULT false);
+CREATE INDEX jobs_ready ON noctis_v2.jobs(state,retry_at,lease_expires_at);
