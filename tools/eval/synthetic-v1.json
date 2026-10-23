@@ -1,0 +1,20 @@
+{"metadata":{"version":"synthetic-adversarial-v1","synthetic":true,"input_fixture":"synthetic-inputs-v1.json","label_provenance":"Human-authored synthetic expectations; not representative gold or measured model quality"},"examples":[
+{"id":"s01","episode":"injection","partition":"development","at":"2026-01-01","language":"es","source":"paste","task":"gate","relevant":true,"adversarial":"embedded hostile instructions"},
+{"id":"s02","episode":"json","partition":"development","at":"2026-01-02","language":"en","source":"gateway","task":"schema","relevant":true,"adversarial":"truncated JSON"},
+{"id":"s03","episode":"multilingual","partition":"development","at":"2026-01-03","language":"ja","source":"forum","task":"semantic","relevant":true,"adversarial":"multilingual evidence"},
+{"id":"s04","episode":"legitimate-sale","partition":"development","at":"2026-01-04","language":"en","source":"market","task":"gate","relevant":false,"adversarial":"legitimate software sale"},
+{"id":"s05","episode":"offer","partition":"development","at":"2026-01-05","language":"es","source":"forum","task":"semantic","relevant":true,"adversarial":"reported illicit access offer"},
+{"id":"s06","episode":"negation","partition":"selection","at":"2026-02-01","language":"es","source":"forum","task":"semantic","relevant":true,"adversarial":"negation and irony"},
+{"id":"s07","episode":"retraction","partition":"selection","at":"2026-02-02","language":"en","source":"rss","task":"claims","relevant":true,"adversarial":"rumor followed by retraction"},
+{"id":"s08","episode":"defang","partition":"selection","at":"2026-02-03","language":"en","source":"paste","task":"roles","relevant":true,"adversarial":"defanged URLs and IPv6"},
+{"id":"s09","episode":"benignhash","partition":"selection","at":"2026-02-04","language":"en","source":"rss","task":"roles","relevant":false,"adversarial":"benign published hash"},
+{"id":"s10","episode":"documentation","partition":"selection","at":"2026-02-05","language":"en","source":"docs","task":"vulnerability","relevant":false,"adversarial":"CVE in documentation; unknown applicability"},
+{"id":"s11","episode":"homonym","partition":"test","at":"2026-03-01","language":"ru","source":"forum","task":"identity","relevant":true,"adversarial":"same handle different persons"},
+{"id":"s12","episode":"sharedcdn","partition":"test","at":"2026-03-02","language":"en","source":"rss","task":"identity","relevant":false,"adversarial":"shared CDN does not imply identity"},
+{"id":"s13","episode":"copies","partition":"test","at":"2026-03-03","language":"es","source":"telegram-fixture","task":"cases","relevant":true,"adversarial":"four copies one origin"},
+{"id":"s14","episode":"copies","partition":"test","at":"2026-03-04","language":"es","source":"telegram-fixture","task":"cases","relevant":true,"adversarial":"duplicate episode stays in same partition"},
+{"id":"s15","episode":"long-document","partition":"test","at":"2026-03-05","language":"ja","source":"paste","task":"roles","relevant":true,"adversarial":"observable in last segment"},
+{"id":"s16","episode":"empty","partition":"test","at":"2026-03-06","language":"unknown","source":"forum","task":"gate","relevant":false,"adversarial":"no text; no invented conclusion"},
+{"id":"s17","episode":"timeout","partition":"test","at":"2026-03-07","language":"en","source":"gateway","task":"operation","relevant":true,"adversarial":"timeout after possible billable execution"},
+{"id":"s18","episode":"invalidref","partition":"test","at":"2026-03-08","language":"es","source":"gateway","task":"claims","relevant":true,"adversarial":"nonexistent evidence ID"}
+]}
