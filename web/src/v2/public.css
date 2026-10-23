@@ -1,0 +1,19 @@
+/* Preserve the established public demo independently of the private workspace. */
+.v2.v2-public{--ink:#14213b;--violet:#6040b2;color:var(--ink);background:#f4f6fa;color-scheme:light;font-size:16px}
+.v2-public header{background:#14213b;color:white;padding:16px 24px;align-items:center;flex-wrap:wrap}
+.v2-public header a{color:white}.v2-public a{color:#50309b}.v2-public small{color:#4c5770}
+.v2-public main{max-width:1100px;padding:24px}.v2-public h1{font-size:clamp(30px,5vw,56px);line-height:1.15;max-width:900px;font-weight:600}
+.v2-public h2{font-weight:600}.v2-public button{background:white;color:#14213b;border-color:#8792a7}
+.v2-public button:hover{background:#e6dff6}.v2-public [aria-pressed=true],.v2-public [aria-current=step]{background:#6040b2;color:white}
+.v2-public .v2-brand{letter-spacing:.15em;font-weight:700}.v2-public .v2-eyebrow{color:#6040b2;font-weight:600;letter-spacing:.07em}
+.v2-public .v2-lead{font-size:20px;max-width:760px}.v2-public .v2-primary{background:#6040b2;color:white;padding:14px 20px;border-radius:4px;margin:12px 0}
+.v2-public .v2-synthetic{position:sticky;top:0;z-index:3;padding:10px 20px;background:#f3edda;border-bottom:1px solid #b2a36e;font-size:14px}
+.v2-public .v2-public-grid{margin:40px 0}.v2-public .v2-public-grid article{background:white;border-top:3px solid #6040b2;padding:20px}
+.v2-public .v2-change{border:0;border-left:4px solid #6040b2;background:#eae4f5;padding:12px;border-radius:0}
+.v2-public .v2-limit{border:0;border-left:4px solid #8b690d;background:#f3edda;padding:14px 18px;border-radius:0}
+.v2-public .v2-rows li{border-color:#ccd3df}.v2-public .v2-rows p{color:#14213b}.v2-public .v2-demo-evidence{background:white;border:2px solid #6040b2;padding:24px}
+.v2-public pre{color:#14213b;background:#f4f6fa;border-color:#ccd3df}.v2-public footer{padding:24px;border-top:1px solid #ccd3df}
+.v2-public .v2-steps{padding-left:24px}.v2-public .v2-steps li{margin:16px 0}.v2-public .v2-steps span{display:block;margin-top:8px}
+.v2.v2-public .v2-citation{color:#50309b!important}
+.v2.v2-public :focus-visible{outline:3px solid #6040b2;outline-offset:4px}
+@media(max-width:600px){.v2-public header a{font-size:14px}.v2-public .v2-lead{font-size:18px}}

@@ -1,0 +1,4 @@
+import React from 'react'
+import {Paged} from './Operations.jsx'
+import {Resource,Refs} from './product.jsx'
+export default function EntityDossier({id,select}){return <><Resource path={`/entities/${id}/dossier`}>{data=><><h2>Dossier · {data.kind}</h2><p>Identidad: {data.identity_status||'desconocida'}. Una coincidencia de handle o infraestructura compartida no fusiona identidades.</p></>}</Resource><h3>Alias</h3><Paged path={`/entities/${id}/aliases`}>{items=><ul>{items.map(a=><li key={a.id}>{a.alias} · {a.scope} · {a.language} · {a.revoked?'Revocado':'Registrado'}<Refs items={a.evidence} select={select}/></li>)}</ul>}</Paged><h3>Hipótesis</h3><Paged path={`/entities/${id}/hypotheses`}>{items=><ul>{items.map(h=><li key={h.id}>{h.left_id} → {h.relation} → {h.right_id}<p>Estado: {h.status}</p><Refs items={h.evidence} select={select}/></li>)}</ul>}</Paged></>}

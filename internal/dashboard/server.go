@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"context"
-	"embed"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -13,10 +12,8 @@ import (
 
 	"github.com/Zyrakk/noctis/internal/llm"
 	"github.com/Zyrakk/noctis/internal/modules"
+	"github.com/Zyrakk/noctis/internal/webassets"
 )
-
-//go:embed static
-var staticFiles embed.FS
 
 // NLQueryEngine is the interface for the natural language query engine.
 type NLQueryEngine interface {
@@ -91,7 +88,7 @@ func (s *Server) SetFastSpendingTracker(st *llm.SpendingTracker) {
 
 func (s *Server) registerRoutes() {
 	// Static file server from embedded FS
-	staticFS, _ := fs.Sub(staticFiles, "static")
+	staticFS := webassets.FS()
 	fileServer := http.FileServer(http.FS(staticFS))
 
 	// API routes (auth required)

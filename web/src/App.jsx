@@ -16,6 +16,8 @@ import Vulnerabilities from './pages/Vulnerabilities.jsx'
 import Query from './pages/Query.jsx'
 import Intelligence from './pages/Intelligence.jsx'
 import Presentation from './presentation/Presentation.jsx'
+import V2App from './v2/App.jsx'
+import PublicProduct from './v2/Demo.jsx'
 
 // Simple client-side router (avoids react-router CDN version issues)
 function useRouter() {
@@ -103,7 +105,21 @@ function AppRoutes() {
   return React.createElement(Landing, { navigate })
 }
 
+function PublicPresentation() {
+  const { path, navigate } = useRouter()
+  return React.createElement(Presentation, { path, navigate })
+}
+
 export default function App() {
+  if (window.location.pathname === '/' || window.location.pathname === '/demo' || window.location.pathname.startsWith('/demo/')) {
+    return React.createElement(PublicProduct)
+  }
+  if (window.location.pathname === '/v2' || window.location.pathname.startsWith('/v2/')) {
+    return React.createElement(V2App)
+  }
+  if (window.location.pathname === '/presentation' || window.location.pathname.startsWith('/presentation/')) {
+    return React.createElement(PublicPresentation)
+  }
   return React.createElement(AuthProvider, null,
     React.createElement(AppRoutes),
   )

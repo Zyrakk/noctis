@@ -1,0 +1,8 @@
+{
+  "product": "Noctis",
+  "direction": "Mesa de investigación nocturna: observación, síntesis y evidencia con procedencia",
+  "palette": {"background":"#0A0A0F","surface":"#12121A","plane":"#1A1726","divider":"#302A42","accent":"#A78BFA","text":"#E8E5F0","muted":"#B4AEC6"},
+  "typography": {"ui":"Fira Sans","data":"Fira Code","delivery":"local","bodyPx":15,"headingPx":32,"measureCh":75},
+  "layout": {"sidebarPx":220,"headerPx":78,"mobileBreakpointPx":760,"todayColumns":"1.8fr 1fr","evidence":"lateral modal document"},
+  "principles": ["Datos reales y vacíos honestos","Citas y revisiones visibles","Inferencia opcional y control por función","Foco y navegación estables","Sin decoración animada ni fuentes remotas"]
+}

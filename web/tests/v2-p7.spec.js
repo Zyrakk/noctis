@@ -1,0 +1,41 @@
+import { test,expect } from '@playwright/test'
+test.beforeEach(async({page})=>{page.__errors=[];page.on('pageerror',e=>page.__errors.push(e.message))})
+test.afterEach(async({page})=>expect(page.__errors).toEqual([]))
+for(const story of ['A','B','C']) test(`demo ${story} autónoma, revisión URL y evidencia accesible`,async({page})=>{
+ const requests=[];page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/api/'))requests.push(request.url())})
+ await page.route('**/api/**',route=>route.abort())
+ await page.addInitScript(()=>{Storage.prototype.getItem=()=>{throw new Error('No acceder a credenciales en demo')}})
+ await page.goto(`/demo?story=${story}&step=0`)
+ await expect(page.getByRole('note')).toContainText('Datos sintéticos')
+ await page.getByRole('button',{name:'Revisión 3',exact:true}).click()
+ await expect(page).toHaveURL(new RegExp(`story=${story}&step=2`));await page.reload()
+ await expect(page.getByText('Qué cambió',{exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'Expediente',exact:true}).click()
+ await page.getByRole('button',{name:'Abrir evidencia sintética 1',exact:true}).click()
+ await expect(page.getByRole('region',{name:'Evidencia sintética'})).toBeVisible()
+ await expect(page.getByRole('region',{name:'Evidencia sintética'}).locator('pre')).not.toBeEmpty()
+ await page.getByRole('button',{name:'Cerrar evidencia sintética'}).click();await page.goBack()
+ await expect(page.getByRole('region',{name:'Evidencia sintética'})).toBeVisible()
+ expect(requests).toEqual([])
+})
+test('landing, demo móvil y zoom sin API privada ni desbordamiento',async({page})=>{
+ let privateCount=0;page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/api/'))privateCount++})
+ await page.route('**/api/**',route=>route.abort());await page.setViewportSize({width:390,height:844});await page.goto('/')
+ await expect(page.getByRole('heading',{name:/Entiende qué cambió/})).toBeVisible();await page.keyboard.press('Tab');await expect(page.getByRole('link',{name:'NOCTIS',exact:true})).toBeFocused()
+ await page.getByRole('link',{name:'Explorar una oferta reportada →'}).click();await expect(page.getByRole('note')).toBeVisible()
+ await page.evaluate(()=>{document.body.style.zoom='2'})
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy()
+ await page.screenshot({path:'/tmp/noctis-p7-demo-mobile.png',fullPage:true});expect(privateCount).toBe(0)
+})
+test('errores de inventario y referencias expiradas no aparentan datos vacíos',async({page})=>{
+ await page.route('**/api/v2/**',route=>{
+  const path=new URL(route.request().url()).pathname
+  if(path.endsWith('/auth/session'))return route.fulfill({json:{data:{user:{username:'fixture'},csrf:'fixture',permissions:['read']}}})
+  if(path.includes('/evidence/'))return route.fulfill({json:{data:{revision:'r1',representation:'original',hash:'h1',text:'Texto expirado',retention_status:'expired'}}})
+  return route.fulfill({status:503,json:{error:{message:'Inventario temporalmente inaccesible'}}})
+ })
+ await page.goto('/v2/explore?view=entities');await expect(page.getByRole('alert')).toContainText('Inventario temporalmente inaccesible');await expect(page.getByText('No hay registros para esta vista.')).toHaveCount(0)
+ const ref={observation_id:'expired',revision:'r1',hash:'h1',representation:'original',start:0,end:5}
+ await page.goto(`/v2/cases?evidence=${encodeURIComponent(JSON.stringify(ref))}`)
+ await expect(page.getByRole('dialog').getByRole('alert')).toContainText('ya no está disponible');await expect(page.getByRole('dialog').locator('pre')).toHaveCount(0)
+})

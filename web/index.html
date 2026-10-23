@@ -13,66 +13,7 @@
   <meta name="apple-mobile-web-app-title" content="Noctis">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
-  <!-- Tailwind CSS Play CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            noctis: {
-              bg: '#0a0a0f',
-              surface: '#12121a',
-              surface2: '#1a1a2e',
-              border: '#2a2a3e',
-              purple: '#7c3aed',
-              'purple-light': '#8b5cf6',
-              'purple-glow': '#a78bfa',
-              blue: '#3b82f6',
-              'blue-light': '#60a5fa',
-              cyan: '#06b6d4',
-              green: '#10b981',
-              text: '#e2e8f0',
-              muted: '#94a3b8',
-              dim: '#64748b',
-            },
-            severity: {
-              critical: '#ef4444',
-              high: '#f97316',
-              medium: '#eab308',
-              low: '#3b82f6',
-              info: '#6b7280',
-            },
-          },
-          fontFamily: {
-            heading: ['Fira Sans', 'sans-serif'],
-            body: ['Fira Sans', 'sans-serif'],
-            mono: ['Fira Code', 'monospace'],
-          },
-        },
-      },
-    }
-  </script>
-
-  <!-- Google Fonts: Fira Code + Fira Sans -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-
-  <!-- Import Map for React ecosystem from esm.sh -->
-  <script type="importmap">
-  {
-    "imports": {
-      "react": "https://esm.sh/react@18",
-      "react/": "https://esm.sh/react@18/",
-      "react-dom": "https://esm.sh/react-dom@18",
-      "react-dom/": "https://esm.sh/react-dom@18/",
-      "react-router-dom": "https://esm.sh/react-router-dom@6?external=react,react-dom",
-      "recharts": "https://esm.sh/recharts@2?external=react,react-dom",
-      "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react"
-    }
-  }
-  </script>
+  <link rel="stylesheet" href="/src/styles.css" />
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }

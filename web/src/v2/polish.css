@@ -1,0 +1,92 @@
+.v2-job-command {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.v2-job-command small {
+  font-size: 12px;
+  line-height: 1.6;
+  max-width: 42ch;
+}
+.v2-brief .v2-job {
+  border: 0;
+  border-radius: 0;
+  padding: 16px 0 0;
+  margin-bottom: 0;
+  border-top: 1px solid var(--line);
+}
+.v2-brief .v2-job-command button {
+  background: #b39af1;
+  border-color: #b39af1;
+  color: #1b122d;
+}
+.v2-brief .v2-job-command button:hover {
+  background: #ccb6ff;
+}
+.v2-workspace > section {
+  margin-top: 36px;
+}
+.v2-workspace > section > h2:first-child {
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+}
+.v2 .v2-ai label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+}
+.v2 .v2-ai label input,
+.v2 .v2-ai label select {
+  margin: 0;
+  width: 100%;
+}
+.v2 .v2-ai .v2-ai-fields .v2-ai-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.v2 .v2-ai input[type="checkbox"] {
+  width: 18px;
+}
+.v2 .v2-ai-function-directory nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-block: 1px solid var(--line);
+}
+.v2 .v2-ai-function-directory nav a {
+  display: flex;
+  border-radius: 0;
+  gap: 9px;
+  padding: 12px;
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .v2 .v2-ai-function-directory nav {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html:has(.v2-shell) {
+    scroll-padding-bottom: 150px;
+  }
+  .v2 .v2-ai-actions {
+    position: sticky;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    bottom: 0;
+    gap: 8px;
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+  }
+  .v2 .v2-ai-actions button {
+    min-width: 0;
+    font-size: 12px;
+    padding: 8px;
+  }
+  .v2 .v2-ai-actions button:first-child {
+    grid-column: 1 / -1;
+  }
+  .v2 .v2-ai :is(input, select, textarea) {
+    scroll-margin-block: 150px;
+  }
+}
