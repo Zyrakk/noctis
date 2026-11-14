@@ -321,6 +321,84 @@ func TestAIDurableConcurrentBudgetTimeoutBadRefsAndPrivacyPostgres(t *testing.T)
 	}
 }
 
+func TestAIUnexpectedSuccessRetainsExposureWithoutRetryPostgres(t *testing.T) {
+	f := newAIFixture(t)
+	ctx := context.Background()
+	f.mode.Store("202")
+	j, err := f.store.Submit(ctx, inference.Submit{Function: "query.plan", Input: f.input(t, "query"), RequestID: "unexpected-success"}, "fixture-admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.store.Once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	check := func() {
+		t.Helper()
+		job, err := f.store.Job(ctx, j.ID, "fixture-admin")
+		if err != nil || job.State != "dependency_blocked" || job.Error != "response_status_invalid" || job.Result != nil {
+			t.Fatal("unexpected success published or became retryable", job, err)
+		}
+		var attempts, publications, products int
+		var maximum, exposure int64
+		var uncertain, usageUnknown bool
+		err = f.conn.QueryRow(ctx, `SELECT count(*),COALESCE(sum(maximum_units),0),COALESCE(sum(exposure_units),0),bool_and(state='uncertain'),bool_and(actual_units IS NULL AND usage IS NULL) FROM noctis_v2.ai_attempts WHERE job_id=$1`, j.ID).Scan(&attempts, &maximum, &exposure, &uncertain, &usageUnknown)
+		if err != nil || attempts != 1 || maximum != 67584 || exposure != maximum || !uncertain || !usageUnknown || f.calls.Load() != 1 {
+			t.Fatal("lost uncertain exposure or repeated call", attempts, maximum, exposure, uncertain, usageUnknown, f.calls.Load(), err)
+		}
+		err = f.conn.QueryRow(ctx, `SELECT (SELECT count(*) FROM noctis_v2.ai_publications WHERE job_id=$1),(SELECT count(*) FROM noctis_v2.ai_products WHERE job_id=$1)`, j.ID).Scan(&publications, &products)
+		if err != nil || publications != 0 || products != 0 {
+			t.Fatal("unsupported response published", publications, products, err)
+		}
+	}
+	check()
+	// Even after the retry time passes, a restarted worker cannot resend it.
+	if _, err = f.conn.Exec(ctx, `UPDATE noctis_v2.ai_jobs SET retry_at=clock_timestamp()-interval '1 second' WHERE id=$1`, j.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.mode.Store("ok")
+	fresh := f.store
+	for i := 0; i < 2; i++ {
+		if err = fresh.Once(ctx); !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatal("blocked job became eligible", err)
+		}
+	}
+	check()
+}
+
+func TestAIRateLimitStillRetriesPostgres(t *testing.T) {
+	f := newAIFixture(t)
+	ctx := context.Background()
+	f.mode.Store("429")
+	j, err := f.store.Submit(ctx, inference.Submit{Function: "query.plan", Input: f.input(t, "query"), RequestID: "rate-limit-retry"}, "fixture-admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.store.Once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	j, err = f.store.Job(ctx, j.ID, "fixture-admin")
+	if err != nil || j.State != "retry_wait" || j.Error != "rate_limited" || f.calls.Load() != 1 {
+		t.Fatal(j, f.calls.Load(), err)
+	}
+	if _, err = f.conn.Exec(ctx, `UPDATE noctis_v2.ai_jobs SET retry_at=clock_timestamp()-interval '1 second' WHERE id=$1`, j.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.mode.Store("ok")
+	fresh := f.store
+	if err = fresh.Once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	j, err = fresh.Job(ctx, j.ID, "fixture-admin")
+	if err != nil || j.State != "succeeded" || j.Result == nil || f.calls.Load() != 2 {
+		t.Fatal("rate limit did not recover", j, f.calls.Load(), err)
+	}
+	var attempts, released, settled int
+	err = f.conn.QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE state='released' AND exposure_units=0),count(*) FILTER(WHERE state='settled') FROM noctis_v2.ai_attempts WHERE job_id=$1`, j.ID).Scan(&attempts, &released, &settled)
+	if err != nil || attempts != 2 || released != 1 || settled != 1 {
+		t.Fatal("rate limit accounting changed", attempts, released, settled, err)
+	}
+}
+
 func newAIFixture(t *testing.T) *aiFixture {
 	t.Helper()
 	f := &aiFixture{dsn: productDB(t)}
@@ -368,6 +446,11 @@ func newAIFixture(t *testing.T) *aiFixture {
 			w.(http.Flusher).Flush()
 		}
 		switch mode {
+		case "202":
+			w.Header().Set("Location", "/poll")
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusAccepted)
+			return
 		case "401":
 			w.WriteHeader(401)
 			return
