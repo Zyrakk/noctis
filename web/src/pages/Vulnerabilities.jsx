@@ -52,7 +52,7 @@ export default function Vulnerabilities() {
     React.createElement('div', { className: 'flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2' },
       React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'Vulnerability Intelligence'),
       React.createElement('span', { className: 'text-sm text-noctis-muted' },
-        `${total.toLocaleString()} vulnerabilities`,
+        `${total.toLocaleString('en-US')} vulnerabilities`,
       ),
     ),
 

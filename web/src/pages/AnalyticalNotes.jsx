@@ -59,7 +59,7 @@ export default function AnalyticalNotes() {
         React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'Analytical Notes'),
       ),
       React.createElement('span', { className: 'text-sm text-noctis-muted' },
-        `${total.toLocaleString()} notes`,
+        `${total.toLocaleString('en-US')} notes`,
       ),
     ),
 
@@ -150,7 +150,7 @@ export default function AnalyticalNotes() {
                     className: 'px-1.5 py-0.5 bg-noctis-cyan/10 border border-noctis-cyan/20 rounded text-cyan-400 truncate max-w-[200px]'
                   }, n.entityId),
                   React.createElement('span', { className: 'text-noctis-dim font-mono ml-auto' },
-                    new Date(n.createdAt).toLocaleString(),
+                    new Date(n.createdAt).toLocaleString('en-US'),
                   ),
                 ),
               )

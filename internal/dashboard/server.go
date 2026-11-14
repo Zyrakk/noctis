@@ -128,7 +128,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("GET /api/public-stats", s.handlePublicStats)
 	s.mux.HandleFunc("GET /api/public-recent", s.handlePublicRecent)
 
-	// SPA catch-all: serve static files, fall back to index.html for client routes
+	// Public landing at root; app.html handles private and demo client routes.
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
@@ -149,9 +149,9 @@ func (s *Server) registerRoutes() {
 			return
 		}
 
-		// SPA fallback: serve index.html for client-side routing
+		// SPA fallback: serve app.html for client-side routing.
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		r.URL.Path = "/"
+		r.URL.Path = "/app.html"
 		fileServer.ServeHTTP(w, r)
 	})
 }

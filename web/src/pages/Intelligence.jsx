@@ -30,7 +30,7 @@ export default function Intelligence({ navigate }) {
   const metricCard = (label, value, icon) =>
     React.createElement('div', { className: 'text-center p-3 bg-noctis-surface/50 border border-white/[0.06] rounded-lg' },
       React.createElement(icon, { className: 'w-4 h-4 mx-auto text-noctis-dim mb-1' }),
-      React.createElement('div', { className: 'text-lg font-mono text-noctis-text' }, (value || 0).toLocaleString()),
+      React.createElement('div', { className: 'text-lg font-mono text-noctis-text' }, (value || 0).toLocaleString('en-US')),
       React.createElement('div', { className: 'text-[10px] text-noctis-dim mt-0.5 uppercase tracking-wider' }, label),
     )
 
@@ -172,7 +172,7 @@ export default function Intelligence({ navigate }) {
                       ),
                     ),
                     React.createElement('span', { className: 'text-[10px] text-noctis-dim' },
-                      `${c.findingCount} findings \u2022 ${new Date(c.createdAt).toLocaleDateString()}`
+                      `${c.findingCount} findings \u2022 ${new Date(c.createdAt).toLocaleDateString('en-US')}`
                     ),
                   )
                 )

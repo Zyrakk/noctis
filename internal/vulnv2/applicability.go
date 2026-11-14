@@ -289,9 +289,9 @@ func publishApplicabilityTx(ctx context.Context, tx pgx.Tx, cve, snapshot, asset
 	}
 	for _, t := range targets {
 		key := fmt.Sprintf("applicability:%s:%s:%s:%d:affected_version", t.id, cve, asset, assetRevision)
-		description := "La versión inventariada coincide con un rango afectado del aviso NVD. Exposición y compromiso local desconocidos; KEV describe explotación global."
+		description := "The inventory version matches an affected range in the NVD advisory. Local exposure and compromise are unknown; KEV describes global exploitation."
 		changeID := uuid.NewString()
-		change, _ := json.Marshal(map[string]any{"id": changeID, "case_id": t.id, "kind": "local_applicability", "title": cve + ": versión inventariada en rango afectado", "description": description, "citations": []json.RawMessage{json.RawMessage(t.ref)}, "snapshot_id": snapshot, "asset_id": asset, "asset_revision": assetRevision, "local_exposure": "unknown", "priority_reason": "inventory_version_matches_published_range"})
+		change, _ := json.Marshal(map[string]any{"id": changeID, "case_id": t.id, "kind": "local_applicability", "title": cve + ": inventory version in affected range", "description": description, "citations": []json.RawMessage{json.RawMessage(t.ref)}, "snapshot_id": snapshot, "asset_id": asset, "asset_revision": assetRevision, "local_exposure": "unknown", "priority_reason": "inventory_version_matches_published_range"})
 		tag, e := tx.Exec(ctx, `INSERT INTO noctis_v2.case_changes(id,case_id,observation_id,body,material_key) VALUES($1,$2,$3,$4,$5) ON CONFLICT(material_key) DO NOTHING`, changeID, t.id, t.obs, string(change), key)
 		if e != nil {
 			return e

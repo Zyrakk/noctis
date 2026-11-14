@@ -12,13 +12,13 @@ test('compiled app renders with third-party requests blocked', async ({ page, ba
     }
     return route.continue()
   })
-  for (const path of ['/', '/login', '/presentation']) {
+  for (const path of ['/login', '/v2/login', '/presentation']) {
     await page.goto(path, { waitUntil: 'networkidle' })
     await expect(page.locator('#root')).not.toBeEmpty()
     await page.evaluate(() => document.fonts.ready)
     expect(await page.evaluate(() => document.fonts.check('400 16px "Fira Sans"'))).toBe(true)
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(10, 10, 15)')
-    if (path === '/login') {
+    if (path.endsWith('/login')) {
       await expect(page.locator('input[type="password"]')).toBeVisible()
       expect(await page.locator('input[type="password"]').evaluate(element => getComputedStyle(element).borderRadius)).not.toBe('0px')
     }

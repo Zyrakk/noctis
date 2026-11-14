@@ -175,7 +175,7 @@ func (s Store) Job(ctx context.Context, id, actor string) (JobView, error) {
 			j.State = "dependency_blocked"
 			j.Error = "result_requires_revalidation"
 			j.Terminal = true
-			j.Limitations = []string{"La evidencia o el contexto cambió; resultado histórico no vigente."}
+			j.Limitations = []string{"The evidence or context changed; this historical result is no longer current."}
 			return j, nil
 		}
 		j.Result = &result
@@ -238,10 +238,10 @@ func (s Store) Once(ctx context.Context) error {
 		return s.fail(ctx, x, e)
 	}
 	if g.Model == "unknown" {
-		g.Result.Limitations = append(g.Result.Limitations, "El proveedor no declara el modelo efectivo; identidad upstream desconocida.")
+		g.Result.Limitations = append(g.Result.Limitations, "The provider does not report the actual model; upstream identity is unknown.")
 	}
 	if g.Usage == nil {
-		g.Result.Limitations = append(g.Result.Limitations, "Uso no declarado: se conserva la exposición máxima incierta.")
+		g.Result.Limitations = append(g.Result.Limitations, "Usage not reported: the uncertain maximum exposure is retained.")
 	}
 	if e = validateResult(x, g.Result); e != nil {
 		return s.fail(ctx, x, e)
@@ -674,7 +674,7 @@ func (s Store) publish(ctx context.Context, x execution, result Result) error {
 		}
 		r := result
 		r.Kind = string(j.Function)
-		r.Limitations = append(r.Limitations, "Salida IA: afirmaciones de fuente o propuestas; no confirma hechos ni atribución.")
+		r.Limitations = append(r.Limitations, "AI output: source claims or proposals; it does not confirm facts or attribution.")
 		tag, pe := tx.Exec(ctx, `INSERT INTO noctis_v2.ai_publications(cache_key,function_id,job_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, x.Cache, j.Function, j.ID)
 		if pe != nil {
 			return pe
@@ -693,10 +693,10 @@ func (s Store) publish(ctx context.Context, x execution, result Result) error {
 			}
 		}
 		if j.Function == "vulnerability.context" {
-			r.Limitations = append(r.Limitations, "Aplicabilidad y exposición local: unknown; el texto no modifica hechos del feed.")
+			r.Limitations = append(r.Limitations, "Local applicability and exposure: unknown; this text does not alter feed facts.")
 		}
 		if j.Function == "evidence.translate" {
-			r.Limitations = append(r.Limitations, "Traducción generada; consultar representación original enlazada.")
+			r.Limitations = append(r.Limitations, "Generated translation; consult the linked original representation.")
 		}
 		raw, _ := json.Marshal(r)
 		deps, _ := json.Marshal(x.Snapshot)

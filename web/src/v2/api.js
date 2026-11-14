@@ -3,8 +3,8 @@ export async function request(path, options = {}) {
     headers: { 'Accept': 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers } })
   if (response.status === 401) window.dispatchEvent(new Event('noctis:unauthorized'))
   let body
-  try { body = await response.json() } catch { throw new Error('Respuesta del servidor no válida') }
-  if (!response.ok) { const error = new Error(body.error?.message || body.error?.code || 'No se pudo completar la solicitud'); error.status = response.status; error.currentRevision=body.error?.current_revision; throw error }
+  try { body = await response.json() } catch { const error = new Error('The server returned an invalid response'); error.status = response.status; throw error }
+  if (!response.ok) { const error = new Error(body.error?.message || body.error?.code || 'Unable to complete the request'); error.status = response.status; error.currentRevision=body.error?.current_revision; throw error }
   return body
 }
 
@@ -17,7 +17,7 @@ export function validEvidenceRef(ref) {
 // Offsets are UTF-8 bytes, never JavaScript UTF-16 indices. Invalid boundaries fail closed.
 export function evidenceParts(text, start, end) {
   const bytes = new TextEncoder().encode(text)
-  if (typeof text !== 'string' || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end > bytes.length) throw new Error('Rango de cita no válido')
+  if (typeof text !== 'string' || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end > bytes.length) throw new Error('Invalid citation range')
   const decoder = new TextDecoder('utf-8', { fatal: true })
   return [decoder.decode(bytes.slice(0, start)), decoder.decode(bytes.slice(start, end)), decoder.decode(bytes.slice(end))]
 }

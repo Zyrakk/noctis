@@ -63,7 +63,7 @@ export default function QueryPage() {
     if (val === null || val === undefined) return '-'
     if (typeof val === 'boolean') return val ? 'true' : 'false'
     if (val instanceof Date || (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val))) {
-      return new Date(val).toLocaleString()
+      return new Date(val).toLocaleString('en-US')
     }
     if (typeof val === 'object') return JSON.stringify(val)
     return String(val)

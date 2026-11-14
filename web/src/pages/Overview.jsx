@@ -28,7 +28,7 @@ function StatCard({ icon: Icon, label, value, color = 'border-noctis-border' }) 
       React.createElement('span', { className: 'text-xs text-noctis-dim' }, label),
     ),
     React.createElement('div', { className: 'text-xl font-mono font-normal text-noctis-text' },
-      value != null ? value.toLocaleString() : React.createElement('span', { className: 'skeleton inline-block w-14 h-6' }),
+      value != null ? value.toLocaleString('en-US') : React.createElement('span', { className: 'skeleton inline-block w-14 h-6' }),
     ),
   )
 }
@@ -196,7 +196,7 @@ export default function Overview({ navigate }) {
               },
                 React.createElement(SeverityBadge, { severity: f.severity }),
                 React.createElement('span', { className: 'text-xs text-noctis-dim font-mono min-w-[5rem]' },
-                  new Date(f.collectedAt).toLocaleDateString(),
+                  new Date(f.collectedAt).toLocaleDateString('en-US'),
                 ),
                 React.createElement('span', { className: 'text-xs text-noctis-muted px-2 py-0.5 bg-noctis-bg rounded' }, f.sourceType),
                 React.createElement('span', { className: 'text-sm text-noctis-text truncate flex-1 min-w-0' }, f.summary || 'No summary'),

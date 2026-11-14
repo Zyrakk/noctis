@@ -11,6 +11,14 @@ original, traducción generada, revisión y evidencia caducada/no disponible. La
 demos públicas de A/B/C son sintéticas y no consultan el backend privado.
 El diseño y los criterios de aceptación están en [rebuild/](rebuild/README.md).
 
+La raíz pública presenta el proyecto en `web/index.html`, con CSS, scripts y
+captura del panel incrustados; vídeo y fuentes son remotos. El acceso privado
+permanece en `/v2/login`, separado de la landing. Con Vite activo se puede
+regenerar la captura sintética mediante `cd web && node scripts/capture-dashboard.mjs`;
+`npm run test:landing` verifica presentación y regresiones del panel desde `web/`.
+La [revisión del 13 de noviembre](docs/review-2026-11-13.md) recoge los bloqueos
+operativos y los hallazgos de la revisión de veinte ámbitos.
+
 ## Desarrollo y comprobaciones
 
 Requiere Go según `go.mod`, Node22, Docker y PostgreSQL16 local de pruebas.

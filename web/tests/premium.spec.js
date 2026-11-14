@@ -1,0 +1,90 @@
+import { test, expect } from '@playwright/test'
+import { panelFixture } from './panel-fixture.js'
+
+test('demo revisions keep future records hidden and citations distinct', async ({ page }) => {
+  const requests = []
+  page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()) })
+  await page.addInitScript(() => { for (const method of ['getItem', 'setItem']) Storage.prototype[method] = () => { throw new Error('Public demo must not access private storage') } })
+  await page.goto('/demo?story=B&step=0&area=case')
+  await expect(page.getByRole('note')).toContainText('Synthetic data')
+  await expect(page.getByText('Synthetic response statement', { exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Open synthetic evidence 1', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('B-offer')
+  await expect(page.getByRole('dialog')).not.toContainText('four republications')
+  await expect(page.getByRole('dialog')).not.toContainText('denies the access claim')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Open synthetic evidence 1', exact: true })).toBeFocused()
+  await page.getByRole('button', { name: 'Revision 3', exact: true }).click()
+  await page.getByRole('button', { name: 'Open synthetic evidence 1', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('B-denial')
+  await expect(page.locator('mark')).toContainText('denies the access claim')
+  await page.reload()
+  await expect(page.getByRole('dialog')).toContainText('B-denial')
+  await page.getByRole('button', { name: 'Close synthetic evidence', exact: true }).click()
+  await page.goBack()
+  await expect(page.getByRole('dialog')).toContainText('B-denial')
+  expect(requests).toEqual([])
+})
+
+test('demo rejects inherited, fractional, future and foreign selections safely', async ({ page }) => {
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  for (const query of ['story=constructor&step=1.5', 'story=__proto__&step=Infinity', 'story=C&step=-9', 'story=A&step=0&evidence=B-denial', 'story=B&step=0&evidence=B-denial']) {
+    await page.goto(`/demo?${query}`)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^Revision [123]$/ })).toHaveCount(3)
+  }
+  await page.goto('/demo?story=C&step=0&area=sources')
+  await expect(page.locator('.demo-source-list')).not.toContainText('shared hosting')
+  await expect(page.locator('.demo-source-list article')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Revision 2', exact: true }).click()
+  await expect(page.locator('.demo-source-list article')).toHaveCount(2)
+  await expect(page.locator('.demo-source-list')).toContainText('shared hosting')
+  expect(errors).toEqual([])
+})
+
+test('demo view, revision and source survive reload and browser history', async ({ page }) => {
+  await page.goto('/demo?story=A&step=1')
+  await page.getByRole('button', { name: 'Relationships', exact: true }).click()
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Relationships', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.demo-document-flow>button')).toHaveCount(2)
+  await page.getByRole('button', { name: 'Sources', exact: true }).click()
+  await page.goBack()
+  await expect(page.getByRole('button', { name: 'Relationships', exact: true })).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('sign-in protects pending submissions and reveals a password accessibly', async ({ page }) => {
+  let attempts = 0, release
+  const waiting = new Promise(resolve => { release = resolve })
+  await panelFixture(page, { authenticated: false })
+  await page.route('**/api/v2/auth/login', async route => { attempts++; await waiting; await route.fulfill({ status: 401, json: { error: { message: 'Not authorized' } } }) })
+  await page.goto('/v2/cases/fixture-case?q=kept#source')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  await page.getByLabel('Username', { exact: true }).fill('operator')
+  await page.getByLabel('Password', { exact: true }).fill('synthetic-password')
+  await page.getByRole('button', { name: 'Show password', exact: true }).click()
+  await expect(page.getByLabel('Password', { exact: true })).toHaveAttribute('type', 'text')
+  await page.getByRole('button', { name: 'Hide password', exact: true }).click()
+  await expect(page.getByLabel('Password', { exact: true })).toHaveAttribute('type', 'password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Signing in…', exact: true })).toBeDisabled()
+  await expect.poll(() => attempts).toBe(1)
+  await page.locator('form').evaluate(form => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
+  expect(attempts).toBe(1)
+  release()
+  await expect(page.getByRole('alert')).toHaveText('The username or password is incorrect.')
+  await expect(page.getByLabel('Password', { exact: true })).toHaveValue('synthetic-password')
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled()
+  expect(await page.evaluate(() => ({ ...localStorage, ...sessionStorage }))).toEqual({})
+})
+
+test('sign-in retains the complete local destination', async ({ page }) => {
+  await panelFixture(page, { authenticated: false })
+  await page.goto('/v2/cases/fixture-case?q=kept#source')
+  await page.getByLabel('Username', { exact: true }).fill('operator')
+  await page.getByLabel('Password', { exact: true }).fill('synthetic-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(page).toHaveURL(/\/v2\/cases\/fixture-case\?q=kept#source$/)
+})

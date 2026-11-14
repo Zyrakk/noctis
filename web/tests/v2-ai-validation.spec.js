@@ -17,15 +17,15 @@ for(const outcome of ['valid','invalid','unknown-reason'])test(`contexto CVE sin
   throw new Error('Unexpected offline UI request')
  })
  await page.goto(`/v2/explore?view=feeds&cve=${encodeURIComponent(records.cve)}`)
- await page.getByRole('button',{name:'Contextualizar CVE con IA'}).click()
+ await page.getByRole('button',{name:'Contextualize CVE with AI'}).click()
  if(outcome==='valid'){
   await expect(page.getByText(records.valid.result.text,{exact:true})).toBeVisible()
-  await expect(page.getByText('Aplicabilidad y exposición local: unknown; el texto no modifica hechos del feed.',{exact:true})).toBeVisible()
-  await expect(page.getByRole('button',{name:/Abrir evidencia/})).toHaveCount(0)
+  await expect(page.getByText('Local applicability and exposure: unknown; this text does not alter feed facts.',{exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:/Open evidence/})).toHaveCount(0)
  }else{
   await expect(page.getByRole('alert').filter({hasText:'result_validation_failed'})).toBeVisible()
-  if(outcome==='invalid')await expect(page.getByText('Una afirmación carece de campos o citas válidos.',{exact:true})).toBeVisible()
-  else await expect(page.getByText('Una afirmación carece de campos o citas válidos.',{exact:true})).toHaveCount(0)
+  if(outcome==='invalid')await expect(page.getByText('A claim lacks valid fields or citations.',{exact:true})).toBeVisible()
+  else await expect(page.getByText('A claim lacks valid fields or citations.',{exact:true})).toHaveCount(0)
   await expect(page.getByText(records.valid.result.text,{exact:true})).toHaveCount(0)
  }
  expect(await page.locator('body').innerText()).not.toContain('SECRET-DECOY')

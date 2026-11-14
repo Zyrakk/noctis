@@ -6,7 +6,8 @@ const origin = `http://127.0.0.1:${port}`
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['offline-assets.spec.js', 'v2-real.spec.js'],
+  testMatch: ['offline-assets.spec.js', 'landing.spec.js', 'premium.spec.js', 'v2-real.spec.js'],
+  workers: 2,
   use: { baseURL: origin },
   webServer: {
     command: `npm run preview -- --host 127.0.0.1 --port ${port} --strictPort`,

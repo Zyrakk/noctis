@@ -14,13 +14,13 @@ type FunctionSpec struct {
 }
 
 var Functions = []FunctionSpec{
-	{"semantic.classify", "observation", "Categoría e intención"}, {"semantic.relevance", "observation", "Relevancia explicada"},
-	{"semantic.claims", "observation", "Afirmaciones atribuidas a la fuente"}, {"semantic.entities_relations", "observation", "Entidades y relaciones propuestas"},
-	{"semantic.observable_roles", "observation", "Roles de observables"}, {"identity.disambiguate", "identity", "Hipótesis de identidad"},
-	{"vulnerability.context", "vulnerability", "Contexto CVE; aplicabilidad desconocida"}, {"case.analyze", "case", "Análisis de expediente"},
-	{"case.summarize", "case", "Síntesis de expediente"}, {"brief.compose", "brief", "Brief de cambios y cobertura"},
-	{"query.plan", "query", "Plan de consulta tipado"}, {"query.explain", "query_result", "Explicación de resultados autorizados"},
-	{"evidence.translate", "observation", "Traducción vinculada al original"}, {"source.triage", "source", "Propuesta de evaluación de fuente"},
+	{"semantic.classify", "observation", "Category and intent"}, {"semantic.relevance", "observation", "Explained relevance"},
+	{"semantic.claims", "observation", "Claims attributed to the source"}, {"semantic.entities_relations", "observation", "Proposed entities and relationships"},
+	{"semantic.observable_roles", "observation", "Observable roles"}, {"identity.disambiguate", "identity", "Identity hypotheses"},
+	{"vulnerability.context", "vulnerability", "CVE context; applicability unknown"}, {"case.analyze", "case", "Case analysis"},
+	{"case.summarize", "case", "Case summary"}, {"brief.compose", "brief", "Brief on changes and coverage"},
+	{"query.plan", "query", "Typed query plan"}, {"query.explain", "query_result", "Explanation of authorized results"},
+	{"evidence.translate", "observation", "Translation linked to the original"}, {"source.triage", "source", "Proposed source assessment"},
 }
 
 func Spec(id Function) (FunctionSpec, bool) {

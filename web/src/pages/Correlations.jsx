@@ -40,7 +40,7 @@ export default function Correlations() {
         React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'Correlations'),
       ),
       React.createElement('span', { className: 'text-sm text-noctis-muted' },
-        `${total.toLocaleString()} ${tab}`,
+        `${total.toLocaleString('en-US')} ${tab}`,
       ),
     ),
 
@@ -107,7 +107,7 @@ export default function Correlations() {
                       ),
                     ),
                     React.createElement('div', { className: 'text-[10px] text-noctis-dim font-mono' },
-                      new Date(c.createdAt).toLocaleString(),
+                      new Date(c.createdAt).toLocaleString('en-US'),
                     ),
                   )
                 )
@@ -133,7 +133,7 @@ export default function Correlations() {
                     ),
                     React.createElement('div', { className: 'flex items-center gap-2 text-[10px] text-noctis-dim' },
                       React.createElement('span', { className: 'font-mono truncate max-w-[200px]' }, d.clusterId),
-                      React.createElement('span', { className: 'font-mono ml-auto' }, new Date(d.createdAt).toLocaleString()),
+                      React.createElement('span', { className: 'font-mono ml-auto' }, new Date(d.createdAt).toLocaleString('en-US')),
                     ),
                   )
                 }),

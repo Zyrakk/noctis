@@ -212,7 +212,7 @@ export default function Findings() {
       React.createElement('div', { className: 'flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 mb-4' },
         React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'Findings'),
         React.createElement('span', { className: 'text-sm text-noctis-muted' },
-          `${total.toLocaleString()} results`,
+          `${total.toLocaleString('en-US')} results`,
         ),
       ),
 
@@ -271,7 +271,7 @@ export default function Findings() {
                     className: `border-b border-white/[0.05] cursor-pointer transition-colors duration-150 hover:bg-white/[0.04] ${selectedId === f.id ? 'bg-noctis-purple/5' : ''}`
                   },
                     React.createElement('td', { className: 'px-3 py-2.5 text-xs font-mono text-noctis-dim whitespace-nowrap' },
-                      new Date(f.collectedAt).toLocaleString(),
+                      new Date(f.collectedAt).toLocaleString('en-US'),
                     ),
                     React.createElement('td', { className: 'px-3 py-2.5' },
                       React.createElement('span', { className: 'text-xs px-2 py-0.5 bg-noctis-bg rounded text-noctis-muted' }, f.sourceType),
@@ -327,7 +327,7 @@ export default function Findings() {
                 // Bottom row: source + time
                 React.createElement('div', { className: 'flex items-center justify-between text-xs text-noctis-dim' },
                   React.createElement('span', { className: 'px-1.5 py-0.5 bg-noctis-bg rounded' }, f.sourceType),
-                  React.createElement('span', { className: 'font-mono' }, new Date(f.collectedAt).toLocaleDateString()),
+                  React.createElement('span', { className: 'font-mono' }, new Date(f.collectedAt).toLocaleDateString('en-US')),
                 ),
               )
             ),
@@ -404,7 +404,7 @@ export default function Findings() {
               }, detail.category.replace(/_/g, ' ')),
               React.createElement('span', {
                 className: 'text-xs text-noctis-dim font-mono'
-              }, new Date(detail.collectedAt).toLocaleString()),
+              }, new Date(detail.collectedAt).toLocaleString('en-US')),
             ),
 
             // Sub-Category

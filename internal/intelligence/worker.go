@@ -195,7 +195,7 @@ func (w Worker) Once(ctx context.Context) (result error) {
 			return e
 		}
 		refs = append(refs, ref)
-		summary := "La fuente publicó contenido coincidente con una watchlist. Independencia de las fuentes desconocida; las copias no aportan corroboración."
+		summary := "The source published content matching a watchlist. Source independence is unknown; copies do not provide corroboration."
 		body, _ := json.Marshal(map[string]any{"id": id, "title": title, "revision": fmt.Sprint(revision), "supersedes": fmt.Sprint(revision - 1), "status": "source_claim", "summary": summary, "citations": refs, "policy_version": j.PolicyVersion, "independence": "unknown"})
 		_, e = tx.Exec(ctx, `INSERT INTO noctis_v2.case_revisions(case_id,revision,body) VALUES($1,$2,$3)`, id, revision, string(body))
 		if e != nil {
@@ -239,7 +239,7 @@ func (w Worker) Brief(ctx context.Context, period, policy string) error {
 		return e
 	}
 	defer rows.Close()
-	text := "Brief mecánico. Cobertura de fuentes limitada a ventanas de feed; independencia desconocida.\n"
+	text := "Automated brief. Source coverage is limited to feed windows; independence is unknown.\n"
 	refs := []evidence.Ref{}
 	needsReview := false
 	for rows.Next() {
@@ -259,7 +259,7 @@ func (w Worker) Brief(ctx context.Context, period, policy string) error {
 		text += "• " + ch.Title + ": " + ch.Description + "\n"
 		if invalid {
 			needsReview = true
-			text += "  Evidencia retirada, sustituida o derivada invalidada: esta entrada requiere revisión y no confirma la afirmación.\n"
+			text += "  Evidence withdrawn, superseded, or derived evidence invalidated: this entry requires review and does not confirm the claim.\n"
 		}
 		refs = append(refs, ch.Citations...)
 	}

@@ -93,7 +93,7 @@ func JudgeClaimTx(ctx context.Context, tx pgx.Tx, c ClaimVersion, status, produc
 		}
 	}
 	changeID := uuid.NewString()
-	change, _ := json.Marshal(map[string]any{"id": changeID, "kind": "operator_claim_judgment", "title": "Juicio de afirmación: " + status, "description": reason, "citations": refs, "claim_id": c.ID, "claim_revision": c.Revision + 1, "producer": producer})
+	change, _ := json.Marshal(map[string]any{"id": changeID, "kind": "operator_claim_judgment", "title": "Claim judgment: " + status, "description": reason, "citations": refs, "claim_id": c.ID, "claim_revision": c.Revision + 1, "producer": producer})
 	_, e = tx.Exec(ctx, `INSERT INTO noctis_v2.case_changes(id,case_id,observation_id,body,material_key) SELECT $1,case_id,$2,$3,$4 FROM noctis_v2.claim_versions WHERE id=$5 AND revision=$6`, changeID, refs[0].ObservationID, string(change), fmt.Sprintf("judgment:%s:%d", c.ID, c.Revision+1), c.ID, c.Revision)
 	if e != nil {
 		return e
@@ -334,7 +334,7 @@ func ApplyAnalysisTx(ctx context.Context, tx pgx.Tx, a ValidatedAnalysis) error 
 		}
 		if contradictions[id] {
 			changeID := uuid.NewString()
-			change, _ := json.Marshal(map[string]any{"id": changeID, "case_id": id, "kind": "source_contradiction", "title": "Una fuente presenta una contradicción", "description": "Se conservan las afirmaciones en conflicto y sus citas. La contradicción no determina cuál es verdadera.", "citations": a.Refs, "status": "source_claim"})
+			change, _ := json.Marshal(map[string]any{"id": changeID, "case_id": id, "kind": "source_contradiction", "title": "A source presents a contradiction", "description": "Conflicting claims and their citations are retained. The contradiction does not determine which claim is true.", "citations": a.Refs, "status": "source_claim"})
 			key := fmt.Sprintf("source_contradiction:%s:%s", id, a.Refs[0].Hash)
 			tag, err := tx.Exec(ctx, `INSERT INTO noctis_v2.case_changes(id,case_id,observation_id,body,material_key) VALUES($1,$2,$3,$4,$5) ON CONFLICT(material_key) DO NOTHING`, changeID, id, k.InputID, string(change), key)
 			if err != nil {
@@ -386,13 +386,13 @@ func RetractClaimTx(ctx context.Context, tx pgx.Tx, c ClaimVersion, producer, re
 	if e != nil {
 		return e
 	}
-	_, e = tx.Exec(ctx, `WITH RECURSIVE affected(id,revision) AS (SELECT $1::uuid,$2::integer UNION SELECT d.claim_id,d.claim_revision FROM noctis_v2.claim_dependencies d JOIN affected a ON d.dependency_id=a.id AND d.dependency_revision=a.revision WHERE d.relation IN('supports','depends_on')), updated AS (UPDATE noctis_v2.intelligence_cases ic SET revision=revision+1,updated_at=clock_timestamp() WHERE EXISTS(SELECT FROM noctis_v2.claim_versions c JOIN affected a ON a.id=c.id AND a.revision=c.revision WHERE c.case_id=ic.id) RETURNING id,revision) INSERT INTO noctis_v2.case_revisions(case_id,revision,body) SELECT u.id,u.revision,old.body||jsonb_build_object('revision',u.revision::text,'supersedes',(u.revision-1)::text,'claims_status','needs_revalidation','summary','Una retractación invalida afirmaciones derivadas; revisar evidencia y contradicciones.') FROM updated u JOIN noctis_v2.case_revisions old ON old.case_id=u.id AND old.revision=u.revision-1`, c.ID, c.Revision)
+	_, e = tx.Exec(ctx, `WITH RECURSIVE affected(id,revision) AS (SELECT $1::uuid,$2::integer UNION SELECT d.claim_id,d.claim_revision FROM noctis_v2.claim_dependencies d JOIN affected a ON d.dependency_id=a.id AND d.dependency_revision=a.revision WHERE d.relation IN('supports','depends_on')), updated AS (UPDATE noctis_v2.intelligence_cases ic SET revision=revision+1,updated_at=clock_timestamp() WHERE EXISTS(SELECT FROM noctis_v2.claim_versions c JOIN affected a ON a.id=c.id AND a.revision=c.revision WHERE c.case_id=ic.id) RETURNING id,revision) INSERT INTO noctis_v2.case_revisions(case_id,revision,body) SELECT u.id,u.revision,old.body||jsonb_build_object('revision',u.revision::text,'supersedes',(u.revision-1)::text,'claims_status','needs_revalidation','summary','A retraction invalidates derived claims; review evidence and contradictions.') FROM updated u JOIN noctis_v2.case_revisions old ON old.case_id=u.id AND old.revision=u.revision-1`, c.ID, c.Revision)
 	if e != nil {
 		return e
 	}
 	ref := refs[0]
 	changeID := uuid.NewString()
-	change, _ := json.Marshal(map[string]any{"id": changeID, "kind": "claim_retraction", "title": "Retractación de una afirmación", "description": reason, "citations": refs, "claim_id": c.ID, "claim_revision": c.Revision + 1})
+	change, _ := json.Marshal(map[string]any{"id": changeID, "kind": "claim_retraction", "title": "Claim retraction", "description": reason, "citations": refs, "claim_id": c.ID, "claim_revision": c.Revision + 1})
 	_, e = tx.Exec(ctx, `INSERT INTO noctis_v2.case_changes(id,case_id,observation_id,body,material_key) SELECT $1,case_id,$2,$3,$4 FROM noctis_v2.claim_versions WHERE id=$5 AND revision=$6 ON CONFLICT(material_key) DO NOTHING`, changeID, ref.ObservationID, string(change), fmt.Sprintf("retraction:%s:%d", c.ID, c.Revision+1), c.ID, c.Revision)
 	return e
 }

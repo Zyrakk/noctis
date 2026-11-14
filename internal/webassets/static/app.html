@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Noctis — Research workspace</title>
+  <meta name="description" content="Noctis: AI-Powered Threat Intelligence Platform. Multi-source collection, AI classification, IOC extraction, entity graph analysis." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='4' y='26' font-family='system-ui' font-size='28' font-weight='300' fill='%237c3aed'>N</text></svg>" />
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#7c3aed">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Noctis">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Fira Sans', sans-serif;
+      background: #0a0a0f;
+      color: #e2e8f0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #12121a; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+    /* Skeleton loading animation */
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #12121a 25%, #1a1a2e 50%, #12121a 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+    }
+    /* Slow ambient background blobs */
+    @keyframes drift-1 {
+      0%, 100% { transform: translate(0, 0); }
+      33% { transform: translate(60px, -40px); }
+      66% { transform: translate(-30px, 30px); }
+    }
+    @keyframes drift-2 {
+      0%, 100% { transform: translate(0, 0); }
+      33% { transform: translate(-50px, 50px); }
+      66% { transform: translate(40px, -20px); }
+    }
+    .hero-blob-1 {
+      position: absolute;
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(124,58,237,0.06) 0%, transparent 70%);
+      border-radius: 50%;
+      top: 10%; left: 15%;
+      animation: drift-1 80s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .hero-blob-2 {
+      position: absolute;
+      width: 250px; height: 250px;
+      background: radial-gradient(circle, rgba(59,130,246,0.05) 0%, transparent 70%);
+      border-radius: 50%;
+      top: 40%; right: 10%;
+      animation: drift-2 70s ease-in-out infinite;
+      pointer-events: none;
+    }
+    /* Grid pattern background */
+    .grid-bg {
+      background-image:
+        linear-gradient(rgba(124, 58, 237, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124, 58, 237, 0.05) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    /* Shake animation for login errors */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+      20%, 40%, 60%, 80% { transform: translateX(4px); }
+    }
+    .shake {
+      animation: shake 0.5s ease-in-out;
+    }
+    /* Slide-in from right for detail panels */
+    @keyframes slide-in-right {
+      from { transform: translateX(1rem); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .animate-slide-in {
+      animation: slide-in-right 0.2s ease-out;
+    }
+    /* Page enter transition for route changes */
+    @keyframes page-enter {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .animate-page-enter {
+      animation: page-enter 150ms ease-out;
+    }
+    /* Slide up from bottom for mobile sheets/panels */
+    @keyframes slide-up {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    .animate-slide-up {
+      animation: slide-up 200ms ease-out;
+    }
+    /* Expand-down for collapsible card details */
+    @keyframes expand-down {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-expand-down {
+      animation: expand-down 150ms ease-out;
+    }
+    /* Safe area for bottom nav on notched phones */
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/app-BBYH6TXn.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/app-DqlN1t9R.css">
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>

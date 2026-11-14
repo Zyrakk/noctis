@@ -62,6 +62,6 @@ func InvalidateProjectionTx(ctx context.Context, tx pgx.Tx, roots []ClaimVersion
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO noctis_v2.case_changes(id,case_id,observation_id,body,material_key) SELECT gen_random_uuid(),ic.id,m.observation_id,jsonb_build_object('case_id',ic.id,'kind','support_invalidated','title','Revalidación necesaria','description',$2::text,'revision',ic.revision), 'invalidation:'||ic.id::text||':'||ic.revision::text FROM noctis_v2.intelligence_cases ic JOIN LATERAL(SELECT observation_id FROM noctis_v2.case_memberships WHERE case_id=ic.id ORDER BY observation_id LIMIT 1)m ON true WHERE ic.id::text=ANY($1::text[]) ON CONFLICT DO NOTHING`, cases, reason)
+	_, err = tx.Exec(ctx, `INSERT INTO noctis_v2.case_changes(id,case_id,observation_id,body,material_key) SELECT gen_random_uuid(),ic.id,m.observation_id,jsonb_build_object('case_id',ic.id,'kind','support_invalidated','title','Revalidation required','description',$2::text,'revision',ic.revision), 'invalidation:'||ic.id::text||':'||ic.revision::text FROM noctis_v2.intelligence_cases ic JOIN LATERAL(SELECT observation_id FROM noctis_v2.case_memberships WHERE case_id=ic.id ORDER BY observation_id LIMIT 1)m ON true WHERE ic.id::text=ANY($1::text[]) ON CONFLICT DO NOTHING`, cases, reason)
 	return err
 }

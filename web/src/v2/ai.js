@@ -6,7 +6,7 @@ export const executeQuery = (plan, csrf, { signal } = {}) => request('/query', {
 export async function readAIConfig({ signal } = {}) {
  const response=await fetch('/api/v2/ai/config',{credentials:'same-origin',headers:{Accept:'application/json'},signal})
  if(response.status===401)window.dispatchEvent(new Event('noctis:unauthorized'))
- let body;try{body=await response.json()}catch{throw new Error('Respuesta del servidor no válida')};if(!response.ok){const e=new Error(body.error?.message||'Configuración no disponible');e.status=response.status;throw e}
+ let body;try{body=await response.json()}catch{throw new Error('Invalid server response')};if(!response.ok){const e=new Error(body.error?.message||'Configuration unavailable');e.status=response.status;throw e}
  return {...body,etag:response.headers.get('ETag')}
 }
 export const saveAIConfig = (config,etag,csrf) => request('/ai/config',{method:'PUT',headers:{'X-CSRF-Token':csrf,'If-Match':etag},body:JSON.stringify(config)})

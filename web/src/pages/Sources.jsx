@@ -222,7 +222,7 @@ export default function Sources() {
                       ),
                       s.lastCollected && React.createElement('div', { className: 'flex items-center gap-1' },
                         React.createElement(Clock, { className: 'w-3 h-3' }),
-                        new Date(s.lastCollected).toLocaleDateString(),
+                        new Date(s.lastCollected).toLocaleDateString('en-US'),
                       ),
                       s.errorCount > 0 && React.createElement('div', { className: 'flex items-center gap-1 text-yellow-400' },
                         React.createElement(AlertTriangle, { className: 'w-3 h-3' }),
@@ -283,7 +283,7 @@ export default function Sources() {
                             s.identifier,
                           ),
                           React.createElement('td', { className: 'px-3 py-2.5 text-xs text-noctis-dim font-mono' },
-                            new Date(s.createdAt).toLocaleDateString(),
+                            new Date(s.createdAt).toLocaleDateString('en-US'),
                           ),
                           React.createElement('td', { className: 'px-3 py-2.5' },
                             tab === 'discovered'
@@ -344,7 +344,7 @@ export default function Sources() {
                             React.createElement('span', { className: 'text-xs text-noctis-muted' }, s.type.replace(/_/g, ' ')),
                           ),
                           React.createElement('span', { className: 'text-xs text-noctis-dim font-mono' },
-                            new Date(s.createdAt).toLocaleDateString(),
+                            new Date(s.createdAt).toLocaleDateString('en-US'),
                           ),
                         ),
                         // Identifier

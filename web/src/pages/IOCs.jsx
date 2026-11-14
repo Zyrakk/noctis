@@ -68,7 +68,7 @@ export default function IOCs() {
       React.createElement('h1', { className: 'font-heading font-normal text-xl' }, 'IOC Explorer'),
       React.createElement('div', { className: 'flex items-center gap-3' },
         React.createElement('span', { className: 'text-sm text-noctis-muted' },
-          `${total.toLocaleString()} indicators`,
+          `${total.toLocaleString('en-US')} indicators`,
         ),
         React.createElement('button', {
           onClick: exportCSV,
@@ -232,7 +232,7 @@ export default function IOCs() {
               },
                 React.createElement('div', { className: 'flex items-center justify-between mb-1.5' },
                   React.createElement('span', { className: 'text-xs px-2 py-0.5 bg-noctis-cyan/10 border border-noctis-cyan/30 rounded text-cyan-400 font-mono' }, ioc.type),
-                  React.createElement('span', { className: 'text-xs text-noctis-dim font-mono' }, new Date(ioc.firstSeen).toLocaleDateString()),
+                  React.createElement('span', { className: 'text-xs text-noctis-dim font-mono' }, new Date(ioc.firstSeen).toLocaleDateString('en-US')),
                 ),
                 React.createElement('p', { className: 'font-mono text-sm text-noctis-text break-all mb-1' }, ioc.value),
                 ioc.context && React.createElement('p', { className: 'text-xs text-noctis-muted line-clamp-1' }, ioc.context),
