@@ -117,6 +117,30 @@ que existe la CRD `serverstransports.traefik.io` y que Traefik observa el namesp
 nuevo. Si falta, resolver la infraestructura explícitamente; no debilitar TLS.
 La NetworkPolicy permite TCP/8081 solo desde las etiquetas Traefik revisadas.
 
+`serve --mode api` valida el origen y carga el par TLS antes de consultar
+PostgreSQL o abrir el listener. Certificado y clave deben configurarse juntos;
+un archivo ausente, ilegible, inválido o incompatible impide el arranque, sin
+degradar a HTTP. La carga comprueba el par criptográfico, no confianza pública,
+SAN ni vigencia: conservar las comprobaciones operativas anteriores. El mismo
+material cargado se utiliza para servir; cambiar archivos requiere reiniciar.
+
+`--origin` es el origen **público** exacto: esquema y host en minúsculas, host DNS
+ASCII/punycode o IP canónica (IPv6 entre corchetes), puerto sin ceros iniciales
+si no es el predeterminado. No admite credenciales, espacios, ruta —tampoco `/`—,
+query ni fragmento. Ejemplos: `https://noctis.zyrak.cloud` y
+`https://noctis.example:8443`. Los puertos predeterminados `:443` en HTTPS y `:80`
+en HTTP se omiten porque el navegador los omite en `Origin`. La comparación de
+peticiones sigue siendo exacta.
+
+Otros despliegues pueden terminar HTTPS en un proxy y usar HTTP interno
+omitiendo **ambos** archivos TLS. Esto es independiente del esquema del origen
+público y no cambia el TLS API/Traefik de estos manifiestos. El acceso autenticado
+del navegador sigue necesitando HTTPS: las cookies conservan `Secure`,
+`HttpOnly`, `SameSite=Strict` y CSRF. `Forwarded` y `X-Forwarded-*` no seleccionan
+el transporte ni sustituyen el origen configurado; tampoco se exige que el
+certificado interno cubra el origen público. Worker, collector, `migrate` y
+comandos administrativos no adquieren requisitos HTTP.
+
 Si Traefik usa `hostNetwork`, el origen que recibe la API puede ser una dirección
 de nodo o de la ruta CNI y no coincidir con el selector de pods. Conservar ese
 selector y, únicamente tras comprobar el origen efectivo desde cada instancia

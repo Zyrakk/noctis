@@ -28,8 +28,11 @@ type API struct {
 }
 
 func NewHandler(cfg configv2.Config) (http.Handler, error) {
-	if cfg.AdminFile == "" || cfg.Origin == "" {
-		return nil, errors.New("admin secret file and canonical origin required")
+	if e := validateOrigin(cfg.Origin); e != nil {
+		return nil, e
+	}
+	if cfg.AdminFile == "" {
+		return nil, errors.New("admin secret file required")
 	}
 	raw, e := os.ReadFile(cfg.AdminFile)
 	if e != nil {

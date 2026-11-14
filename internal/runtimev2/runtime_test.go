@@ -52,7 +52,7 @@ func TestStartupWithoutLLMPostgres(t *testing.T) {
 	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
-	if e = Run(cancelled, configv2.Config{Mode: "api", DatabaseURL: dsn, Listen: "127.0.0.1:0"}); e == nil {
+	if e = Run(cancelled, configv2.Config{Mode: "api", DatabaseURL: dsn, Listen: "127.0.0.1:0", Origin: "https://fixture.invalid", AdminFile: httpConfigAdmin(t)}); e == nil {
 		t.Fatal("cancelled startup should fail DB check")
 	}
 }
