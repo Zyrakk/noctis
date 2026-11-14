@@ -19,7 +19,7 @@ import (
 const rssExpiredEntry = `<item><guid>A</guid><title>old evidence</title></item>`
 const rssNewEntry = `<item><guid>B</guid><title>new evidence</title></item>`
 
-func rssExpiredBatch(t *testing.T, dsn, address, entry string, change func(*Item)) Batch {
+func rssExpiredBatch(t *testing.T, dsn, address, entry string, change func(*Item)) (Batch, string) {
 	t.Helper()
 	ctx := context.Background()
 	b := batch(t, dsn)
@@ -48,10 +48,22 @@ func rssExpiredBatch(t *testing.T, dsn, address, entry string, change func(*Item
 	if _, err = c.Exec(ctx, `UPDATE noctis_v2.content_blobs SET payload=''::bytea`); err != nil {
 		t.Fatal(err)
 	}
-	return b
+	return b, rssPollWorkState(t, c)
 }
 
-func assertRSSPollRollback(t *testing.T, dsn string, b Batch, wantVersion int64) {
+func rssPollWorkState(t *testing.T, c *pgx.Conn) string {
+	t.Helper()
+	var state string
+	err := c.QueryRow(context.Background(), `SELECT jsonb_build_object(
+ 'jobs',(SELECT jsonb_agg(j ORDER BY id) FROM noctis_v2.jobs j),
+ 'requests',(SELECT jsonb_agg(r ORDER BY id) FROM noctis_v2.applicability_requests r))::text`).Scan(&state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return state
+}
+
+func assertRSSPollRollback(t *testing.T, dsn string, b Batch, wantVersion int64, wantWork string) {
 	t.Helper()
 	ctx := context.Background()
 	c, err := pgx.Connect(ctx, dsn)
@@ -65,11 +77,16 @@ func assertRSSPollRollback(t *testing.T, dsn string, b Batch, wantVersion int64)
  (SELECT count(*) FROM noctis_v2.observations WHERE retention_expired_at IS NOT NULL)=1 AND
  (SELECT count(*) FROM noctis_v2.content_blobs)=1 AND
  (SELECT octet_length(payload)=0 FROM noctis_v2.content_blobs) AND
- (SELECT count(*) FROM noctis_v2.jobs)=1 AND
+ (SELECT count(*) FROM noctis_v2.jobs WHERE stage='parse')=1 AND
  (SELECT count(*) FROM noctis_v2.batch_receipts)=1 AND
  (SELECT version=$2 AND value=$3::jsonb FROM noctis_v2.checkpoints WHERE source_id=$1)`, b.SourceID, wantVersion, string(b.Next.Value)).Scan(&intact)
 	if err != nil || !intact {
 		t.Fatal("failed poll changed capture state", intact, err)
+	}
+	// Expiration also queues applicability work. Preserve every job and request
+	// row, including their state, rather than assuming only a parse job exists.
+	if gotWork := rssPollWorkState(t, c); gotWork != wantWork {
+		t.Fatalf("failed poll changed capture work\nbefore: %s\nafter: %s", wantWork, gotWork)
 	}
 }
 
@@ -82,7 +99,7 @@ func TestRSSExpiredIdentityConflictRollsBackPostgres(t *testing.T) {
 				fmt.Fprint(w, `<rss><channel>`+rssNewEntry+rssExpiredEntry+`</channel></rss>`)
 			}))
 			defer feed.Close()
-			b := rssExpiredBatch(t, dsn, feed.URL, rssExpiredEntry, func(item *Item) {
+			b, workBefore := rssExpiredBatch(t, dsn, feed.URL, rssExpiredEntry, func(item *Item) {
 				if field == "hash" {
 					item.Payload = []byte("different content for the same revision")
 					item.Hash = fmt.Sprintf("sha256:%x", sha256.Sum256(item.Payload))
@@ -94,7 +111,7 @@ func TestRSSExpiredIdentityConflictRollsBackPostgres(t *testing.T) {
 			if !errors.Is(err, ErrConflict) {
 				t.Fatal("expired identity mismatch accepted", err)
 			}
-			assertRSSPollRollback(t, dsn, b, 1)
+			assertRSSPollRollback(t, dsn, b, 1, workBefore)
 		})
 	}
 }
@@ -117,12 +134,12 @@ func TestRSSExpiredFilterPreservesOriginalLimitsPostgres(t *testing.T) {
 				fmt.Fprint(w, `</channel></rss>`)
 			}))
 			defer feed.Close()
-			b := rssExpiredBatch(t, dsn, feed.URL, tc.entry, nil)
+			b, workBefore := rssExpiredBatch(t, dsn, feed.URL, tc.entry, nil)
 			err := (Store{DSN: dsn}).Poll(context.Background(), b.SourceID, Fetcher{AllowLocal: map[string]bool{strings.TrimPrefix(feed.URL, "http://"): true}, MaxCompressed: 40 << 20, MaxDecoded: 40 << 20})
 			if err == nil || err.Error() != tc.want {
 				t.Fatalf("original batch limit bypassed: %v, want %s", err, tc.want)
 			}
-			assertRSSPollRollback(t, dsn, b, 1)
+			assertRSSPollRollback(t, dsn, b, 1, workBefore)
 		})
 	}
 }
@@ -146,7 +163,7 @@ func TestRSSExpiredFilterRevalidatesAuthorizationAndCASPostgres(t *testing.T) {
 			}))
 			defer feed.Close()
 			defer unblock()
-			b := rssExpiredBatch(t, dsn, feed.URL, rssExpiredEntry, nil)
+			b, workBefore := rssExpiredBatch(t, dsn, feed.URL, rssExpiredEntry, nil)
 			done := make(chan error, 1)
 			go func() {
 				done <- (Store{DSN: dsn}).Poll(ctx, b.SourceID, Fetcher{AllowLocal: map[string]bool{strings.TrimPrefix(feed.URL, "http://"): true}})
@@ -185,7 +202,7 @@ func TestRSSExpiredFilterRevalidatesAuthorizationAndCASPostgres(t *testing.T) {
 			} else if err == nil || err.Error() != "source authorization changed" {
 				t.Fatal("changed source authorization accepted", err)
 			}
-			assertRSSPollRollback(t, dsn, b, version)
+			assertRSSPollRollback(t, dsn, b, version, workBefore)
 		})
 	}
 }
