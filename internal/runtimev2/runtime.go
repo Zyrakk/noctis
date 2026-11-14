@@ -154,6 +154,9 @@ func runLoop(ctx context.Context, cfg configv2.Config) error {
 			continue
 		}
 		if cfg.Mode == "worker" {
+			if e := (vulnv2.ApplicabilityWorker{DSN: cfg.DatabaseURL, Owner: worker.Owner + "-applicability"}).Once(ctx); e != nil && !errors.Is(e, pgx.ErrNoRows) {
+				slog.Error("v2 applicability page failed", "error", e)
+			}
 			if e := runAutomaticInference(ctx, cfg); e != nil {
 				slog.Error("v2 inference attempt deferred")
 			}
