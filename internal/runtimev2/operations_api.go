@@ -314,21 +314,17 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 	case isSource:
 		var version string
 		var rev int64
-		if e = tx.QueryRow(ctx, `SELECT policy_version,policy_revision FROM noctis_v2.sources WHERE id::text=$1 FOR UPDATE`, parts[1]).Scan(&version, &rev); e != nil {
+		var activated bool
+		if e = tx.QueryRow(ctx, `SELECT policy_version,policy_revision,activated_at IS NOT NULL FROM noctis_v2.sources WHERE id::text=$1 FOR UPDATE`, parts[1]).Scan(&version, &rev, &activated); e != nil {
 			return true, e
-		}
-		if in.PolicyVersion == "" {
-			in.PolicyVersion = version
-		}
-		var exists bool
-		if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM noctis_v2.policies WHERE version=$1)`, in.PolicyVersion).Scan(&exists); e != nil {
-			return true, e
-		}
-		if !exists {
-			return true, reject(400, "policy_not_found")
 		}
 		if in.ExpectedRevision != rev {
 			return true, &operationError{409, "stale_revision", rev}
+		}
+		assignPolicy := in.PolicyVersion != ""
+		var question string
+		if in.PolicyVersion, question, e = resolveSourceGovernanceTx(ctx, tx, parts[1], version, in); e != nil {
+			return true, e
 		}
 		if in.Enabled {
 			var missingBaseline bool
@@ -354,22 +350,15 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 			if err != nil {
 				return true, err
 			}
-			_, err = tx.Exec(ctx, `UPDATE noctis_v2.telegram_peers SET allowed=true WHERE source_id::text=$1`, parts[1])
+			// Changing analytical governance does not renew Telegram consent.
+			_, err = tx.Exec(ctx, `UPDATE noctis_v2.telegram_peers SET allowed=true WHERE source_id::text=$1 AND $2`, parts[1], !activated || version == in.PolicyVersion)
 			if err != nil {
 				return true, err
 			}
 		}
 		_, err = tx.Exec(ctx, `UPDATE noctis_v2.sources SET enabled=$2,policy_version=$3,policy_revision=policy_revision+1 WHERE id::text=$1`, parts[1], in.Enabled, in.PolicyVersion)
-		if in.QuestionID == "" && strings.HasPrefix(in.PolicyVersion, "question:") {
-			pieces := strings.Split(in.PolicyVersion, ":")
-			if len(pieces) > 1 {
-				if _, parseErr := uuid.Parse(pieces[1]); parseErr == nil {
-					in.QuestionID = pieces[1]
-				}
-			}
-		}
-		if err == nil && in.QuestionID != "" {
-			_, err = tx.Exec(ctx, `INSERT INTO noctis_v2.question_sources(question_id,source_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, in.QuestionID, parts[1])
+		if err == nil && assignPolicy {
+			err = replaceSourceGovernanceTx(ctx, tx, parts[1], question)
 		}
 		if err == nil && in.Enabled {
 			err = resumeSourceParseTx(ctx, tx, parts[1])
@@ -620,13 +609,14 @@ func (a *API) mutateDiscovery(ctx context.Context, tx pgx.Tx, actor string, part
 			return nil, e
 		}
 		// Activation always binds the current PIR revision, including after edits.
-		var questionRevision int64
-		if e = tx.QueryRow(ctx, `SELECT revision FROM noctis_v2.questions WHERE id=$1`, question).Scan(&questionRevision); e != nil {
-			return nil, e
+		if in.QuestionID != "" && in.QuestionID != question {
+			return nil, reject(400, "question_policy_mismatch")
 		}
-		in.PolicyVersion = "question:" + question
-		if questionRevision > 1 {
-			in.PolicyVersion = fmt.Sprintf("question:%s:r%d", question, questionRevision)
+		if in.PolicyVersion != "" && in.PolicyVersion != "question:"+question && !strings.HasPrefix(in.PolicyVersion, "question:"+question+":r") {
+			return nil, reject(400, "question_policy_mismatch")
+		}
+		if in.PolicyVersion, _, e = currentQuestionPolicyTx(ctx, tx, question); e != nil {
+			return nil, e
 		}
 		var valid bool
 		if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM noctis_v2.policies WHERE version=$1)`, in.PolicyVersion).Scan(&valid); e != nil {
@@ -649,7 +639,7 @@ func (a *API) mutateDiscovery(ctx context.Context, tx pgx.Tx, actor string, part
 		if e != nil {
 			return nil, e
 		}
-		_, e = tx.Exec(ctx, `INSERT INTO noctis_v2.question_sources(question_id,source_id) VALUES($1,$2)`, question, source)
+		e = replaceSourceGovernanceTx(ctx, tx, source, question)
 		if e != nil {
 			return nil, e
 		}
