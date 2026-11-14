@@ -181,6 +181,32 @@ func channelsCommands(dbRef *string) []*cobra.Command {
 	proposal.Flags().StringVar(&consentActor, "actor", "", "Operator identity")
 	proposal.Flags().StringVar(&consentReason, "reason", "", "Explicit capture purpose")
 	telegram.AddCommand(proposal)
+	var transitionAccount, transitionActor, transitionReason, transitionFile string
+	transitionProposal := &cobra.Command{Use: "capture-generation-propose", Args: cobra.NoArgs, Short: "Write a protected generation transition CAS after authenticated session closure", RunE: func(cmd *cobra.Command, _ []string) error {
+		cfg, e := configv2.Load("api", "", *dbRef)
+		if e != nil {
+			return e
+		}
+		return (telegramv2.Store{DSN: cfg.DatabaseURL}).ProposeGenerationTransition(cmd.Context(), transitionAccount, transitionActor, transitionReason, transitionFile)
+	}}
+	transitionProposal.Flags().StringVar(&transitionAccount, "account", "", "Production Telegram account")
+	transitionProposal.Flags().StringVar(&transitionActor, "actor", "", "Operator identity")
+	transitionProposal.Flags().StringVar(&transitionReason, "reason", "", "Explicit session replacement or repair reason")
+	transitionProposal.Flags().StringVar(&transitionFile, "transition-file", "", "Protected reviewable transition JSON output")
+	telegram.AddCommand(transitionProposal, &cobra.Command{Use: "capture-generation-transition TRANSITION_JSON", Args: cobra.ExactArgs(1), Short: "Apply the exact reviewed generation transition; keeps capture blocked pending new consent", RunE: func(cmd *cobra.Command, args []string) error {
+		r, e := telegramv2.ReadGenerationTransition(args[0])
+		if e != nil {
+			return e
+		}
+		cfg, e := configv2.Load("api", "", *dbRef)
+		if e != nil {
+			return e
+		}
+		if e = (telegramv2.Store{DSN: cfg.DatabaseURL}).TransitionGeneration(cmd.Context(), sessionFile, r); e != nil {
+			return e
+		}
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{"transition_id": r.ID, "capture_pending": true})
+	}})
 	var failureRevision int64
 	var resumeActor, resumeReason string
 	resume := &cobra.Command{Use: "capture-resume", Args: cobra.NoArgs, Short: "Manually acknowledge one terminal failure CAS after proving closure; never resets quotas or cursors", RunE: func(cmd *cobra.Command, _ []string) error {

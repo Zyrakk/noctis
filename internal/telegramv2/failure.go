@@ -81,7 +81,7 @@ func (s Store) closeOwned(ctx context.Context, c *pgx.Conn, o Owner, parent cont
 			return e
 		}
 	}
-	_, e = tx.Exec(ctx, `UPDATE noctis_v2.telegram_accounts SET closed=true,owner=NULL,lease_expires_at=NULL,status=CASE WHEN status='running' THEN 'paused' ELSE status END,capture_failure_revision=$4 WHERE id=$1 AND owner=$2 AND owner_fence=$3`, o.Account, o.ID, o.Fence, revision)
+	_, e = tx.Exec(ctx, `UPDATE noctis_v2.telegram_accounts SET closed=true,owner=NULL,lease_expires_at=NULL,authentication_in_progress=false,status=CASE WHEN status='running' THEN 'paused' ELSE status END,capture_failure_revision=$4 WHERE id=$1 AND owner=$2 AND owner_fence=$3`, o.Account, o.ID, o.Fence, revision)
 	if e != nil {
 		return e
 	}

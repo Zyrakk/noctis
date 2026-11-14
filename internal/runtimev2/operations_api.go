@@ -230,7 +230,7 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 		}
 		var account, generation, name string
 		var hash int64
-		e = tx.QueryRow(ctx, `SELECT n.account_id,n.auth_generation::text,i.name,i.access_hash FROM noctis_v2.telegram_inventory_candidates i JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=i.snapshot_id JOIN noctis_v2.telegram_accounts a ON a.id=n.account_id AND a.auth_generation=n.auth_generation WHERE n.id=$1 AND i.peer_id=$2 AND a.closed AND n.id=(SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=n.account_id ORDER BY z.created_at DESC,z.id DESC LIMIT 1) FOR UPDATE OF a,i`, in.SnapshotID, in.PeerID).Scan(&account, &generation, &name, &hash)
+		e = tx.QueryRow(ctx, `SELECT n.account_id,n.auth_generation::text,i.name,i.access_hash FROM noctis_v2.telegram_inventory_candidates i JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=i.snapshot_id JOIN noctis_v2.telegram_accounts a ON a.id=n.account_id AND a.auth_generation=n.auth_generation WHERE n.id=$1 AND i.peer_id=$2 AND a.closed AND a.owner IS NULL AND a.lease_expires_at IS NULL AND NOT a.authentication_in_progress AND a.prepared_auth_generation IS NULL AND n.id=(SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=n.account_id ORDER BY z.created_at DESC,z.id DESC LIMIT 1) FOR UPDATE OF a,i`, in.SnapshotID, in.PeerID).Scan(&account, &generation, &name, &hash)
 		if e != nil {
 			return true, reject(409, "inventory_stale_or_capture_running")
 		}
@@ -248,8 +248,23 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 		} else if e != nil {
 			return true, e
 		}
-		if _, e = tx.Exec(ctx, `UPDATE noctis_v2.telegram_peers SET inventory_snapshot=$4,access_hash=$5 WHERE account_id=$1 AND peer_type='channel' AND peer_id=$2 AND source_id=$3 AND auth_generation=$6`, account, in.PeerID, source, in.SnapshotID, hash, generation); e != nil {
+		// A new key requires explicit import and a fresh policy approval. Preserve
+		// the channel cursor and source epoch: changing keys is not gap recovery.
+		tag, e := tx.Exec(ctx, `UPDATE noctis_v2.telegram_peers p SET auth_generation=$4,allowed=false FROM noctis_v2.telegram_accounts a JOIN noctis_v2.telegram_generation_transitions t ON t.id=a.pending_generation_transition WHERE p.account_id=$1 AND p.peer_type='channel' AND p.peer_id=$2 AND p.source_id=$3 AND p.auth_generation<>$4 AND a.id=p.account_id AND t.account_id=a.id AND t.to_generation=$4`, account, in.PeerID, source, generation)
+		if e != nil {
 			return true, e
+		}
+		if tag.RowsAffected() == 1 {
+			if _, e = tx.Exec(ctx, `UPDATE noctis_v2.sources SET enabled=false,policy_revision=policy_revision+1 WHERE id=$1`, source); e != nil {
+				return true, e
+			}
+		}
+		tag, e = tx.Exec(ctx, `UPDATE noctis_v2.telegram_peers SET inventory_snapshot=$4,access_hash=$5 WHERE account_id=$1 AND peer_type='channel' AND peer_id=$2 AND source_id=$3 AND auth_generation=$6`, account, in.PeerID, source, in.SnapshotID, hash, generation)
+		if e != nil {
+			return true, e
+		}
+		if tag.RowsAffected() != 1 {
+			return true, reject(409, "generation_transition_required")
 		}
 		_, err = tx.Exec(ctx, `UPDATE noctis_v2.telegram_inventory_candidates SET source_id=$3 WHERE snapshot_id=$1 AND peer_id=$2`, in.SnapshotID, in.PeerID, source)
 		result = map[string]any{"source_id": source, "imported": true, "activation": "explicit source policy required"}
@@ -343,7 +358,7 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 				return true, err
 			}
 			var valid bool
-			e = tx.QueryRow(ctx, `SELECT NOT EXISTS(SELECT FROM noctis_v2.telegram_peers p JOIN noctis_v2.telegram_accounts a ON a.id=p.account_id LEFT JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=p.inventory_snapshot WHERE p.source_id::text=$1 AND p.inventory_snapshot IS NOT NULL AND (p.auth_generation<>a.auth_generation OR n.auth_generation<>a.auth_generation OR n.id IS DISTINCT FROM (SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=a.id ORDER BY z.created_at DESC,z.id DESC LIMIT 1)))`, parts[1]).Scan(&valid)
+			e = tx.QueryRow(ctx, `SELECT NOT EXISTS(SELECT FROM noctis_v2.telegram_peers p JOIN noctis_v2.telegram_accounts a ON a.id=p.account_id LEFT JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=p.inventory_snapshot WHERE p.source_id::text=$1 AND p.inventory_snapshot IS NOT NULL AND (a.authentication_in_progress OR a.prepared_auth_generation IS NOT NULL OR p.auth_generation<>a.auth_generation OR n.auth_generation<>a.auth_generation OR n.id IS DISTINCT FROM (SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=a.id ORDER BY z.created_at DESC,z.id DESC LIMIT 1)))`, parts[1]).Scan(&valid)
 			if e != nil {
 				return true, e
 			}
