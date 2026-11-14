@@ -64,3 +64,40 @@ test('paginación real de afirmaciones y discovery cierra pruebas vencidas o rev
  for(const id of [ids.proposal_expired,ids.proposal_revoked]){const response=await api(page,`/discovery/${id}/trial`,{expected_revision:1,ttl_seconds:60,quota:1,action:'run'});expect(response.status()).toBe(403)}
  await expect(page.getByText(/no authorized source/)).toBeVisible()
 })
+
+test('operational CAS preserves drafts and intentions across two real sessions without replay',async({page,browser})=>{
+ const second=await browser.newContext({ignoreHTTPSErrors:true}),other=await second.newPage(),writes=[]
+ let initialControl
+ page.on('request',req=>{if(req.method()==='POST'&&/\/api\/v2\/(sources\/.*\/policy|runtime-control|retention)$/.test(new URL(req.url()).pathname))writes.push(req.postDataJSON())})
+ try{
+  await other.goto(`${base}/v2/login`);await other.getByLabel('Username',{exact:true}).fill(process.env.NOCTIS_V2_E2E_USERNAME);await other.getByLabel('Password',{exact:true}).fill(process.env.NOCTIS_V2_E2E_PASSWORD);await other.getByRole('button',{name:'Sign in'}).click();await expect(other.getByRole('heading',{name:'Today',exact:true})).toBeVisible()
+  const source=(await(await page.request.get(`${base}/api/v2/sources`)).json()).data.find(s=>s.id===ids.source_ops)
+  expect(source).toBeTruthy()
+  await page.goto(`${base}/v2/sources`)
+  const row=page.getByRole('listitem').filter({has:page.getByText(source.name,{exact:true})}).filter({has:page.getByText('Source policy and pause',{exact:true})})
+  await row.locator('summary').click();await row.getByLabel('Collection authorized and active').uncheck()
+  const changed=await api(other,`/sources/${source.id}/policy`,{expected_revision:source.policy_revision,enabled:source.enabled,policy_version:source.policy_version});expect(changed.status()).toBe(200)
+  const changedSource=(await changed.json()).data
+  await row.getByRole('button',{name:'Save source policy',exact:true}).click();await expect(row.getByText(/Revision conflict/)).toBeVisible()
+  await row.getByRole('button',{name:'Reload current source',exact:true}).click();await expect(row.getByText(`Confirmed source revision ${changedSource.policy_revision}`,{exact:false})).toBeVisible();await expect(row.getByLabel('Collection authorized and active')).not.toBeChecked();expect(writes).toHaveLength(1)
+  await row.getByRole('button',{name:'Save source policy',exact:true}).click();await expect(row.getByText(/Policy and pause saved/)).toBeVisible();await expect(row.getByText(/Status: paused/)).toBeVisible();expect(writes[1].expected_revision).toBe(changedSource.policy_revision)
+  await page.goto(`${base}/v2/system`);const control=page.getByRole('region',{name:'Processing control'})
+  await expect(control.getByText(/Confirmed control revision/)).toBeVisible()
+  const current=(await(await other.request.get(`${base}/api/v2/runtime-control`)).json()).data,intent=current.paused?'resume':'pause';initialControl=current
+  expect((await api(other,'/runtime-control',{expected_revision:current.revision,action:intent,reason:'second synthetic session'})).status()).toBe(200)
+  await control.getByRole('button',{name:intent==='pause'?'Pause processing':'Resume processing',exact:true}).click();await expect(control.getByText(/Revision conflict/)).toBeVisible()
+  await control.getByRole('button',{name:'Reload processing control'}).click();await expect(control.getByText(/already satisfies your requested action/)).toBeVisible();expect(writes).toHaveLength(3)
+  expect((await api(other,'/permissions',{permission:'retention',granted:true})).status()).toBe(200)
+  await page.getByText('Retention by source and class',{exact:true}).click();await page.getByLabel('Source UUID',{exact:true}).fill(source.id)
+  const retention=page.getByRole('region',{name:'Retention policy'});await expect(retention.getByText(/Confirmed retention revision/)).toBeVisible();await retention.getByLabel('Retention in seconds',{exact:true}).fill('7200')
+  const policyPath=`/retention?source_id=${source.id}&data_class=private`,policy=(await(await other.request.get(`${base}/api/v2${policyPath}`)).json()).data
+  const updated=await api(other,'/retention',{source_id:source.id,data_class:'private',action:'policy',expected_revision:policy.revision,retain_seconds:3600});expect(updated.status()).toBe(200);const revision=(await updated.json()).data.revision
+  await retention.getByRole('button',{name:'Save retention policy',exact:true}).click();await expect(retention.getByText(/Revision conflict/)).toBeVisible()
+  await retention.getByRole('button',{name:'Reload current retention policy'}).click();await expect(retention.getByText(`Confirmed retention revision ${revision}`,{exact:false})).toBeVisible();await expect(retention.getByLabel('Retention in seconds',{exact:true})).toHaveValue('7200');expect(writes).toHaveLength(4)
+  await retention.getByRole('button',{name:'Save retention policy',exact:true}).click();await expect(retention.getByText('Retention policy saved.',{exact:true})).toBeVisible();expect(writes[4].expected_revision).toBe(revision)
+  expect(writes.filter(w=>w.action==='run'||w.action==='batch')).toHaveLength(0)
+ }finally{
+  if(initialControl){const current=(await(await other.request.get(`${base}/api/v2/runtime-control`)).json()).data;if(current.paused!==initialControl.paused)expect((await api(other,'/runtime-control',{expected_revision:current.revision,action:initialControl.paused?'pause':'resume',reason:'restore synthetic test control'})).status()).toBe(200)}
+  await second.close()
+ }
+})
