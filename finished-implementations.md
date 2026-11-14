@@ -4,19 +4,23 @@ Veinte propuestas aceptadas, implementadas en ramas independientes desde `dev` y
 
 Integración de las veinte ramas: `e3a2080f424b6aac7cddd8ee5344caad514aa1ba`. Las verificaciones de cada sección corresponden a su integración. La validación conjunta de CI, imagen y despliegue sigue en curso.
 
+La validación conjunta conserva además los estados completos de trabajo derivado en las pruebas de rollback y comprueba el lease original en recuperación SIGKILL. La PK nueva de transiciones usa UUID para mantener backups sin secuencias; backup y restauración sintéticos de las trece migraciones fueron verificados.
+
 ## 01- RSS/Atom caducado sin bloquear noticias nuevas
 
-Rama `feat/avance-01`. Implementación: `16cdb28ae46566d2932a2dccace6c3bc8da9eeb0`. Integración: `d19b7bbc53d03bbb27fe8a07abd90013e8bcc7ca`, sin conflictos ni ajustes posteriores.
+Rama `feat/avance-01`. Implementación: `16cdb28ae46566d2932a2dccace6c3bc8da9eeb0`. Integración: `d19b7bbc53d03bbb27fe8a07abd90013e8bcc7ca`. Ajuste posterior de regresiones: `034d71f194a0c6108227881513d60f7605a0c3c2`.
 
-Un feed que repite una entrada caducada junto a una noticia nueva permite capturar la novedad sin duplicarla ni reactivar la evidencia antigua. También confirma feeds completamente caducados y admite nuevas revisiones del mismo identificador.
+Un feed que repite una entrada caducada permite capturar noticias nuevas sin duplicarlas ni reactivar la evidencia antigua. También confirma feeds completamente caducados y admite nuevas revisiones del mismo identificador.
 
-[Store.Poll](internal/capture/rss.go) valida el lote original antes de filtrarlo, conservando los límites de entradas y bytes. Dentro de la transacción, tras bloquear la proyección y revalidar autorización, política y epoch, excluye únicamente coincidencias caducadas exactas de fuente, identificador, revisión, hash y representación. Las incompatibilidades siguen siendo errores. El checkpoint mantiene el hash del feed completo; la confirmación conserva CAS y recibos incluso con un lote vacío. [CommitBatchTx](internal/capture/store.go) mantiene el rechazo de replay caducado para otros consumidores.
+[Store.Poll](internal/capture/rss.go) valida el lote original antes de filtrarlo, conservando límites de entradas y bytes. Dentro de la transacción, tras bloquear la proyección y revalidar autorización, política y epoch, excluye únicamente coincidencias caducadas exactas de fuente, identificador, revisión, hash y representación. Las incompatibilidades siguen siendo errores. Conserva el checkpoint del feed completo, CAS y recibos incluso con un lote vacío. [CommitBatchTx](internal/capture/store.go) mantiene el rechazo de replay caducado para otros consumidores.
 
-Las regresiones de [capture](internal/capture/rss_retention_test.go) y [runtimev2](internal/runtimev2/rss_retention_test.go) cubren rollback, límites originales, autorización, CAS, purga concurrente, revisiones, deduplicación y blobs compartidos legítimamente. La evidencia caducada conserva tombstone e indisponibilidad HTTP 410.
+Las regresiones de [capture](internal/capture/rss_retention_test.go) y [runtimev2](internal/runtimev2/rss_retention_test.go) cubren rollback, límites, autorización, CAS, purga concurrente, revisiones, deduplicación y blobs compartidos. La evidencia caducada conserva tombstone y HTTP 410.
 
-**Verificación:** código contrastado con `dev` final. El recibo `integration-01-focused.jsonl` registra pruebas focalizadas de ambos paquetes sobre PostgreSQL16 y HTTP(S) sintéticos: 8 pruebas principales y 11 subpruebas aprobadas, sin fallos ni omisiones. El merge conservó exactamente el árbol revisado.
+El ajuste posterior adapta exclusivamente el helper al trabajo de aplicabilidad creado por la migración 010: mantiene exactamente un trabajo `parse` y las demás invariantes, y compara snapshots completos de todas las filas/columnas de `jobs` y `applicability_requests` antes/después del sondeo fallido.
 
-**Límites:** ese recibo acredita la integración 01; la suite global final y cualquier despliegue requieren sus recibos centrales. No acredita fuentes productivas.
+**Verificación:** código contrastado con `dev`. `integration-01-followup-race.jsonl` acredita focalizadas con `-race`, 13 migraciones y PostgreSQL16/HTTP(S) sintéticos: 8 pruebas principales y 11 subpruebas aprobadas, sin fallos ni omisiones.
+
+**Límites:** CI global aún en curso; estas pruebas no acreditan despliegue ni fuentes productivas.
 
 
 ## 02- Recuperación de canales antes de confirmar el cursor global de Telegram
@@ -88,15 +92,17 @@ Verificación registrada en `integration-06-focused.jsonl`, sobre el commit de i
 
 ## 07- Aplicabilidad vigente y retractación de afectaciones obsoletas
 
-Rama `feat/avance-07`: implementación `4e0f3ee`; merge `dcd8629`; integración final `902d030`.
+Rama `feat/avance-07`: implementación `4e0f3ee`; merge `dcd8629`; ajustes de integración `902d030` y `a86b089`.
 
-La aplicabilidad distingue el estado vigente del historial conservado. [La migración 009](migrations/v2/009_applicability_current.sql) selecciona primero la revisión NVD por CVE y después evalúa su caducidad: no resucita snapshots anteriores. Revisiones contradictorias o nuevas sin fecha fiable producen `unknown`. La proyección por CVE/activo y el registro de transiciones permiten retractar afectaciones por cambios de versión, evidencia, pertenencia al expediente o TTL; `local_exposure` permanece `unknown`.
+[La migración 009](migrations/v2/009_applicability_current.sql) selecciona primero la revisión NVD por CVE y después comprueba caducidad, sin resucitar snapshots anteriores. Revisiones contradictorias o nuevas sin fecha fiable producen `unknown`. Retracta afectaciones por versión, evidencia, membresía o TTL y conserva el historial; `local_exposure` permanece `unknown`.
 
-[La publicación](internal/vulnv2/applicability_projection.go) comprueba generación y revisión del activo, evita duplicados y conserva revisiones históricas. Cualquier pareja afectada válida mantiene la afectación; excluirla exige cobertura completa y no vacía. [API](internal/runtimev2/domain_api.go), [expedientes](internal/runtimev2/api.go), [briefs](internal/intelligence/worker.go) y [contexto IA](internal/inference/inputs.go) consultan soporte vigente, incluso con el worker detenido; nuevas revisiones conservan el agregado. La cola durable, paginación, leases y progreso corresponden a rama08.
+[La publicación](internal/vulnv2/applicability_projection.go) comprueba generación/revisión y evita duplicados. Cualquier afectación válida domina; excluir exige cobertura completa y no vacía. [API y briefs](internal/runtimev2/api.go) y [contexto IA](internal/inference/inputs.go) consultan soporte vigente incluso sin worker; nuevas revisiones conservan el agregado. Cola, paginación, leases y progreso pertenecen a rama08.
 
-El ajuste de integración `902d030` usa `select_current_nvd($1)` directamente y expone `c.cve` en la vista para acotar el filtro. [La regresión EXPLAIN](internal/runtimev2/applicability_plan_test.go) verificó equivalencia de resultados y redujo de **1000 a 1 iteración** la selección sobre 1000 CVEs.
+`902d030` consulta `select_current_nvd($1)` directamente y expone `c.cve` en la vista: [EXPLAIN](internal/runtimev2/applicability_plan_test.go) verificó resultados equivalentes y **1000→1 iteración** sobre 1000 CVEs.
 
-Verificación registrada en `integration-07-summary.json`: PostgreSQL16 sintético, `go test -race`, **46 pruebas principales y 125 subpruebas aprobadas**, sin pruebas omitidas ni carreras; cubre retractación, TTL, concurrencia, API y consumidores IA. El recibo de integración08 revalidó esta semántica y el selector. Nueve checksums y preservación de migraciones001–008 comprobados en integración07. Esta evidencia no acredita proveedores reales, capacidad productiva ni despliegue.
+`a86b089` cambia la PK de transiciones a UUID en 009, aún no desplegada al corregirse, preservando el backup sin secuencias. El ID no constituía contrato de ordenación/consumo; el contador del expediente permanece independiente. [La regresión](internal/runtimev2/applicability_schema_test.go) comprueba UUID distintos con LOGIN restringido.
+
+El recibo `integration-07-schema-fix.md` registra **18 pruebas principales y 50 subpruebas con race aprobadas**, sin fallos, omisiones ni carreras. Backup cifrado y restauración reales sobre PostgreSQL16 sintético: **13 migraciones, 79 tablas, 19 filas y cero secuencias**; esquema, checksums, conteos, digests y consultas coinciden exactamente. No acredita CI global, proveedores reales, capacidad productiva ni despliegue.
 
 
 ## 08- Aplicabilidad mediante páginas durables y recuperables
