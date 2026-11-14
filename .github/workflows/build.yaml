@@ -12,6 +12,9 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-check-${{ github.ref }}
+      cancel-in-progress: true
     services:
       postgres:
         image: postgres:16-bookworm
@@ -26,7 +29,8 @@ jobs:
       NOCTIS_V2_TEST_DATABASE_URL: postgres://postgres@127.0.0.1:5432/noctis_v2_test?sslmode=disable
       NOCTIS_V2_FAULT_DOCKER_IMAGE: postgres:16-bookworm
       NOCTIS_V2_CHECK_RECEIPT: /tmp/noctis-v2-go-tests.jsonl
-      NOCTIS_V2_E2E_RECEIPT: /tmp/noctis-v2-e2e-receipt.json
+      CANDIDATE_VERSION: ${{ github.sha }}
+      CANDIDATE_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -39,34 +43,47 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: cd web && npm ci && npx playwright install --with-deps chromium
       - run: docker pull postgres:16-bookworm
-      - run: make ci
+      - uses: docker/setup-buildx-action@v3
+      - run: make ci-check
+      - name: Build candidate and run its canonical synthetic E2E
+        run: make image-check VERSION="$CANDIDATE_VERSION" COMMIT="$CANDIDATE_COMMIT"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: synthetic-check-receipts
+          retention-days: 7
           path: |
             /tmp/noctis-v2-go-tests.jsonl
-            /tmp/noctis-v2-e2e-receipt.json
+            /tmp/noctis-image-check/e2e/*.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-image-receipt
+          retention-days: 3
+          path: |
+            /tmp/noctis-image-check/receipt.json
+            /tmp/noctis-image-check/e2e/*.json
+            /tmp/noctis-image-check/amd64.tar
+            /tmp/noctis-image-check/arm64.tar
           if-no-files-found: error
 
   image-check:
     needs: check
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-image-check-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - run: python3 ops/rebuild/operations/image_checks.py --output /tmp/noctis-image-check --version "$CANDIDATE_VERSION"
-        env:
-          CANDIDATE_VERSION: ${{ github.sha }}
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - uses: actions/download-artifact@v4
         with:
           name: candidate-image-receipt
-          path: |
-            /tmp/noctis-image-check/receipt.json
-            /tmp/noctis-image-check/amd64.tar
-            /tmp/noctis-image-check/arm64.tar
-          if-no-files-found: error
+          path: /tmp/noctis-image-check
+      - run: make image-verify VERSION="$CANDIDATE_VERSION" COMMIT="$CANDIDATE_COMMIT"
+        env:
+          CANDIDATE_VERSION: ${{ github.sha }}
+          CANDIDATE_COMMIT: ${{ github.sha }}
 
   build:
     needs: [check, image-check]
@@ -103,12 +120,19 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - run: python3 ops/rebuild/operations/image_checks.py --output /tmp/noctis-image-check --publish "$CANDIDATE_REGISTRY"
+      - run: python3 ops/rebuild/operations/image_checks.py --output /tmp/noctis-image-check --publish "$CANDIDATE_REGISTRY" --version "$CANDIDATE_VERSION" --commit "$CANDIDATE_COMMIT"
         env:
           CANDIDATE_REGISTRY: ${{ steps.image.outputs.repository }}
+          CANDIDATE_VERSION: ${{ github.sha }}
+          CANDIDATE_COMMIT: ${{ github.sha }}
           NOCTIS_IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: published-image-receipt
-          path: /tmp/noctis-image-check/publication-receipt.json
+          retention-days: 14
+          path: |
+            /tmp/noctis-image-check/receipt.json
+            /tmp/noctis-image-check/e2e/*.json
+            /tmp/noctis-image-check/publication-*.json
           if-no-files-found: error
