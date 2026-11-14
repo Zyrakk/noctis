@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Zyrakk/noctis/internal/capture"
+	"github.com/Zyrakk/noctis/internal/intelligence"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -40,11 +41,12 @@ type Page struct {
 	Complete bool
 }
 type Receipt struct {
-	SnapshotID string `json:"snapshot_id"`
-	Hash       string `json:"hash"`
-	Facts      int    `json:"facts"`
-	Complete   bool   `json:"complete"`
-	Cursor     Cursor `json:"cursor"`
+	SnapshotID       string `json:"snapshot_id"`
+	Hash             string `json:"hash"`
+	Facts            int    `json:"facts"`
+	Complete         bool   `json:"complete"`
+	Cursor           Cursor `json:"cursor"`
+	CalculationState string `json:"calculation_state,omitempty"`
 }
 type Store struct {
 	DSN     string
@@ -284,6 +286,9 @@ func (s Store) PollPage(ctx context.Context, kind, endpoint string, ttl time.Dur
 		return receipt, e
 	}
 	defer tx.Rollback(context.Background())
+	if e = intelligence.LockProjectionTx(ctx, tx); e != nil {
+		return receipt, e
+	}
 	if _, e = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,11))`, kind+":"+endpoint); e != nil {
 		return receipt, e
 	}
@@ -299,14 +304,23 @@ func (s Store) PollPage(ctx context.Context, kind, endpoint string, ttl time.Dur
 	if e != nil {
 		return receipt, e
 	}
+	requests := []string{}
 	for _, f := range page.Facts {
 		if _, e = tx.Exec(ctx, `INSERT INTO noctis_v2.vulnerability_facts(snapshot_id,cve,body) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, snapshot, strings.ToUpper(f.CVE), string(f.Body)); e != nil {
 			return receipt, e
 		}
 		if kind == "nvd" {
-			if e = RefreshApplicabilityTx(ctx, tx, f.CVE); e != nil {
+			var requestID string
+			if requestID, e = EnqueueCVEApplicabilityTx(ctx, tx, f.CVE, snapshot, page.AsOf.Add(ttl)); e != nil {
 				return receipt, e
 			}
+			requests = append(requests, requestID)
+		}
+	}
+	calculationState := ""
+	if kind == "nvd" {
+		if e = tx.QueryRow(ctx, `SELECT CASE WHEN bool_or(calculation_state='failed') THEN 'failed' WHEN bool_or(calculation_state='pending') THEN 'pending' ELSE 'complete' END FROM noctis_v2.applicability_work_status WHERE id=ANY($1::uuid[])`, requests).Scan(&calculationState); e != nil {
+			return receipt, e
 		}
 	}
 	encoded, _ := json.Marshal(next)
@@ -317,5 +331,7 @@ func (s Store) PollPage(ctx context.Context, kind, endpoint string, ttl time.Dur
 	if e = tx.Commit(ctx); e != nil {
 		return receipt, e
 	}
-	return Receipt{SnapshotID: snapshot, Hash: hash, Facts: len(page.Facts), Complete: page.Complete, Cursor: next}, nil
+	receipt = Receipt{SnapshotID: snapshot, Hash: hash, Facts: len(page.Facts), Complete: page.Complete, Cursor: next}
+	receipt.CalculationState = calculationState
+	return receipt, nil
 }

@@ -157,6 +157,7 @@ func TestAcceptanceStoriesABCSyntheticPostgresAndPrivateAPI(t *testing.T) {
 	asset := uuid.NewString()
 	assetInput := map[string]any{"id": asset, "expected_revision": 0, "cpe": "cpe:2.3:a:synthetic:product:*:*:*:*:*:*:*:*", "version": nil, "refs": []evidence.Ref{vulnRef}}
 	request("POST", "assets", assetInput)
+	drainApplicability(t, dsn)
 	var status string
 	must(c.QueryRow(ctx, `SELECT status FROM noctis_v2.local_applicability WHERE asset_id=$1 AND asset_revision=1`, asset).Scan(&status))
 	if status != "unknown" {
@@ -165,6 +166,7 @@ func TestAcceptanceStoriesABCSyntheticPostgresAndPrivateAPI(t *testing.T) {
 	assetInput["expected_revision"] = 1
 	assetInput["version"] = "1.5"
 	request("POST", "assets", assetInput)
+	drainApplicability(t, dsn)
 	must(c.QueryRow(ctx, `SELECT status FROM noctis_v2.local_applicability WHERE asset_id=$1 AND asset_revision=2`, asset).Scan(&status))
 	if status != "affected_version" {
 		t.Fatal("range not matched", status)
