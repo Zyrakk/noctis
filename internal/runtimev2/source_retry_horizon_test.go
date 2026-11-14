@@ -87,6 +87,41 @@ func (f retryFixture) claim(t *testing.T) jobs.Job {
 	return j
 }
 
+func TestSourceRetryClaimStageIsolationPostgres(t *testing.T) {
+	f := newRetryFixture(t)
+	ctx := context.Background()
+	active, expired := uuid.NewString(), uuid.NewString()
+	coreExec(t, f.c, `INSERT INTO noctis_v2.jobs(id,stage,input_id,input_revision,policy_version,schema_version,created_at) VALUES($1,'applicability',$3,'1','p1','active',clock_timestamp()),($2,'applicability',$3,'1','p1','expired',clock_timestamp()-interval '2 days')`, active, expired, f.observation)
+	j := f.claim(t)
+	if j.ID != f.job || j.Stage != "parse" {
+		t.Fatal("default claim crossed into applicability", j)
+	}
+	var untouched int
+	if err := f.c.QueryRow(ctx, `SELECT count(*) FROM noctis_v2.jobs WHERE stage='applicability' AND state='queued' AND attempts=0`).Scan(&untouched); err != nil || untouched != 2 {
+		t.Fatal("parse claim changed another stage", untouched, err)
+	}
+	if err := f.store.Finish(ctx, j, func(pgx.Tx) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	coreExec(t, f.c, `UPDATE noctis_v2.jobs SET state='queued',retry_deadline_at=clock_timestamp()-interval '1 second' WHERE id=$1`, f.job)
+	j, err := f.store.Claim(ctx, "applicability", time.Minute, "applicability")
+	if err != nil || j.ID != active || j.Stage != "applicability" {
+		t.Fatal("explicit claim selected the wrong stage or expired job", j, err)
+	}
+	f.assert(t, `state='queued' AND attempts=1 AND source_paused_at IS NULL`)
+	var quarantined bool
+	if err = f.c.QueryRow(ctx, `SELECT state='quarantined' AND attempts=0 AND last_error_code='retry_horizon_exceeded' FROM noctis_v2.jobs WHERE id=$1`, expired).Scan(&quarantined); err != nil || !quarantined {
+		t.Fatal("applicability horizon was not enforced", quarantined, err)
+	}
+	if _, err = f.store.Claim(ctx, "parse", time.Minute); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatal("parse claim acquired an applicability lease", err)
+	}
+	f.assert(t, `state='quarantined' AND attempts=1`)
+	if err = f.store.Finish(ctx, j, func(pgx.Tx) error { return nil }); err != nil {
+		t.Fatal("parse sweep invalidated the applicability fence", err)
+	}
+}
+
 func TestSourceRetryLongPausePreservesRemainingHorizonPostgres(t *testing.T) {
 	f := newRetryFixture(t)
 	ctx := context.Background()

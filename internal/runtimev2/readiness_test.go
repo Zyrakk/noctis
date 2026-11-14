@@ -279,8 +279,8 @@ func TestReadinessDriftAndHTTPPostgres(t *testing.T) {
 	if err = admin.QueryRow(context.Background(), `SELECT pg_get_functiondef('noctis_v2.ai_immutable_revision()'::regprocedure)`).Scan(&immutableDefinition); err != nil {
 		t.Fatal(err)
 	}
-	var nvdDefinition, nvdView string
-	if err = admin.QueryRow(context.Background(), `SELECT pg_get_functiondef('noctis_v2.nvd_revision(text)'::regprocedure),pg_get_viewdef('noctis_v2.nvd_current_selection'::regclass,true)`).Scan(&nvdDefinition, &nvdView); err != nil {
+	var nvdDefinition, nvdView, retryDeadlineDefinition string
+	if err = admin.QueryRow(context.Background(), `SELECT pg_get_functiondef('noctis_v2.nvd_revision(text)'::regprocedure),pg_get_viewdef('noctis_v2.nvd_current_selection'::regclass,true),pg_get_functiondef('noctis_v2.initialize_job_retry_deadline()'::regprocedure)`).Scan(&nvdDefinition, &nvdView, &retryDeadlineDefinition); err != nil {
 		t.Fatal(err)
 	}
 	nvdView = strings.TrimSuffix(strings.TrimSpace(nvdView), ";")
@@ -304,6 +304,10 @@ func TestReadinessDriftAndHTTPPostgres(t *testing.T) {
 		{"nvd_selector_altered", `ALTER FUNCTION noctis_v2.select_current_nvd(text) VOLATILE`, `ALTER FUNCTION noctis_v2.select_current_nvd(text) STABLE`, false},
 		{"nvd_view_altered", `CREATE OR REPLACE VIEW noctis_v2.nvd_current_selection AS SELECT * FROM (` + nvdView + `) selected WHERE false`, `CREATE OR REPLACE VIEW noctis_v2.nvd_current_selection AS ` + nvdView, false},
 		{"governance_constraint_missing", `ALTER TABLE noctis_v2.question_sources DROP CONSTRAINT question_sources_one_governor`, `ALTER TABLE noctis_v2.question_sources ADD CONSTRAINT question_sources_one_governor UNIQUE(source_id)`, false},
+		{"retry_deadline_missing", `ALTER TABLE noctis_v2.jobs RENAME COLUMN retry_deadline_at TO missing_retry_deadline_at`, `ALTER TABLE noctis_v2.jobs RENAME COLUMN missing_retry_deadline_at TO retry_deadline_at`, false},
+		{"retry_pause_missing", `ALTER TABLE noctis_v2.jobs RENAME COLUMN source_paused_at TO missing_source_paused_at`, `ALTER TABLE noctis_v2.jobs RENAME COLUMN missing_source_paused_at TO source_paused_at`, false},
+		{"retry_deadline_trigger_disabled", `ALTER TABLE noctis_v2.jobs DISABLE TRIGGER initialize_job_retry_deadline`, `ALTER TABLE noctis_v2.jobs ENABLE TRIGGER initialize_job_retry_deadline`, false},
+		{"retry_deadline_function_altered", `CREATE OR REPLACE FUNCTION noctis_v2.initialize_job_retry_deadline() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN NEW.retry_deadline_at := clock_timestamp()+interval '24 hours'; RETURN NEW; END$$`, retryDeadlineDefinition, false},
 		{"ledger_pending", `DELETE FROM public.noctis_v2_migrations WHERE name='` + ms[len(ms)-1].Name + `'`, `INSERT INTO public.noctis_v2_migrations(name,checksum) VALUES('` + ms[len(ms)-1].Name + `','` + ms[len(ms)-1].Checksum + `')`, false},
 		{"ledger_additional", `INSERT INTO public.noctis_v2_migrations(name,checksum) VALUES('999_future.sql','bad')`, `DELETE FROM public.noctis_v2_migrations WHERE name='999_future.sql'`, false},
 		{"ledger_checksum", `UPDATE public.noctis_v2_migrations SET checksum='bad' WHERE name='` + ms[0].Name + `'`, `UPDATE public.noctis_v2_migrations SET checksum='` + ms[0].Checksum + `' WHERE name='` + ms[0].Name + `'`, false},

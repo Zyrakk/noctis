@@ -2337,11 +2337,25 @@
     "not_null": false,
     "generated": ""
   },
+  "column:jobs.retry_deadline_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
   "column:jobs.schema_version": {
     "type": "text",
     "default": null,
     "identity": "",
     "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.source_paused_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
     "generated": ""
   },
   "column:jobs.stage": {
@@ -5091,6 +5105,9 @@
   "function:noctis_v2.enqueue_applicability(text,text,integer,text,timestamp with time zone,uuid)": {
     "definition": "CREATE OR REPLACE FUNCTION noctis_v2.enqueue_applicability(p_scope text, p_input text, p_revision integer, p_key text, p_due timestamp with time zone DEFAULT clock_timestamp(), p_parent uuid DEFAULT NULL::uuid)\n RETURNS uuid\n LANGUAGE plpgsql\nAS $function$\nDECLARE request_id uuid;\nBEGIN\n INSERT INTO noctis_v2.applicability_requests(scope,input_id,input_revision,idempotency_key,due_at,parent_id)\n VALUES(p_scope,p_input,p_revision,p_key,p_due,p_parent)\n ON CONFLICT(idempotency_key) DO NOTHING RETURNING id INTO request_id;\n IF request_id IS NULL THEN\n  SELECT id INTO request_id FROM noctis_v2.applicability_requests WHERE idempotency_key=p_key;\n ELSIF p_due\u003c=clock_timestamp() THEN\n  INSERT INTO noctis_v2.jobs(id,stage,input_id,input_revision,policy_version,schema_version)\n  VALUES(gen_random_uuid(),'applicability',request_id,'0','applicability-v2','1');\n END IF;\n RETURN request_id;\nEND $function$\n"
   },
+  "function:noctis_v2.initialize_job_retry_deadline()": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.initialize_job_retry_deadline()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n IF NEW.retry_deadline_at IS NULL THEN\n  NEW.retry_deadline_at := NEW.created_at+interval '24 hours';\n END IF;\n RETURN NEW;\nEND $function$\n"
+  },
   "function:noctis_v2.native_budget_binding()": {
     "definition": "CREATE OR REPLACE FUNCTION noctis_v2.native_budget_binding()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$BEGIN\n IF OLD.active_capture_budget IS NOT NULL AND NEW.active_capture_budget IS DISTINCT FROM OLD.active_capture_budget THEN RAISE EXCEPTION 'immutable native budget binding'; END IF;\n IF NEW.active_capture_budget IS NOT NULL AND NOT EXISTS(SELECT FROM noctis_v2.telegram_capture_budgets b WHERE b.id=NEW.active_capture_budget AND b.account_id=NEW.id AND b.auth_generation=NEW.auth_generation) THEN RAISE EXCEPTION 'native budget account generation mismatch'; END IF;\n RETURN NEW;\nEND$function$\n"
   },
@@ -5484,6 +5501,10 @@
   "trigger:case_memberships.applicability_membership": {
     "enabled": true,
     "definition": "CREATE TRIGGER applicability_membership AFTER INSERT OR DELETE ON noctis_v2.case_memberships FOR EACH ROW EXECUTE FUNCTION noctis_v2.queue_applicability_membership()"
+  },
+  "trigger:jobs.initialize_job_retry_deadline": {
+    "enabled": true,
+    "definition": "CREATE TRIGGER initialize_job_retry_deadline BEFORE INSERT ON noctis_v2.jobs FOR EACH ROW EXECUTE FUNCTION noctis_v2.initialize_job_retry_deadline()"
   },
   "trigger:observable_sightings.applicability_sighting": {
     "enabled": true,
