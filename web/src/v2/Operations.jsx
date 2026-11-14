@@ -1,13 +1,42 @@
-import React,{useEffect,useState} from 'react'
+import React,{useEffect,useRef,useState} from 'react'
 import {request} from './api.js'
 import {useAuth} from './Auth.jsx'
 
 export function Paged({path,children}){
  const[state,setState]=useState({path,loading:true,items:[]})
- useEffect(()=>{const c=new AbortController();setState({path,loading:true,items:[]});request(path,{signal:c.signal}).then(r=>setState({path,items:r.data,meta:r.meta})).catch(e=>{if(!c.signal.aborted)setState({path,items:[],error:e.message})});return()=>c.abort()},[path])
- async function more(){try{const r=await request(`${path}${path.includes('?')?'&':'?'}cursor=${encodeURIComponent(state.meta.next_cursor)}`);setState(s=>({...s,items:[...s.items,...r.data],meta:r.meta}))}catch(e){setState(s=>({...s,error:e.message}))}}
+ const active=useRef(null)
+ const current=load=>active.current===load&&!load.controller.signal.aborted
+ useEffect(()=>{
+  const load={path,controller:new AbortController(),cursor:null,pending:null}
+  active.current=load
+  setState({path,load,loading:true,items:[]})
+  request(path,{signal:load.controller.signal}).then(r=>{
+   if(!current(load))return
+   load.cursor=r.meta?.next_cursor
+   setState(s=>current(load)?{path,load,items:r.data,meta:r.meta}:s)
+  }).catch(e=>{if(current(load))setState(s=>current(load)?{path,load,items:[],error:e.message}:s)})
+  return()=>{if(active.current===load)active.current=null;load.controller.abort()}
+ },[path])
+ async function more(){
+  const load=active.current
+  if(!load||load.path!==path||load.pending||!load.cursor)return
+  // Acquire before React renders, and retain the exact cursor for this request.
+  const page={cursor:load.cursor}
+  load.pending=page
+  setState(s=>current(load)&&s.load===load?{...s,moreLoading:true}:s)
+  try{
+   const r=await request(`${path}${path.includes('?')?'&':'?'}cursor=${encodeURIComponent(page.cursor)}`,{signal:load.controller.signal})
+   if(!current(load)||load.pending!==page)return
+   load.cursor=r.meta?.next_cursor
+   setState(s=>current(load)&&s.load===load?{...s,items:[...s.items,...r.data],meta:r.meta,error:undefined,moreLoading:false}:s)
+  }catch(e){
+   if(current(load)&&load.pending===page)setState(s=>current(load)&&s.load===load?{...s,error:e.message,moreLoading:false}:s)
+  }finally{
+   if(current(load)&&load.pending===page)load.pending=null
+  }
+ }
  if(state.path!==path||state.loading)return <p role="status">Loading data…</p>
- return <>{state.error&&<p role="alert">{state.error}</p>}{children(state.items,state.meta||{})}{state.meta?.next_cursor&&<button onClick={more}>Load more records</button>}</>
+ return <>{state.error&&<p role="alert">{state.error}</p>}{children(state.items,state.meta||{})}{state.meta?.next_cursor&&<button disabled={state.moreLoading} aria-busy={!!state.moreLoading} onClick={more}>Load more records</button>}{state.moreLoading&&<p role="status">Loading more records…</p>}</>
 }
 function useMutation(){const{session}=useAuth();return (path,body)=>request(path,{method:'POST',headers:{'X-CSRF-Token':session.csrf},body:JSON.stringify({request_id:crypto.randomUUID(),...body})})}
 
