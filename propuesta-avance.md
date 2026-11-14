@@ -2,7 +2,7 @@
 
 Base de código: `9374936`. Dos rondas independientes de veinte agentes Astra en ultra.
 
-Resultado: **20 aceptadas, 0 denegadas**, con ajustes de alcance y garantías. Las secciones siguientes son la decisión final; las propuestas originales se conservan al final. Implementación y verificación todavía pendientes.
+Resultado: **20 aceptadas, 0 denegadas**, con ajustes de alcance y garantías. Las veinte ramas están implementadas, verificadas en su alcance y fusionadas secuencialmente en `dev`; el detalle está en [finished-implementations.md](finished-implementations.md). La validación conjunta y el despliegue se registran por separado. Las secciones siguientes conservan las decisiones finales y, al final, las propuestas originales.
 
 ## 1- Evitar que una entrada RSS caducada bloquee noticias nuevas
 
