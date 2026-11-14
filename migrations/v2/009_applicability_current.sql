@@ -34,7 +34,9 @@ SELECT cve,snapshot_id,body,nvd_revision,expires_at,selection_reason,
 $$;
 
 CREATE VIEW noctis_v2.nvd_current_selection AS
-SELECT current.* FROM (SELECT DISTINCT cve FROM noctis_v2.vulnerability_facts) c
+-- Expose the outer key so CVE predicates restrict the set before the lateral call.
+SELECT c.cve,current.snapshot_id,current.body,current.nvd_revision,current.expires_at,current.selection_reason,current.generation
+FROM (SELECT DISTINCT cve FROM noctis_v2.vulnerability_facts) c
 CROSS JOIN LATERAL noctis_v2.select_current_nvd(c.cve) current;
 
 CREATE TABLE noctis_v2.applicability_current(

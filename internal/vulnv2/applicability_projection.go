@@ -24,7 +24,7 @@ func EvaluateCurrentPairTx(ctx context.Context, tx pgx.Tx, cve, assetID, expecte
 	var body, refsRaw []byte
 	var expires time.Time
 	var nvdRevision *time.Time
-	err := tx.QueryRow(ctx, `SELECT snapshot_id::text,body,nvd_revision,generation,expires_at,selection_reason FROM noctis_v2.nvd_current_selection WHERE cve=$1`, cve).Scan(&snapshot, &body, &nvdRevision, &generation, &expires, &selectionReason)
+	err := tx.QueryRow(ctx, `SELECT snapshot_id::text,body,nvd_revision,generation,expires_at,selection_reason FROM noctis_v2.select_current_nvd($1)`, cve).Scan(&snapshot, &body, &nvdRevision, &generation, &expires, &selectionReason)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
