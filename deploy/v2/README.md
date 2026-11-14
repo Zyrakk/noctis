@@ -49,6 +49,31 @@ estos contratos requieren el backend005. Worker/collector son bucles sin HTTP:
 Kubernetes supervisa el proceso y el operador comprueba progreso/cursor/backlog;
 no hay probes HTTP inventadas. Los límites son hipótesis, no sizing certificado.
 Sin destinos IA/entrega ni fuentes habilitadas no existe efecto externo implícito.
+
+La ejecución IA requiere opt-in por worker, además de la configuración por función:
+
+| `--automatic-inference` | `--manual-inference` | Comportamiento del worker |
+| --- | --- | --- |
+| `false` (predeterminado) | `false` (predeterminado) | Solo trabajo mecánico; no ejecuta ni planifica IA. |
+| `false` | `true` | Ejecuta solicitudes manuales elegibles; no ejecuta ni planifica trabajos automáticos. |
+| `true` | `false` | Conserva ejecución de ambas procedencias y planificación automática. |
+| `true` | `true` | Igual que automático solo. |
+
+`--manual-inference` permite gasto, incluidas solicitudes manuales antiguas aún
+elegibles. Revisar la cola y presupuestos antes de habilitarlo; no borrar ni reenviar
+trabajos para vaciarla. Conserva límites, pausa general, cancelación, reservas y
+fences. Los intentos abandonados de cualquier procedencia se reconcilian como
+inciertos, retienen exposición y no se reenvían. Cada flag afecta solo al worker
+que lo recibe: desactivarlo no cancela peticiones ya enviadas ni otros procesos.
+La API continúa admitiendo solicitudes aunque ambos flags estén desactivados.
+
+La identidad `system:semantic-planner` está reservada al planificador automático;
+no usarla como username administrativo. La API rechaza esa configuración y las
+sesiones antiguas que colisionen con ella con un diagnóstico explícito. La
+procedencia deriva del actor autenticado; `request_id` no la decide y el POST no
+acepta campos de actor/procedencia. No se reclasifican trabajos históricos ante
+una colisión: revisar su origen antes de cualquier habilitación automática.
+
 Para entrega, autorizar un único worker sender y añadir su endpoint privado;
 mantener collector único y demostrar cierre de dueño anterior antes de takeover.
 

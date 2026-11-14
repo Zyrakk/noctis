@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Zyrakk/noctis/internal/configv2"
+	"github.com/Zyrakk/noctis/internal/inference"
 	"github.com/Zyrakk/noctis/internal/intelligence"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -36,6 +37,9 @@ func NewHandler(cfg configv2.Config) (http.Handler, error) {
 	var a struct{ Username, Password string }
 	if e = json.Unmarshal(raw, &a); e != nil || a.Username == "" || len(a.Password) < 16 {
 		return nil, errors.New("admin secret requires username and password >=16 bytes")
+	}
+	if a.Username == inference.AutomaticActor {
+		return nil, fmt.Errorf("admin username %q is reserved for automatic inference", inference.AutomaticActor)
 	}
 	api := &API{cfg: cfg, username: a.Username, password: a.Password}
 	mux := http.NewServeMux()
@@ -113,6 +117,10 @@ func (a *API) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	if e != nil {
 		failure(w, 503, "database_unavailable")
+		return
+	}
+	if username == inference.AutomaticActor {
+		failure(w, 403, "reserved_actor_identity")
 		return
 	}
 	if path == "auth/session" && r.Method == "GET" {
