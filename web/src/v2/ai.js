@@ -1,7 +1,8 @@
 import { request } from './api.js'
 export const submitAIJob = (payload, csrf, { signal } = {}) => request('/ai/jobs', { method:'POST', headers:{'X-CSRF-Token':csrf}, body:JSON.stringify(payload), signal })
 export const getAIJob = (id, { signal } = {}) => request(`/ai/jobs/${encodeURIComponent(id)}`, { signal })
-export const cancelAIJob = (id, csrf) => request(`/ai/jobs/${encodeURIComponent(id)}/cancel`, { method:'POST', headers:{'X-CSRF-Token':csrf} })
+export const listAIJobs = (cursor='', { signal } = {}) => request(`/ai/jobs${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`, { signal })
+export const cancelAIJob = (id, csrf, { signal } = {}) => request(`/ai/jobs/${encodeURIComponent(id)}/cancel`, { method:'POST', headers:{'X-CSRF-Token':csrf}, signal })
 export const executeQuery = (plan, csrf, { signal } = {}) => request('/query', { method:'POST', headers:{'X-CSRF-Token':csrf}, body:JSON.stringify({plan}), signal })
 export async function readAIConfig({ signal } = {}) {
  const response=await fetch('/api/v2/ai/config',{credentials:'same-origin',headers:{Accept:'application/json'},signal})

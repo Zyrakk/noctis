@@ -4,6 +4,7 @@ import { request, evidenceParts, validEvidenceRef } from './api.js'
 import { Claims, MissingActions, ExploreDomain, SourceDetails } from './product.jsx'
 import { AIAction, TypedQuery } from './Consumers.jsx'
 import AISettings from './AISettings.jsx'
+import AIJobs from './AIJobs.jsx'
 import LoginScreen from './LoginScreen.jsx'
 import { Radar, SunMoon, Files, ScanSearch, Radio, Settings2, LogOut, ShieldCheck, ArrowUpRight, BookOpen } from 'lucide-react'
 import './styles.css'
@@ -71,9 +72,9 @@ function Sources({url,navigate,select}) {
  async function reload(id){const result=await request(path),item=result.data.find(source=>source.id===id);if(!item)throw new Error('Source not found on the current page. Reload the source list.');return item}
  return <><h1>Sources</h1><Status state={state}>{(data,meta)=><>{!data.length?<p>No sources configured.</p>:<ul className="v2-rows">{data.map(source=>{const item=confirmed[source.id]||source;return <li key={item.id}><strong>{item.name}</strong><p>Status: {item.status} · Coverage: {item.coverage || 'unknown'}</p><p>Last capture: {item.last_success_at || 'unknown'}</p>{item.last_error&&<p role="alert">{item.last_error}</p>}<SourcePolicy item={item} onReload={()=>reload(item.id)} onChanged={current=>setConfirmed(items=>({...items,[item.id]:current}))}/><AIAction functionID="source.triage" input={{kind:'source',id:item.id}} label="Assess source with AI" select={select}/></li>})}</ul>}{meta.next_cursor&&<button onClick={()=>navigate(`/v2/sources?source_cursor=${encodeURIComponent(meta.next_cursor)}`)}>Next page of sources</button>}</>}</Status><SourceDetails url={url} navigate={navigate}/></>
 }
-function System() {
+function System({url,navigate,select}) {
  const state=useResource('/system')
- return <><h1>System</h1><Status state={state}>{data=><><p>Status: {data.status || 'unknown'}</p><p>Pending jobs: {data.backlog ?? 'unknown'}</p><p>Oldest job: {data.oldest_job_at || 'unknown'}</p>{data.errors?.map((error,i)=><p role="alert" key={i}>{error}</p>)}<h2>Artificial intelligence</h2><p>Service status: {data.ai?.status||'unknown'}. Search and reading do not require inference.</p><AISettings/><h2>Durable progress</h2><pre>{JSON.stringify(data.progress||{},null,2)}</pre><OperationsSettings/></>}</Status></>
+ return <><h1>System</h1><AIJobs url={url} navigate={navigate} select={select}/><Status state={state}>{data=><><p>Status: {data.status || 'unknown'}</p><p>Pending jobs: {data.backlog ?? 'unknown'}</p><p>Oldest job: {data.oldest_job_at || 'unknown'}</p>{data.errors?.map((error,i)=><p role="alert" key={i}>{error}</p>)}<h2>Artificial intelligence</h2><p>Service status: {data.ai?.status||'unknown'}. Search and reading do not require inference.</p><AISettings/><h2>Durable progress</h2><pre>{JSON.stringify(data.progress||{},null,2)}</pre><OperationsSettings/></>}</Status></>
 }
 function Routes() {
   const [url,navigate]=useLocation(), auth=useAuth(); const [error,setError]=useState('')
@@ -91,7 +92,7 @@ function Routes() {
   else if(url.pathname==='/v2/explore') page=<ExploreDomain url={url} navigate={navigate} select={select} query={<TypedQuery url={url} navigate={navigate} select={select}/>}/>
   else if(url.pathname.startsWith('/v2/cases/')) { try { page=<Detail id={decodeURIComponent(url.pathname.slice(10))} select={select}/> } catch {page=<p role="alert">Invalid route.</p>} }
   else if(url.pathname==='/v2/sources') page=<><Sources url={url} navigate={navigate} select={select}/><TelegramOnboarding/></>
-  else if(url.pathname==='/v2/system') page=<System/>
+  else if(url.pathname==='/v2/system') page=<System url={url} navigate={navigate} select={select}/>
   else page=<h1>Page not found</h1>
 return <div className="v2 v2-shell"><header className="v2-shell-header"><div className="v2-shell-brand"><Radar size={29} strokeWidth={1.4} aria-hidden="true"/><strong>Noctis<small>Private observatory</small></strong></div><span className="v2-workspace-label">Research workspace</span><span className="v2-user">{auth.session.user.username}</span><button className="v2-logout" onClick={async()=>{try{await auth.logout();navigate('/v2/login')}catch(e){setError(e.message)}}}><LogOut size={16} aria-hidden="true"/> Sign out</button></header><aside className="v2-sidebar"><nav className="v2-main-nav" aria-label="Main">{[['today','Today',SunMoon],['cases','Case files',Files],['explore','Explore',ScanSearch],['sources','Sources',Radio],['system','System',Settings2]].map(([path,label,Icon])=><Link key={path} to={`/v2/${path}`} navigate={navigate} aria-current={(url.pathname.startsWith(`/v2/${path}`)||(path==='today'&&['/v2','/v2/','/v2/login'].includes(url.pathname)))?'page':undefined}><Icon size={19} strokeWidth={1.7} aria-hidden="true"/>{label}</Link>)}</nav><div className="v2-sidebar-note"><ShieldCheck size={20} strokeWidth={1.5} aria-hidden="true"/><p>Evidence before<br/>conclusions.</p><small>Intelligence with provenance</small></div></aside><main className="v2-workspace">{error&&<p role="alert">{error}</p>}{referenceText&&!reference&&<p role="alert">Invalid evidence selection.</p>}{page}</main>{reference&&<Evidence key={referenceText} reference={reference} close={close} select={select}/>}</div>
 }

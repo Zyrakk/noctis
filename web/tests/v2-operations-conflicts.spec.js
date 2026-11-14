@@ -11,6 +11,7 @@ async function fixture(page,handlers={}){
   if(handlers[path])return handlers[path]({req,url,send,fail,writes})
   if(path==='/auth/session')return send({user:{username:'operator'},csrf:'fixture-csrf'})
   if(path==='/system')return send({status:'ok',errors:[]})
+  if(path==='/ai/jobs'&&req.method()==='GET')return send({jobs:[]})
   if(path==='/runtime-control')return send({revision:1,paused:false})
   if(path==='/ai/config')return send({revision:1,functions:[],connections:[],bindings:[],credential_available:false})
   if(path==='/today')return send({changes:[]})

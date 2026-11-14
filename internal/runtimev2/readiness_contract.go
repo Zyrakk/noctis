@@ -48,6 +48,7 @@ var readinessPrivileges = map[string][]readinessPrivilege{
 		{"invalidated_products", "SELECT"},
 		{"analyses analysis_results observable_sightings", "SELECT,UPDATE"},
 		{"ai_configs ai_secrets", "SELECT,INSERT"}, // configuration publishing
+		// Actor-scoped job history reuses the existing SELECT on ai_jobs.
 		{"ai_jobs ai_query_results", "SELECT,INSERT,UPDATE"},
 		{"ai_attempts", "SELECT"},
 		{"ai_products ai_promotions", "SELECT,UPDATE"},

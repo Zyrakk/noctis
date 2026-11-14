@@ -22,6 +22,7 @@ async function fixture(page,{authenticated=true,failed=false}={}) {
     if(['/questions','/discovery','/coverage'].some(path=>url.pathname.endsWith(path))) return send([])
     if(url.pathname.endsWith('/runtime-control')) return send({revision:1,paused:false})
     if(url.pathname.endsWith('/system')) return send({status:'degraded',backlog:null,errors:[]})
+    if(url.pathname.endsWith('/ai/jobs')&&request.method()==='GET') return send({jobs:[]})
     if(url.pathname.endsWith('/ai/config')) return send({revision:1,functions:[],connections:[],bindings:[],daily_cap_units:0,monthly_cap_units:0,max_concurrent:0,credential_available:false})
     throw new Error(`Unexpected URL ${url}`)
   })

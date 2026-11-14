@@ -10,5 +10,6 @@
   "009_applicability_current.sql": "0eec4a3cf68a6e8fd496e6089422231a1b9a6c68ced92ff6d455964872219aeb",
   "010_applicability_queue.sql": "b8c95222bfd9342b17cea534331a81e114486bb32a0e2f86ceeb6864f2766cc1",
   "011_source_governance.sql": "6a7ce0aab063b42c649325f6828a52c254bd5a09ebf6ab84648b38f730f33d20",
-  "012_job_retry_pause.sql": "f7025663b442dbf10c257e38d1fac3af969386bcee5fd298de75deac0bae99b3"
+  "012_job_retry_pause.sql": "f7025663b442dbf10c257e38d1fac3af969386bcee5fd298de75deac0bae99b3",
+  "013_ai_job_history.sql": "ab872307c5d7c05cb5541cc85655898cfb6478ba3497850294cdda59b6d7e437"
 }
