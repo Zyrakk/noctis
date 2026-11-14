@@ -128,6 +128,11 @@ func (s Store) Poll(ctx context.Context, id string, f Fetcher) error {
 		return e
 	}
 	checkpoint, _ := json.Marshal(map[string]string{"feed_hash": fmt.Sprintf("%x", sha256.Sum256(raw))})
+	b := Batch{BatchID: uuid.NewString(), Version: "1", SourceID: id, Epoch: epoch, Mode: Live, Expected: expected, Next: Checkpoint{Version: expected.Version + 1, Value: checkpoint}, Items: items}
+	// Repeated expired entries still count toward the adapter's input limits.
+	if e = b.Validate(); e != nil {
+		return e
+	}
 	tx, e := c.Begin(ctx)
 	if e != nil {
 		return e
@@ -143,8 +148,53 @@ func (s Store) Poll(ctx context.Context, id string, f Fetcher) error {
 	if !valid {
 		return errors.New("source authorization changed")
 	}
-	if _, e = CommitBatchTx(ctx, tx, Batch{BatchID: uuid.NewString(), Version: "1", SourceID: id, Epoch: epoch, Mode: Live, Expected: expected, Next: Checkpoint{Version: expected.Version + 1, Value: checkpoint}, Items: items}); e != nil {
+	if b.Items, e = filterExpiredFeedItemsTx(ctx, tx, id, items); e != nil {
+		return e
+	}
+	if _, e = CommitBatchTx(ctx, tx, b); e != nil {
 		return e
 	}
 	return tx.Commit(ctx)
+}
+
+// filterExpiredFeedItemsTx accepts only exact feed repetitions of expired
+// identities. The caller holds the projection lock, which also fences retention.
+// Other capture adapters retain CommitBatchTx's strict replay rejection.
+func filterExpiredFeedItemsTx(ctx context.Context, tx pgx.Tx, sourceID string, items []Item) ([]Item, error) {
+	if len(items) == 0 {
+		return items, nil
+	}
+	nativeIDs, revisions := make([]string, len(items)), make([]string, len(items))
+	for n, item := range items {
+		nativeIDs[n], revisions[n] = item.NativeID, item.Revision
+	}
+	rows, e := tx.Query(ctx, `SELECT o.native_id,o.revision,o.hash,o.representation
+ FROM noctis_v2.observations o
+ JOIN unnest($2::text[],$3::text[]) AS i(native_id,revision) USING(native_id,revision)
+ WHERE o.source_id=$1 AND o.retention_expired_at IS NOT NULL`, sourceID, nativeIDs, revisions)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	expired := make(map[[2]string][2]string)
+	for rows.Next() {
+		var identity, content [2]string
+		if e = rows.Scan(&identity[0], &identity[1], &content[0], &content[1]); e != nil {
+			return nil, e
+		}
+		expired[identity] = content
+	}
+	if e = rows.Err(); e != nil {
+		return nil, e
+	}
+	filtered := make([]Item, 0, len(items))
+	for _, item := range items {
+		content, found := expired[[2]string{item.NativeID, item.Revision}]
+		if !found {
+			filtered = append(filtered, item)
+		} else if content != [2]string{item.Hash, item.Representation} {
+			return nil, ErrConflict
+		}
+	}
+	return filtered, nil
 }
