@@ -143,8 +143,28 @@ archivos v1/v2 conserva su alcance `legacy-shared-dsn-only`: el antiguo
 `database.secret` no acredita la recuperación de cuatro credenciales segregadas.
 Acepta sólo nombres conocidos (master/admin/DSN/TLS/config/sesión/API/política),
 todos0600 en directorio0700; `restore-config` exige membership exacto y restaura
-a otro directorio nuevo sin iniciar procesos. El DSN recuperado sigue apuntando
-al origen: preparar credenciales nuevas para la DB restaurada antes de uso.
+a otro directorio nuevo sin iniciar servicios. Antes de descifrar crea un staging
+privado hermano `.DESTINO.restore-config-ID.incomplete`; cualquier fallo o
+interrupción anterior a la publicación conserva allí el diagnóstico y deja
+el destino solicitado sin crear. Esas copias pueden contener plaintext y nunca
+deben usarse como configuración publicada ni eliminarse automáticamente.
+
+Tras todas las comprobaciones prepara `restore-receipt.json`0600, con versión,
+cobertura histórica y checks realizados, sin valores secretos. Publica contenido
+y recibo mediante una sola operación Linux `renameat2(RENAME_NOREPLACE)` en el
+mismo sistema de archivos: cualquier destino existente, incluso creado durante
+la restauración, se conserva intacto. Si la plataforma, libc o filesystem no
+soportan esa operación, falla explícitamente y conserva el staging; no copia
+gradualmente ni reemplaza el destino. Sólo el recibo **en el destino final**
+acredita publicación. Si el proceso termina después de ese commit y se pierde
+stdout, el destino y recibo siguen siendo válidos: inspeccionarlos antes de
+repetir; un nuevo intento nunca los sobrescribe. Esta garantía cubre visibilidad
+e interrupción del proceso, no durabilidad ante pérdida eléctrica.
+
+El recibo acredita comprobaciones del formato, no validación semántica completa
+ni autorización para iniciar servicios o capturar Telegram. Mantener las
+verificaciones offline y de binding indicadas arriba. El DSN recuperado sigue
+apuntando al origen: preparar credenciales nuevas para la DB restaurada antes de uso.
 El ensayo histórico004 verificó los cinco archivos admin/master/DSN/TLS byte a byte
 y descifró cuatro credenciales del dump con el master recuperado; una clave
 incorrecta falló. No se leyeron claves privadas reales.

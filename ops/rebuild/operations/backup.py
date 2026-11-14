@@ -5,6 +5,8 @@ Uses the P0 snapshot/manifest/age interfaces unchanged. Connections use a named
 Docker container's local Unix socket; passwords never enter arguments or logs.
 """
 import argparse
+import ctypes
+import errno
 import hashlib
 import json
 import os
@@ -150,12 +152,39 @@ def backup_config(source_directory, destination, key, modes=('api',)):
     describe_encryption(root, 'Protected external configuration; no PostgreSQL container or session is started')
     return {'result': 'pass', 'configuration_encrypted': True, 'full_decrypt_verified': True, 'files': [file.name for file in files]}
 
+def private_output(path):
+    return os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb')
+
+def publish_configuration(staging, destination):
+    """One same-filesystem commit, including when a competing destination appears."""
+    if sys.platform != 'linux':
+        raise RuntimeError('Atomic configuration publication requires Linux renameat2 RENAME_NOREPLACE')
+    try:
+        rename = ctypes.CDLL(None, use_errno=True).renameat2
+    except AttributeError as error:
+        raise RuntimeError('Atomic configuration publication requires renameat2 RENAME_NOREPLACE') from error
+    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    # AT_FDCWD and RENAME_NOREPLACE. Never fall back to exists()+rename or copying.
+    if rename(-100, os.fsencode(staging), -100, os.fsencode(destination), 1) != 0:
+        code = ctypes.get_errno()
+        if code in {errno.ENOSYS, errno.EINVAL, errno.ENOTSUP}:
+            raise RuntimeError('Filesystem/kernel lacks atomic configuration publication without replacement')
+        raise OSError(code, os.strerror(code), str(destination))
+
 def restore_config(archive, key, destination):
     private_file(archive); private_file(key)
-    root = new_root(destination)
+    destination = Path(destination).absolute()
+    parent = destination.parent
+    if destination != destination.resolve() or not parent.is_dir() or parent.stat().st_mode & 0o077:
+        raise ValueError('Private existing parent directory without symlinks required')
+    if destination.exists():
+        raise FileExistsError(errno.EEXIST, 'Configuration destination already exists', str(destination))
+    # The name marks even a SIGKILL during decryption as incomplete. Keep failed
+    # attempts for private diagnosis; only the final destination is published.
+    root = Path(tempfile.mkdtemp(prefix='.' + destination.name + '.restore-config-', suffix='.incomplete', dir=parent))
     plain = root / 'configuration.tar'
-    with plain.open('xb') as target:
-        plain.chmod(0o600)
+    with private_output(plain) as target:
         subprocess.run(['age', '-d', '-i', str(key), str(archive)], stdout=target, check=True, stderr=subprocess.DEVNULL)
     with tarfile.open(plain) as bundle:
         members = bundle.getmembers()
@@ -165,12 +194,15 @@ def restore_config(archive, key, destination):
         for member in members:
             if not member.isfile() or member.size > 64 * 1024**2:
                 raise ValueError('Unsafe configuration member')
-            with bundle.extractfile(member) as source, (root / member.name).open('xb') as target:
-                (root / member.name).chmod(0o600)
+            with bundle.extractfile(member) as source, private_output(root / member.name) as target:
                 shutil.copyfileobj(source, target)
     report = json.loads((root / 'recovery-report.json').read_text())
+    if not isinstance(report, dict):
+        raise ValueError('Invalid configuration manifest')
     version = report.get('format')
     modes = ['api'] if version == 'noctis-v2-config-v1' else report.get('modes', [])
+    if not isinstance(modes, list) or not all(isinstance(mode, str) for mode in modes):
+        raise ValueError('Invalid configuration modes')
     legacy = version in {'noctis-v2-config-v1', 'noctis-v2-config-v2'}
     required = (set.union(*(LEGACY_CONFIG_REQUIRED[mode] for mode in modes))
                 if legacy and modes and not set(modes) - LEGACY_CONFIG_REQUIRED.keys()
@@ -187,11 +219,26 @@ def restore_config(archive, key, destination):
             or report.get('sha256') != configuration_hashes(root, names - {'recovery-report.json'})):
         raise ValueError('Configuration policy mapping or checksum mismatch')
     validate_configuration(root, names)
-    return {'result': 'pass', 'configuration_restored': True, 'files': sorted(names - {'recovery-report.json'}),
+    result = {'result': 'pass', 'configuration_restored': True, 'files': sorted(names - {'recovery-report.json'}),
             'modes': modes, 'database_files': {mode: ('database.secret' if legacy else CONFIG_DATABASES[mode]) for mode in modes},
             'coverage': 'legacy-shared-dsn-only' if legacy else 'selected-mode-specific-dsns-without-required-capture-policy' if version == 'noctis-v2-config-v3' else 'selected-mode-specific-dsns-and-capture-policy',
-            'capture_policy_files': report.get('capture_policy_files', {}),
+            'capture_policy_files': {'telegram': 'capture-policy.json'} if 'telegram' in modes and 'capture-policy.json' in names else {},
             'capture_policy_semantics': 'requires offline capture-policy-validate and restored database binding verification' if 'telegram' in modes else 'not-selected'}
+    # Use only validated/canonical metadata, never raw report values, hashes or
+    # configuration contents. Historical formats do not acquire v4 guarantees.
+    receipt = dict(result, format='noctis-v2-config-restore-v1', archive_format=version,
+                   checks={'archive_membership': 'pass', 'required_files': 'pass',
+                           'configuration_envelopes': 'pass',
+                           'database_mapping': 'legacy-shared-dsn' if legacy else 'pass',
+                           'capture_policy_mapping': 'pass' if version == 'noctis-v2-config-v4' else 'not-available-in-format',
+                           'sha256': 'pass' if version == 'noctis-v2-config-v4' else 'not-available-in-format',
+                           'telegram_account_match': 'pass' if {'capture-policy.json', 'telegram-credentials.json'} <= names else 'not-checked'},
+                   publication='valid only at requested final destination', services_authorized=False)
+    with private_output(root / 'restore-receipt.json') as target:
+        target.write((json.dumps(receipt, indent=2) + '\n').encode())
+    publish_configuration(root, destination)
+    # Nothing after the atomic commit reclassifies a published restore as failed.
+    return result
 
 def backup(container, identity, user, database, destination, key):
     if not re.fullmatch(r'noctis_v2_[a-z0-9_]+', database):
