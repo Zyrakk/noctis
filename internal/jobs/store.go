@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/jackc/pgx/v5"
 	"math/rand/v2"
+	"slices"
 	"time"
 )
 
@@ -35,7 +36,31 @@ func (s Store) Claim(ctx context.Context, owner string, duration time.Duration, 
 	if len(stages) == 0 {
 		stages = []string{"parse"}
 	}
-	e = c.QueryRow(ctx, `WITH stale AS (UPDATE noctis_v2.jobs SET state='quarantined',last_error_code='retry_horizon_exceeded',lease_owner=NULL,lease_expires_at=NULL WHERE stage=ANY($3) AND last_error_code IS DISTINCT FROM 'source_resumed' AND (attempts>=5 OR created_at<clock_timestamp()-interval '24 hours') AND (state IN ('queued','retry_wait') OR (state='leased' AND lease_expires_at<=clock_timestamp()))), candidate AS (SELECT id FROM noctis_v2.jobs WHERE stage=ANY($3) AND attempts<5 AND (created_at>=clock_timestamp()-interval '24 hours' OR last_error_code='source_resumed') AND (state='queued' OR (state='retry_wait' AND retry_at<=clock_timestamp()) OR (state='leased' AND lease_expires_at<=clock_timestamp())) ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE noctis_v2.jobs j SET state='leased',lease_owner=$1,lease_expires_at=clock_timestamp()+$2::interval,fence=fence+1,attempts=attempts+1,last_error_code=CASE WHEN last_error_code='source_resumed' THEN NULL ELSE last_error_code END FROM candidate WHERE j.id=candidate.id RETURNING j.id,stage,input_id,input_revision,policy_version,schema_version,lease_owner,lease_expires_at,fence,attempts`, owner, duration.String(), stages).Scan(&j.ID, &j.Stage, &j.InputID, &j.InputRevision, &j.PolicyVersion, &j.SchemaVersion, &j.Owner, &j.ExpiresAt, &j.Fence, &j.Attempts)
+	tx, e := c.Begin(ctx)
+	if e != nil {
+		return j, e
+	}
+	defer tx.Rollback(context.Background())
+	if slices.Contains(stages, "parse") {
+		if e = lockSourcePauseTx(ctx, tx); e != nil {
+			return j, e
+		}
+		if e = parkPausedParseTx(ctx, tx); e != nil {
+			return j, e
+		}
+	}
+	_, e = tx.Exec(ctx, `WITH stale AS (SELECT id FROM noctis_v2.jobs WHERE stage=ANY($1) AND (attempts>=5 OR retry_deadline_at<=clock_timestamp()) AND (state IN ('queued','retry_wait') OR (state='leased' AND lease_expires_at<=clock_timestamp())) FOR UPDATE SKIP LOCKED) UPDATE noctis_v2.jobs j SET state='quarantined',last_error_code='retry_horizon_exceeded',source_paused_at=NULL,lease_owner=NULL,lease_expires_at=NULL FROM stale WHERE j.id=stale.id`, stages)
+	if e != nil {
+		return j, e
+	}
+	e = tx.QueryRow(ctx, `WITH candidate AS (SELECT id FROM noctis_v2.jobs WHERE stage=ANY($3) AND attempts<5 AND retry_deadline_at>clock_timestamp() AND (state='queued' OR (state='retry_wait' AND retry_at<=clock_timestamp()) OR (state='leased' AND lease_expires_at<=clock_timestamp())) ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE noctis_v2.jobs j SET state='leased',lease_owner=$1,lease_expires_at=clock_timestamp()+$2::interval,fence=fence+1,attempts=attempts+1 FROM candidate WHERE j.id=candidate.id RETURNING j.id,stage,input_id,input_revision,policy_version,schema_version,lease_owner,lease_expires_at,fence,attempts`, owner, duration.String(), stages).Scan(&j.ID, &j.Stage, &j.InputID, &j.InputRevision, &j.PolicyVersion, &j.SchemaVersion, &j.Owner, &j.ExpiresAt, &j.Fence, &j.Attempts)
+	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
+		return j, e
+	}
+	// Parking and quarantine must commit even when there is nothing to claim.
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return j, commitErr
+	}
 	return j, e
 }
 func (s Store) Finish(ctx context.Context, j Job, write func(pgx.Tx) error) error {
@@ -67,7 +92,7 @@ func FinishTx(ctx context.Context, tx pgx.Tx, j Job, write func(pgx.Tx) error) e
 		return e
 	}
 	if e = write(tx); errors.Is(e, ErrSourcePaused) {
-		tag, parkErr := tx.Exec(ctx, `UPDATE noctis_v2.jobs SET state='dependency_blocked',last_error_code='source_paused',attempts=GREATEST(attempts-1,0),retry_at=NULL,lease_owner=NULL,lease_expires_at=NULL WHERE id=$1 AND fence=$2 AND lease_expires_at>clock_timestamp()`, j.ID, j.Fence)
+		tag, parkErr := tx.Exec(ctx, `UPDATE noctis_v2.jobs SET state=CASE WHEN retry_deadline_at>statement_timestamp() AND attempts<=5 THEN 'dependency_blocked' ELSE 'quarantined' END,last_error_code=CASE WHEN retry_deadline_at>statement_timestamp() AND attempts<=5 THEN 'source_paused' ELSE 'retry_horizon_exceeded' END,source_paused_at=CASE WHEN retry_deadline_at>statement_timestamp() AND attempts<=5 THEN statement_timestamp() END,attempts=GREATEST(attempts-1,0),lease_owner=NULL,lease_expires_at=NULL WHERE id=$1 AND fence=$2 AND lease_expires_at>clock_timestamp()`, j.ID, j.Fence)
 		if parkErr != nil {
 			return parkErr
 		}
@@ -91,14 +116,45 @@ func (s Store) Heartbeat(ctx context.Context, j Job, d time.Duration) error {
 	return s.transition(ctx, j, `UPDATE noctis_v2.jobs SET lease_expires_at=clock_timestamp()+$4::interval WHERE id=$1 AND lease_owner=$2 AND fence=$3 AND state='leased' AND lease_expires_at>clock_timestamp()`, d.String())
 }
 func (s Store) Fail(ctx context.Context, j Job, code string, permanent bool) error {
-	state := "retry_wait"
-	if permanent || j.Attempts >= 5 {
-		state = "quarantined"
-	}
 	shift := min(max(j.Attempts-1, 0), 8)
 	base := time.Second * time.Duration(1<<shift)
 	delay := base + time.Duration(rand.Int64N(int64(base)))
-	return s.transition(ctx, j, `UPDATE noctis_v2.jobs SET state=CASE WHEN created_at<clock_timestamp()-interval '24 hours' THEN 'quarantined' ELSE $4 END,last_error_code=$5,retry_at=clock_timestamp()+$6::interval,lease_owner=NULL,lease_expires_at=NULL WHERE id=$1 AND lease_owner=$2 AND fence=$3 AND state='leased' AND lease_expires_at>clock_timestamp()`, state, code, delay.String())
+	c, e := pgx.Connect(ctx, s.DSN)
+	if e != nil {
+		return e
+	}
+	defer c.Close(context.Background())
+	tx, e := c.Begin(ctx)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback(context.Background())
+	var stage string
+	e = tx.QueryRow(ctx, `SELECT stage FROM noctis_v2.jobs WHERE id=$1 AND lease_owner=$2 AND fence=$3 AND state='leased' AND lease_expires_at>clock_timestamp() FOR UPDATE`, j.ID, j.Owner, j.Fence).Scan(&stage)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return ErrLeaseLost
+	}
+	if e != nil {
+		return e
+	}
+	paused := false
+	if stage == "parse" {
+		if e = lockSourcePauseTx(ctx, tx); e != nil {
+			return e
+		}
+		e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM noctis_v2.jobs j JOIN noctis_v2.observations o ON o.id=j.input_id JOIN noctis_v2.sources s ON s.id=o.source_id WHERE j.id=$1 AND `+ParsePauseEligibleSQL+` AND `+sourcePausedSQL+`)`, j.ID).Scan(&paused)
+		if e != nil {
+			return e
+		}
+	}
+	tag, e := tx.Exec(ctx, `WITH outcome AS (SELECT CASE WHEN $4 OR attempts>=5 OR retry_deadline_at<=statement_timestamp() THEN 'quarantined' WHEN $7 THEN 'dependency_blocked' ELSE 'retry_wait' END AS state FROM noctis_v2.jobs WHERE id=$1) UPDATE noctis_v2.jobs j SET state=o.state,last_error_code=CASE WHEN o.state='dependency_blocked' THEN 'source_paused' ELSE $5 END,source_paused_at=CASE WHEN o.state='dependency_blocked' THEN statement_timestamp() END,retry_at=statement_timestamp()+$6::interval,lease_owner=NULL,lease_expires_at=NULL FROM outcome o WHERE j.id=$1 AND lease_owner=$2 AND fence=$3 AND j.state='leased' AND lease_expires_at>clock_timestamp()`, j.ID, j.Owner, j.Fence, permanent, code, delay.String(), paused)
+	if e != nil {
+		return e
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrLeaseLost
+	}
+	return tx.Commit(ctx)
 }
 func (s Store) transition(ctx context.Context, j Job, q string, args ...any) error {
 	c, e := pgx.Connect(ctx, s.DSN)
@@ -120,7 +176,7 @@ func (s Store) Replay(ctx context.Context, id string) error {
 		return e
 	}
 	defer c.Close(context.Background())
-	tag, e := c.Exec(ctx, `UPDATE noctis_v2.jobs SET state='queued',last_error_code=NULL,retry_at=NULL,attempts=0,created_at=clock_timestamp() WHERE id=$1 AND state IN ('quarantined','dependency_blocked','budget_blocked','cancelled')`, id)
+	tag, e := c.Exec(ctx, `UPDATE noctis_v2.jobs SET state='queued',last_error_code=NULL,retry_at=NULL,source_paused_at=NULL,attempts=0,created_at=statement_timestamp(),retry_deadline_at=statement_timestamp()+interval '24 hours' WHERE id=$1 AND state IN ('quarantined','dependency_blocked','budget_blocked','cancelled')`, id)
 	if e == nil && tag.RowsAffected() != 1 {
 		return errors.New("job not replayable")
 	}
@@ -133,7 +189,7 @@ func (s Store) Cancel(ctx context.Context, id string) error {
 		return e
 	}
 	defer c.Close(context.Background())
-	tag, e := c.Exec(ctx, `UPDATE noctis_v2.jobs SET state='cancelled',lease_owner=NULL,lease_expires_at=NULL,fence=fence+1 WHERE id=$1 AND state NOT IN ('succeeded','cancelled')`, id)
+	tag, e := c.Exec(ctx, `UPDATE noctis_v2.jobs SET state='cancelled',source_paused_at=NULL,lease_owner=NULL,lease_expires_at=NULL,fence=fence+1 WHERE id=$1 AND state NOT IN ('succeeded','cancelled')`, id)
 	if e == nil && tag.RowsAffected() != 1 {
 		return errors.New("job not cancellable")
 	}

@@ -9,5 +9,6 @@
   "008_capture_generation_transition.sql": "a2bcc21f034f6e30b4f94d214fd3b93ce6e5724171fd23d4a8b1df24e4db8970",
   "009_applicability_current.sql": "0eec4a3cf68a6e8fd496e6089422231a1b9a6c68ced92ff6d455964872219aeb",
   "010_applicability_queue.sql": "b8c95222bfd9342b17cea534331a81e114486bb32a0e2f86ceeb6864f2766cc1",
-  "011_source_governance.sql": "6a7ce0aab063b42c649325f6828a52c254bd5a09ebf6ab84648b38f730f33d20"
+  "011_source_governance.sql": "6a7ce0aab063b42c649325f6828a52c254bd5a09ebf6ab84648b38f730f33d20",
+  "012_job_retry_pause.sql": "f7025663b442dbf10c257e38d1fac3af969386bcee5fd298de75deac0bae99b3"
 }

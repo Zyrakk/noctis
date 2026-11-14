@@ -5,6 +5,10 @@ legacy P0 de los datos nuevos v2. La imagen por defecto ejecuta `v2`, nunca
 `serve` legacy. [Recibo ejecutado](receipt.md),
 [plantillas pausadas](../../../deploy/v2/README.md).
 
+El [contrato de horizonte y pausa](source-retry-horizon.md) describe la
+congelación durable de trabajos `parse` y los conteos obligatorios antes de
+aplicar la migración 012 a backlog antiguo.
+
 El runner `go run ./ops/rebuild/operations/telegram` consulta sólo identidad,
 cinco semillas y, con `--dialogs`, diálogos activos/archivados. Requiere copia de
 sesión en directorio0700/archivo0600, credenciales protegidas y exclusividad
