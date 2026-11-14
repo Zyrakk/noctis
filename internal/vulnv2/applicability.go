@@ -1,17 +1,9 @@
 package vulnv2
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"github.com/Zyrakk/noctis/internal/intelligence"
-	"github.com/google/uuid"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 type truth int
@@ -213,112 +205,4 @@ func Evaluate(body json.RawMessage, cpe, version string) (string, string) {
 	default:
 		return "unknown", "unsupported_or_incomplete_configuration; exposure_unknown"
 	}
-}
-func RefreshApplicabilityTx(ctx context.Context, tx pgx.Tx, cve string) error {
-	if e := intelligence.LockProjectionTx(ctx, tx); e != nil {
-		return e
-	}
-	rows, e := tx.Query(ctx, `SELECT f.snapshot_id::text,f.body,s.expires_at,a.id::text,a.revision,a.cpe,COALESCE(a.version,'') FROM noctis_v2.vulnerability_facts f JOIN noctis_v2.feed_snapshots s ON s.id=f.snapshot_id CROSS JOIN (SELECT DISTINCT ON(id) * FROM noctis_v2.asset_versions ORDER BY id,revision DESC)a WHERE f.cve=$1 AND s.kind='nvd' ORDER BY s.as_of DESC LIMIT 1000`, cve)
-	if e != nil {
-		return e
-	}
-	type result struct {
-		snapshot, asset, status, reason string
-		revision                        int
-	}
-	results := []result{}
-	for rows.Next() {
-		var r result
-		var body []byte
-		var cpe, version string
-		var expires time.Time
-		if e = rows.Scan(&r.snapshot, &body, &expires, &r.asset, &r.revision, &cpe, &version); e != nil {
-			rows.Close()
-			return e
-		}
-		r.status, r.reason = Evaluate(body, cpe, version)
-		if !expires.After(time.Now().UTC()) {
-			r.status = "unknown"
-			r.reason = "feed_snapshot_stale"
-		}
-		results = append(results, r)
-	}
-	rows.Close()
-	if e = rows.Err(); e != nil {
-		return e
-	}
-	if len(results) >= 1000 {
-		return errors.New("applicability projection limit reached")
-	}
-	for _, r := range results {
-		tag, err := tx.Exec(ctx, `INSERT INTO noctis_v2.local_applicability(snapshot_id,cve,asset_id,asset_revision,status,reason) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, r.snapshot, cve, r.asset, r.revision, r.status, r.reason)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 1 && r.status == "affected_version" {
-			if e = publishApplicabilityTx(ctx, tx, cve, r.snapshot, r.asset, r.revision); e != nil {
-				return e
-			}
-		}
-	}
-	return nil
-}
-
-func publishApplicabilityTx(ctx context.Context, tx pgx.Tx, cve, snapshot, asset string, assetRevision int) error {
-	rows, e := tx.Query(ctx, `SELECT ic.id::text,ic.revision,cr.body,ob.observation_id::text,ob.evidence FROM noctis_v2.intelligence_cases ic JOIN noctis_v2.case_revisions cr ON cr.case_id=ic.id AND cr.revision=ic.revision CROSS JOIN LATERAL(SELECT s.observation_id,s.evidence FROM noctis_v2.case_memberships m JOIN noctis_v2.observable_sightings s ON s.observation_id=m.observation_id WHERE m.case_id=ic.id AND s.observable_type='cve' AND s.value=$1 ORDER BY s.observation_id LIMIT 1)ob ORDER BY ic.id FOR UPDATE OF ic`, cve)
-	if e != nil {
-		return e
-	}
-	type target struct {
-		id, obs   string
-		revision  int64
-		body, ref []byte
-	}
-	targets := []target{}
-	for rows.Next() {
-		var t target
-		if e = rows.Scan(&t.id, &t.revision, &t.body, &t.obs, &t.ref); e != nil {
-			rows.Close()
-			return e
-		}
-		targets = append(targets, t)
-	}
-	rows.Close()
-	if e = rows.Err(); e != nil {
-		return e
-	}
-	for _, t := range targets {
-		key := fmt.Sprintf("applicability:%s:%s:%s:%d:affected_version", t.id, cve, asset, assetRevision)
-		description := "The inventory version matches an affected range in the NVD advisory. Local exposure and compromise are unknown; KEV describes global exploitation."
-		changeID := uuid.NewString()
-		change, _ := json.Marshal(map[string]any{"id": changeID, "case_id": t.id, "kind": "local_applicability", "title": cve + ": inventory version in affected range", "description": description, "citations": []json.RawMessage{json.RawMessage(t.ref)}, "snapshot_id": snapshot, "asset_id": asset, "asset_revision": assetRevision, "local_exposure": "unknown", "priority_reason": "inventory_version_matches_published_range"})
-		tag, e := tx.Exec(ctx, `INSERT INTO noctis_v2.case_changes(id,case_id,observation_id,body,material_key) VALUES($1,$2,$3,$4,$5) ON CONFLICT(material_key) DO NOTHING`, changeID, t.id, t.obs, string(change), key)
-		if e != nil {
-			return e
-		}
-		if tag.RowsAffected() == 0 {
-			continue
-		}
-		var body map[string]any
-		if e = json.Unmarshal(t.body, &body); e != nil {
-			return e
-		}
-		body["revision"] = fmt.Sprint(t.revision + 1)
-		body["supersedes"] = fmt.Sprint(t.revision)
-		body["local_applicability"] = "affected_version"
-		body["local_exposure"] = "unknown"
-		body["priority_reason"] = "inventory_version_matches_published_range"
-		body["applicability_snapshot_id"] = snapshot
-		raw, _ := json.Marshal(body)
-		if _, e = tx.Exec(ctx, `INSERT INTO noctis_v2.case_revisions(case_id,revision,body) VALUES($1,$2,$3)`, t.id, t.revision+1, string(raw)); e != nil {
-			return e
-		}
-		if _, e = tx.Exec(ctx, `UPDATE noctis_v2.intelligence_cases SET revision=$2,updated_at=clock_timestamp() WHERE id=$1`, t.id, t.revision+1); e != nil {
-			return e
-		}
-		if _, e = tx.Exec(ctx, `UPDATE noctis_v2.briefs SET invalidated=true WHERE body::text LIKE '%'||$1||'%'`, t.obs); e != nil {
-			return e
-		}
-	}
-	return nil
 }

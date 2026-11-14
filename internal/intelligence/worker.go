@@ -197,7 +197,7 @@ func (w Worker) Once(ctx context.Context) (result error) {
 		refs = append(refs, ref)
 		summary := "The source published content matching a watchlist. Source independence is unknown; copies do not provide corroboration."
 		body, _ := json.Marshal(map[string]any{"id": id, "title": title, "revision": fmt.Sprint(revision), "supersedes": fmt.Sprint(revision - 1), "status": "source_claim", "summary": summary, "citations": refs, "policy_version": j.PolicyVersion, "independence": "unknown"})
-		_, e = tx.Exec(ctx, `INSERT INTO noctis_v2.case_revisions(case_id,revision,body) VALUES($1,$2,$3)`, id, revision, string(body))
+		_, e = tx.Exec(ctx, `INSERT INTO noctis_v2.case_revisions(case_id,revision,body) VALUES($1,$2,noctis_v2.case_effective_body($1,$3::jsonb))`, id, revision, string(body))
 		if e != nil {
 			return e
 		}
@@ -234,7 +234,7 @@ func (w Worker) Brief(ctx context.Context, period, policy string) error {
 	if e = LockProjectionTx(ctx, tx); e != nil {
 		return e
 	}
-	rows, e := tx.Query(ctx, `SELECT ch.body,o.source_deleted OR o.superseded_by IS NOT NULL OR o.retention_expired_at IS NOT NULL OR EXISTS(SELECT FROM noctis_v2.claim_versions cv WHERE cv.case_id=ch.case_id AND (cv.invalidated OR cv.status IN ('contradicted','retracted','unresolved')) AND cv.revision=(SELECT max(revision) FROM noctis_v2.claim_versions current WHERE current.id=cv.id)) FROM noctis_v2.case_changes ch JOIN noctis_v2.observations o ON o.id=ch.observation_id WHERE ch.created_at >= $1::date AND ch.created_at < $1::date+1 ORDER BY ch.created_at,ch.id`, period)
+	rows, e := tx.Query(ctx, `SELECT ch.body,o.source_deleted OR o.superseded_by IS NOT NULL OR o.retention_expired_at IS NOT NULL OR EXISTS(SELECT FROM noctis_v2.claim_versions cv WHERE cv.case_id=ch.case_id AND (cv.invalidated OR cv.status IN ('contradicted','retracted','unresolved')) AND cv.revision=(SELECT max(revision) FROM noctis_v2.claim_versions current WHERE current.id=cv.id)),ch.case_id::text,noctis_v2.case_applicability(ch.case_id) FROM noctis_v2.case_changes ch JOIN noctis_v2.observations o ON o.id=ch.observation_id WHERE ch.created_at >= $1::date AND ch.created_at < $1::date+1 ORDER BY ch.created_at,ch.id`, period)
 	if e != nil {
 		return e
 	}
@@ -242,19 +242,41 @@ func (w Worker) Brief(ctx context.Context, period, policy string) error {
 	text := "Automated brief. Source coverage is limited to feed windows; independence is unknown.\n"
 	refs := []evidence.Ref{}
 	needsReview := false
+	support := []map[string]string{}
+	supported := map[string]bool{}
 	for rows.Next() {
-		var raw []byte
+		var raw, applicability []byte
+		var caseID string
 		var invalid bool
-		if e = rows.Scan(&raw, &invalid); e != nil {
+		if e = rows.Scan(&raw, &invalid, &caseID, &applicability); e != nil {
 			return e
 		}
 		var ch struct {
+			Kind        string         `json:"kind"`
 			Title       string         `json:"title"`
 			Description string         `json:"description"`
 			Citations   []evidence.Ref `json:"citations"`
 		}
 		if e = json.Unmarshal(raw, &ch); e != nil {
 			return e
+		}
+		if ch.Kind == "local_applicability" {
+			var state struct {
+				Status     string `json:"local_applicability"`
+				Generation string `json:"applicability_generation"`
+				Pending    bool   `json:"applicability_pending"`
+			}
+			if e = json.Unmarshal(applicability, &state); e != nil {
+				return e
+			}
+			if supported[caseID] {
+				continue
+			}
+			supported[caseID] = true
+			support = append(support, map[string]string{"case_id": caseID, "generation": state.Generation})
+			ch.Title = "Current inventory applicability"
+			ch.Description = state.Status + ". Earlier applicability changes are historical. Local exposure and compromise are unknown."
+			invalid = invalid || state.Pending || state.Status == "unknown"
 		}
 		text += "• " + ch.Title + ": " + ch.Description + "\n"
 		if invalid {
@@ -271,8 +293,8 @@ func (w Worker) Brief(ctx context.Context, period, policy string) error {
 	if needsReview {
 		status = "requires_review"
 	}
-	raw, _ := json.Marshal(map[string]any{"text": text, "citations": refs, "status": status, "current_for_alerts": !needsReview})
-	_, e = tx.Exec(ctx, `INSERT INTO noctis_v2.briefs(period,policy_version,body,invalidated) VALUES($1,$2,$3,$4) ON CONFLICT(period,policy_version) DO UPDATE SET body=EXCLUDED.body,invalidated=EXCLUDED.invalidated WHERE noctis_v2.briefs.invalidated`, period, policy, string(raw), needsReview)
+	raw, _ := json.Marshal(map[string]any{"text": text, "citations": refs, "status": status, "current_for_alerts": !needsReview, "applicability_support": support})
+	_, e = tx.Exec(ctx, `INSERT INTO noctis_v2.briefs(period,policy_version,body,invalidated) VALUES($1,$2,$3,$4) ON CONFLICT(period,policy_version) DO UPDATE SET body=EXCLUDED.body,invalidated=EXCLUDED.invalidated WHERE noctis_v2.briefs.invalidated OR NOT noctis_v2.brief_applicability_current(noctis_v2.briefs.body)`, period, policy, string(raw), needsReview)
 	if e != nil {
 		return e
 	}
