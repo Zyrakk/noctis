@@ -587,6 +587,559 @@
     "not_null": true,
     "generated": ""
   },
+  "column:applicability_current.asset_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_current.asset_revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_current.calculated_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_current.cve": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_current.expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_current.generation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_current.nvd_revision": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_current.reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_current.snapshot_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_current.status": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_effective.asset_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.asset_revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.calculated_asset_revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.calculated_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.calculated_generation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.calculated_snapshot_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.created_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.cve": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.effective_status": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.freshness": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.generation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.invalid_reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.local_exposure": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.nvd_revision": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.snapshot_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_effective.status": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_requests.calculation_version": {
+    "type": "text",
+    "default": "'applicability-v2'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.case_upper_bound": {
+    "type": "text",
+    "default": "''::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.cases_processed": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.cursor": {
+    "type": "text",
+    "default": "''::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.due_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.id": {
+    "type": "uuid",
+    "default": "gen_random_uuid()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.idempotency_key": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.input_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.input_revision": {
+    "type": "integer",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.page": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.pairs_processed": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.parent_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_requests.phase": {
+    "type": "text",
+    "default": "'start'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.scope": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.state": {
+    "type": "text",
+    "default": "'pending'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.updated_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_requests.upper_bound": {
+    "type": "text",
+    "default": "''::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_transitions.asset_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_transitions.asset_revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_transitions.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_transitions.cve": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_transitions.generation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_transitions.id": {
+    "type": "bigint",
+    "default": null,
+    "identity": "a",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_transitions.reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_transitions.snapshot_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_transitions.status": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:applicability_work_status.attempts": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.calculation_state": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.calculation_version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.case_upper_bound": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.cases_processed": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.created_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.cursor": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.due_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.generation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.idempotency_key": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.input_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.input_revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.job_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.job_state": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.last_error_code": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.page": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.pairs_processed": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.parent_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.phase": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.scope": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.state": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.updated_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:applicability_work_status.upper_bound": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
   "column:asset_versions.cpe": {
     "type": "text",
     "default": null,
@@ -680,6 +1233,34 @@
   },
   "column:briefs.policy_version": {
     "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_applicability_projection.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_applicability_projection.case_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_applicability_projection.generation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_applicability_projection.transition": {
+    "type": "bigint",
     "default": null,
     "identity": "",
     "not_null": true,
@@ -1861,6 +2442,55 @@
     "not_null": true,
     "generated": ""
   },
+  "column:nvd_current_selection.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:nvd_current_selection.cve": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:nvd_current_selection.expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:nvd_current_selection.generation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:nvd_current_selection.nvd_revision": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:nvd_current_selection.selection_reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:nvd_current_selection.snapshot_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
   "column:observable_sightings.end_byte": {
     "type": "integer",
     "default": null,
@@ -2575,6 +3205,13 @@
     "not_null": true,
     "generated": ""
   },
+  "column:telegram_accounts.authentication_in_progress": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
   "column:telegram_accounts.capture_failure_revision": {
     "type": "bigint",
     "default": "0",
@@ -2636,6 +3273,20 @@
     "default": "0",
     "identity": "",
     "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.pending_generation_transition": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_accounts.prepared_auth_generation": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
     "generated": ""
   },
   "column:telegram_accounts.quota_wait_reason": {
@@ -2759,6 +3410,97 @@
   },
   "column:telegram_channel_states.pts": {
     "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.account_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.actor": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.capture_not_before": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.consent_generation": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.consent_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.consent_revision": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.from_generation": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.owner_fence": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.request_digest": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_generation_transitions.to_generation": {
+    "type": "uuid",
     "default": null,
     "identity": "",
     "not_null": true,
@@ -3205,6 +3947,83 @@
     "index_valid": true,
     "fk_triggers_enabled": null
   },
+  "constraint:applicability_current.applicability_current_asset_id_asset_revision_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (asset_id, asset_revision) REFERENCES noctis_v2.asset_versions(id, revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:applicability_current.applicability_current_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (cve, asset_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:applicability_current.applicability_current_snapshot_id_cve_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (snapshot_id, cve) REFERENCES noctis_v2.vulnerability_facts(snapshot_id, cve)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:applicability_current.applicability_current_status_check": {
+    "validated": true,
+    "definition": "CHECK (status = ANY (ARRAY['affected_version'::text, 'not_affected_version'::text, 'unknown'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:applicability_requests.applicability_requests_idempotency_key_key": {
+    "validated": true,
+    "definition": "UNIQUE (idempotency_key)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:applicability_requests.applicability_requests_parent_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (parent_id) REFERENCES noctis_v2.applicability_requests(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:applicability_requests.applicability_requests_phase_check": {
+    "validated": true,
+    "definition": "CHECK (phase = ANY (ARRAY['start'::text, 'pairs'::text, 'children'::text, 'cases'::text, 'done'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:applicability_requests.applicability_requests_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:applicability_requests.applicability_requests_scope_check": {
+    "validated": true,
+    "definition": "CHECK (scope = ANY (ARRAY['asset'::text, 'cve'::text, 'case'::text, 'evidence'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:applicability_requests.applicability_requests_state_check": {
+    "validated": true,
+    "definition": "CHECK (state = ANY (ARRAY['pending'::text, 'complete'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:applicability_transitions.applicability_transitions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
   "constraint:asset_versions.asset_versions_pkey": {
     "validated": true,
     "definition": "PRIMARY KEY (id, revision)",
@@ -3231,6 +4050,27 @@
     "definition": "PRIMARY KEY (period, policy_version)",
     "index_ready": true,
     "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:case_applicability_projection.case_applicability_projection_case_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (case_id) REFERENCES noctis_v2.intelligence_cases(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:case_applicability_projection.case_applicability_projection_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (case_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:case_applicability_projection.case_applicability_projection_transition_check": {
+    "validated": true,
+    "definition": "CHECK (transition \u003e 0)",
+    "index_ready": null,
+    "index_valid": null,
     "fk_triggers_enabled": null
   },
   "constraint:case_attention.case_attention_case_id_fkey": {
@@ -3835,6 +4675,13 @@
     "index_valid": true,
     "fk_triggers_enabled": null
   },
+  "constraint:question_sources.question_sources_one_governor": {
+    "validated": true,
+    "definition": "UNIQUE (source_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
   "constraint:question_sources.question_sources_pkey": {
     "validated": true,
     "definition": "PRIMARY KEY (question_id, source_id)",
@@ -3982,6 +4829,13 @@
     "index_valid": true,
     "fk_triggers_enabled": true
   },
+  "constraint:telegram_accounts.telegram_accounts_pending_generation_transition_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (pending_generation_transition) REFERENCES noctis_v2.telegram_generation_transitions(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
   "constraint:telegram_accounts.telegram_accounts_pkey": {
     "validated": true,
     "definition": "PRIMARY KEY (id)",
@@ -4041,6 +4895,41 @@
   "constraint:telegram_channel_states.telegram_channel_states_pkey": {
     "validated": true,
     "definition": "PRIMARY KEY (account_id, channel_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_generation_transitions.telegram_generation_transitions_account_id_consent_revision_key": {
+    "validated": true,
+    "definition": "UNIQUE (account_id, consent_revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_generation_transitions.telegram_generation_transitions_account_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (account_id) REFERENCES noctis_v2.telegram_accounts(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_generation_transitions.telegram_generation_transitions_check": {
+    "validated": true,
+    "definition": "CHECK (consent_generation \u003c\u003e to_generation)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_generation_transitions.telegram_generation_transitions_consent_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (consent_id) REFERENCES noctis_v2.telegram_capture_consents(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_generation_transitions.telegram_generation_transitions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
     "index_ready": true,
     "index_valid": true,
     "fk_triggers_enabled": null
@@ -4181,11 +5070,44 @@
   "function:noctis_v2.ai_immutable_revision()": {
     "definition": "CREATE OR REPLACE FUNCTION noctis_v2.ai_immutable_revision()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$BEGIN\n IF TG_TABLE_NAME='ai_products' AND TG_OP='UPDATE' THEN\n  IF NEW.result='{}'::jsonb AND NEW.dependencies='{}'::jsonb AND (to_jsonb(NEW)-'result'-'dependencies')=(to_jsonb(OLD)-'result'-'dependencies') AND (EXISTS(SELECT FROM noctis_v2.retention_tombstones t WHERE OLD.dependencies::text LIKE '%'||t.observation_id::text||'%') OR EXISTS(SELECT FROM noctis_v2.invalidated_products p WHERE p.job_id=OLD.job_id AND p.reason='retention_expired')) THEN RETURN NEW; END IF;\n END IF;\n RAISE EXCEPTION 'immutable AI revision';\nEND$function$\n"
   },
+  "function:noctis_v2.applicability_evidence_current(jsonb)": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.applicability_evidence_current(refs jsonb)\n RETURNS boolean\n LANGUAGE sql\n STABLE\nAS $function$\n  SELECT jsonb_typeof(refs)='array' AND jsonb_array_length(refs)\u003e0 AND NOT EXISTS(\n    SELECT FROM jsonb_array_elements(refs) r WHERE NOT EXISTS(\n      SELECT FROM noctis_v2.observations o JOIN noctis_v2.content_blobs b USING(hash,representation)\n      WHERE o.id::text=r-\u003e\u003e'observation_id' AND o.revision=r-\u003e\u003e'revision' AND o.hash=r-\u003e\u003e'hash'\n        AND o.representation=r-\u003e\u003e'representation' AND NOT o.source_deleted AND o.superseded_by IS NULL\n        AND o.retention_expired_at IS NULL))\n$function$\n"
+  },
+  "function:noctis_v2.brief_applicability_current(jsonb)": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.brief_applicability_current(body jsonb)\n RETURNS boolean\n LANGUAGE sql\n STABLE\nAS $function$\n SELECT NOT EXISTS(SELECT FROM jsonb_array_elements(COALESCE(body-\u003e'applicability_support','[]'::jsonb)) s\n WHERE (noctis_v2.case_applicability((s-\u003e\u003e'case_id')::uuid)-\u003e\u003e'applicability_generation') IS DISTINCT FROM s-\u003e\u003e'generation')\n AND (body ? 'applicability_support' OR NOT EXISTS(SELECT FROM noctis_v2.case_changes ch\n WHERE ch.body-\u003e\u003e'kind'='local_applicability' AND body::text LIKE '%'||ch.observation_id::text||'%'))\n$function$\n"
+  },
+  "function:noctis_v2.capture_audit_immutable()": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.capture_audit_immutable()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$ BEGIN RAISE EXCEPTION 'immutable capture failure/resume audit'; END $function$\n"
+  },
+  "function:noctis_v2.case_applicability(uuid)": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.case_applicability(case_uuid uuid)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\nAS $function$\nWITH cves AS (\n SELECT s.value AS cve,bool_or(noctis_v2.applicability_evidence_current(jsonb_build_array(s.evidence))) AS valid\n FROM noctis_v2.case_memberships m JOIN noctis_v2.observable_sightings s ON s.observation_id=m.observation_id\n WHERE m.case_id=case_uuid AND s.observable_type='cve' GROUP BY s.value\n), pairs AS (\n SELECT c.cve,c.valid,e.asset_id,e.asset_revision,e.generation,e.snapshot_id,e.expires_at,\n CASE WHEN c.valid THEN COALESCE(e.effective_status,'unknown') ELSE 'unknown' END AS status,\n COALESCE(e.freshness,'pending') AS freshness\n FROM cves c LEFT JOIN noctis_v2.applicability_effective e USING(cve)\n), aggregate AS (\n SELECT CASE WHEN bool_or(status='affected_version') THEN 'affected_version'\n   WHEN count(*)\u003e0 AND bool_and(status='not_affected_version' AND asset_id IS NOT NULL) THEN 'not_affected_version'\n   ELSE 'unknown' END AS status,\n   COALESCE(bool_or(freshness\u003c\u003e'current' OR NOT valid OR asset_id IS NULL),true) AS pending,\n   md5(COALESCE(string_agg(cve||':'||COALESCE(asset_id::text,'')||':'||COALESCE(asset_revision::text,'')||':'||COALESCE(generation,'')||':'||status||':'||valid::text,'|' ORDER BY cve,asset_id),'')) AS generation,\n   min(expires_at) AS expires_at FROM pairs\n)\nSELECT jsonb_build_object('local_applicability',status,'local_exposure','unknown',\n 'applicability_generation',generation,'applicability_pending',pending,'applicability_expires_at',expires_at,\n 'priority_reason',CASE status WHEN 'affected_version' THEN 'inventory_version_matches_published_range'\n   WHEN 'not_affected_version' THEN 'inventory_versions_excluded_by_published_ranges' ELSE 'applicability_unknown' END)\nFROM aggregate\n$function$\n"
+  },
+  "function:noctis_v2.case_effective_body(uuid,jsonb)": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.case_effective_body(case_uuid uuid, historical jsonb)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\nAS $function$\n SELECT historical||jsonb_build_object('historical_local_applicability',historical-\u003e'local_applicability')\n   ||noctis_v2.case_applicability(case_uuid)\n$function$\n"
+  },
+  "function:noctis_v2.change_effective_body(uuid,jsonb)": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.change_effective_body(case_uuid uuid, historical jsonb)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\nAS $function$\n SELECT CASE WHEN historical-\u003e\u003e'kind'='local_applicability' THEN historical||jsonb_build_object(\n   'historical',true,'effective_status',noctis_v2.case_applicability(case_uuid)-\u003e\u003e'local_applicability',\n   'current_for_alerts',COALESCE(historical-\u003e\u003e'applicability_generation'=noctis_v2.case_applicability(case_uuid)-\u003e\u003e'applicability_generation',false))\n ELSE historical END\n$function$\n"
+  },
+  "function:noctis_v2.enqueue_applicability(text,text,integer,text,timestamp with time zone,uuid)": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.enqueue_applicability(p_scope text, p_input text, p_revision integer, p_key text, p_due timestamp with time zone DEFAULT clock_timestamp(), p_parent uuid DEFAULT NULL::uuid)\n RETURNS uuid\n LANGUAGE plpgsql\nAS $function$\nDECLARE request_id uuid;\nBEGIN\n INSERT INTO noctis_v2.applicability_requests(scope,input_id,input_revision,idempotency_key,due_at,parent_id)\n VALUES(p_scope,p_input,p_revision,p_key,p_due,p_parent)\n ON CONFLICT(idempotency_key) DO NOTHING RETURNING id INTO request_id;\n IF request_id IS NULL THEN\n  SELECT id INTO request_id FROM noctis_v2.applicability_requests WHERE idempotency_key=p_key;\n ELSIF p_due\u003c=clock_timestamp() THEN\n  INSERT INTO noctis_v2.jobs(id,stage,input_id,input_revision,policy_version,schema_version)\n  VALUES(gen_random_uuid(),'applicability',request_id,'0','applicability-v2','1');\n END IF;\n RETURN request_id;\nEND $function$\n"
+  },
   "function:noctis_v2.native_budget_binding()": {
     "definition": "CREATE OR REPLACE FUNCTION noctis_v2.native_budget_binding()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$BEGIN\n IF OLD.active_capture_budget IS NOT NULL AND NEW.active_capture_budget IS DISTINCT FROM OLD.active_capture_budget THEN RAISE EXCEPTION 'immutable native budget binding'; END IF;\n IF NEW.active_capture_budget IS NOT NULL AND NOT EXISTS(SELECT FROM noctis_v2.telegram_capture_budgets b WHERE b.id=NEW.active_capture_budget AND b.account_id=NEW.id AND b.auth_generation=NEW.auth_generation) THEN RAISE EXCEPTION 'native budget account generation mismatch'; END IF;\n RETURN NEW;\nEND$function$\n"
   },
   "function:noctis_v2.native_budget_immutable()": {
     "definition": "CREATE OR REPLACE FUNCTION noctis_v2.native_budget_immutable()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE phase text; counter text;\nBEGIN\n IF TG_OP='DELETE' THEN RAISE EXCEPTION 'immutable native budget'; END IF;\n IF TG_OP='UPDATE' AND (to_jsonb(NEW)-'counters'-'state')\u003c\u003e(to_jsonb(OLD)-'counters'-'state') THEN RAISE EXCEPTION 'immutable native budget policy'; END IF;\n IF TG_OP='UPDATE' AND OLD.state\u003c\u003e'active' AND NEW.state\u003c\u003eOLD.state THEN RAISE EXCEPTION 'terminal native budget'; END IF;\n IF jsonb_typeof(NEW.counters)\u003c\u003e'object' OR (SELECT count(*) FROM jsonb_object_keys(NEW.counters))\u003c\u003e3 THEN RAISE EXCEPTION 'invalid native counters'; END IF;\n FOREACH phase IN ARRAY ARRAY['control','bootstrap','live'] LOOP\n  IF jsonb_typeof(NEW.counters-\u003ephase)\u003c\u003e'object' OR (SELECT count(*) FROM jsonb_object_keys(NEW.counters-\u003ephase))\u003c\u003e4 THEN RAISE EXCEPTION 'invalid native phase'; END IF;\n  FOREACH counter IN ARRAY ARRAY['api','observations','payload_bytes','metadata_bytes'] LOOP\n   IF jsonb_typeof(NEW.counters-\u003ephase-\u003ecounter)\u003c\u003e'number' OR NOT COALESCE((NEW.counters-\u003ephase-\u003e\u003ecounter) ~ '^[0-9]+$',false) THEN RAISE EXCEPTION 'invalid native counter'; END IF;\n   PERFORM (NEW.counters-\u003ephase-\u003e\u003ecounter)::bigint;\n   IF TG_OP='UPDATE' AND (NEW.counters-\u003ephase-\u003e\u003ecounter)::bigint\u003c(OLD.counters-\u003ephase-\u003e\u003ecounter)::bigint THEN RAISE EXCEPTION 'native counter cannot decrease'; END IF;\n  END LOOP;\n END LOOP;\n RETURN NEW;\nEND$function$\n"
+  },
+  "function:noctis_v2.nvd_revision(text)": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.nvd_revision(value text)\n RETURNS timestamp with time zone\n LANGUAGE plpgsql\n IMMUTABLE\nAS $function$\nBEGIN\n  IF value IS NULL OR value !~ '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})?$' THEN RETURN NULL; END IF;\n  RETURN (CASE WHEN value ~ '(Z|[+-]\\d{2}:\\d{2})$' THEN value ELSE value||'Z' END)::timestamptz;\nEXCEPTION WHEN OTHERS THEN RETURN NULL;\nEND $function$\n"
+  },
+  "function:noctis_v2.queue_applicability_evidence()": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.queue_applicability_evidence()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE observation_id uuid;\nBEGIN\n IF TG_TABLE_NAME='observations' THEN observation_id:=NEW.id; ELSE observation_id:=NEW.observation_id; END IF;\n PERFORM noctis_v2.enqueue_applicability('evidence',observation_id::text,0,'evidence:'||observation_id||':'||txid_current()::text);\n RETURN NULL;\nEND $function$\n"
+  },
+  "function:noctis_v2.queue_applicability_membership()": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.queue_applicability_membership()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE row_case uuid;\nBEGIN\n row_case := CASE WHEN TG_OP='DELETE' THEN OLD.case_id ELSE NEW.case_id END;\n PERFORM noctis_v2.enqueue_applicability('case',row_case::text,0,'membership:'||row_case||':'||txid_current()::text);\n RETURN NULL;\nEND $function$\n"
+  },
+  "function:noctis_v2.select_current_nvd(text)": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.select_current_nvd(requested_cve text)\n RETURNS TABLE(cve text, snapshot_id uuid, body jsonb, nvd_revision timestamp with time zone, expires_at timestamp with time zone, selection_reason text, generation text)\n LANGUAGE sql\n STABLE\nAS $function$\nWITH raw_records AS (\n  SELECT f.cve,f.snapshot_id,f.body,s.as_of,s.expires_at,\n    noctis_v2.nvd_revision(f.body-\u003e\u003e'lastModified') AS nvd_revision\n  FROM noctis_v2.vulnerability_facts f JOIN noctis_v2.feed_snapshots s ON s.id=f.snapshot_id WHERE s.kind='nvd' AND f.cve=requested_cve\n), records AS (\n  SELECT *,CASE WHEN nvd_revision IS NULL THEN body ELSE (body-'lastModified')||jsonb_build_object('lastModified',nvd_revision) END AS semantic_body FROM raw_records\n), ranked AS (\n  SELECT *,max(nvd_revision) OVER(PARTITION BY cve) AS newest_revision,\n    max(as_of) OVER(PARTITION BY cve) AS newest_legacy FROM records\n), candidates AS (\n  SELECT * FROM ranked WHERE nvd_revision=newest_revision OR (newest_revision IS NULL AND as_of=newest_legacy)\n), picked AS (\n  SELECT DISTINCT ON(cve) * FROM candidates ORDER BY cve,as_of DESC,snapshot_id\n), selected AS (\n  SELECT p.*,CASE\n    WHEN EXISTS(SELECT FROM candidates c WHERE c.cve=p.cve AND c.semantic_body\u003c\u003ep.semantic_body) THEN 'conflicting_nvd_revision'\n    WHEN p.newest_revision IS NOT NULL AND EXISTS(SELECT FROM records r WHERE r.cve=p.cve AND r.nvd_revision IS NULL AND r.as_of\u003e=p.as_of) THEN 'unversioned_nvd_record'\n    ELSE '' END AS selection_reason FROM picked p\n)\nSELECT cve,snapshot_id,body,nvd_revision,expires_at,selection_reason,\n  md5(snapshot_id::text||':'||body::text||':'||selection_reason) AS generation FROM selected\n$function$\n"
   },
   "relation:action_receipts": {
     "kind": "r",
@@ -4247,6 +5169,31 @@
     "persistence": "p",
     "row_security": false
   },
+  "relation:applicability_current": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:applicability_effective": {
+    "kind": "v",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:applicability_requests": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:applicability_transitions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:applicability_work_status": {
+    "kind": "v",
+    "persistence": "p",
+    "row_security": false
+  },
   "relation:asset_versions": {
     "kind": "r",
     "persistence": "p",
@@ -4258,6 +5205,11 @@
     "row_security": false
   },
   "relation:briefs": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:case_applicability_projection": {
     "kind": "r",
     "persistence": "p",
     "row_security": false
@@ -4387,6 +5339,11 @@
     "persistence": "p",
     "row_security": false
   },
+  "relation:nvd_current_selection": {
+    "kind": "v",
+    "persistence": "p",
+    "row_security": false
+  },
   "relation:observable_sightings": {
     "kind": "r",
     "persistence": "p",
@@ -4482,6 +5439,11 @@
     "persistence": "p",
     "row_security": false
   },
+  "relation:telegram_generation_transitions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
   "relation:telegram_inbox": {
     "kind": "r",
     "persistence": "p",
@@ -4519,6 +5481,18 @@
     "enabled": true,
     "definition": "CREATE TRIGGER ai_secrets_immutable BEFORE DELETE OR UPDATE ON noctis_v2.ai_secrets FOR EACH ROW EXECUTE FUNCTION noctis_v2.ai_immutable_revision()"
   },
+  "trigger:case_memberships.applicability_membership": {
+    "enabled": true,
+    "definition": "CREATE TRIGGER applicability_membership AFTER INSERT OR DELETE ON noctis_v2.case_memberships FOR EACH ROW EXECUTE FUNCTION noctis_v2.queue_applicability_membership()"
+  },
+  "trigger:observable_sightings.applicability_sighting": {
+    "enabled": true,
+    "definition": "CREATE TRIGGER applicability_sighting AFTER INSERT ON noctis_v2.observable_sightings FOR EACH ROW WHEN (new.observable_type = 'cve'::text) EXECUTE FUNCTION noctis_v2.queue_applicability_evidence()"
+  },
+  "trigger:observations.applicability_evidence": {
+    "enabled": true,
+    "definition": "CREATE TRIGGER applicability_evidence AFTER UPDATE OF source_deleted, superseded_by, retention_expired_at ON noctis_v2.observations FOR EACH ROW WHEN (old.source_deleted IS DISTINCT FROM new.source_deleted OR old.superseded_by IS DISTINCT FROM new.superseded_by OR old.retention_expired_at IS DISTINCT FROM new.retention_expired_at) EXECUTE FUNCTION noctis_v2.queue_applicability_evidence()"
+  },
   "trigger:telegram_accounts.native_budget_binding": {
     "enabled": true,
     "definition": "CREATE TRIGGER native_budget_binding BEFORE UPDATE ON noctis_v2.telegram_accounts FOR EACH ROW EXECUTE FUNCTION noctis_v2.native_budget_binding()"
@@ -4526,5 +5500,21 @@
   "trigger:telegram_capture_budgets.native_budget_immutable": {
     "enabled": true,
     "definition": "CREATE TRIGGER native_budget_immutable BEFORE INSERT OR DELETE OR UPDATE ON noctis_v2.telegram_capture_budgets FOR EACH ROW EXECUTE FUNCTION noctis_v2.native_budget_immutable()"
+  },
+  "trigger:telegram_generation_transitions.generation_transition_immutable": {
+    "enabled": true,
+    "definition": "CREATE TRIGGER generation_transition_immutable BEFORE DELETE OR UPDATE ON noctis_v2.telegram_generation_transitions FOR EACH ROW EXECUTE FUNCTION noctis_v2.capture_audit_immutable()"
+  },
+  "view:applicability_effective": {
+    "options": null,
+    "definition": " WITH assets AS (\n         SELECT DISTINCT ON (asset_versions.id) asset_versions.id,\n            asset_versions.revision,\n            asset_versions.cpe,\n            asset_versions.version,\n            asset_versions.evidence,\n            asset_versions.producer,\n            asset_versions.created_at\n           FROM noctis_v2.asset_versions\n          ORDER BY asset_versions.id, asset_versions.revision DESC\n        ), evaluated AS (\n         SELECT n.cve,\n            a.id AS asset_id,\n            a.revision AS asset_revision,\n            n.snapshot_id,\n            n.nvd_revision,\n            n.generation,\n            n.expires_at,\n            p.status,\n            p.reason,\n            p.calculated_at,\n            p.calculated_at AS created_at,\n            p.snapshot_id AS calculated_snapshot_id,\n            p.asset_revision AS calculated_asset_revision,\n            p.generation AS calculated_generation,\n                CASE\n                    WHEN n.selection_reason \u003c\u003e ''::text THEN n.selection_reason\n                    WHEN n.expires_at \u003c= clock_timestamp() THEN 'feed_snapshot_stale'::text\n                    WHEN NOT noctis_v2.applicability_evidence_current(a.evidence) THEN 'asset_evidence_unavailable'::text\n                    WHEN p.generation IS DISTINCT FROM n.generation OR p.asset_revision IS DISTINCT FROM a.revision THEN 'calculation_pending'::text\n                    ELSE ''::text\n                END AS invalid_reason\n           FROM noctis_v2.nvd_current_selection n\n             CROSS JOIN assets a\n             LEFT JOIN noctis_v2.applicability_current p ON p.cve = n.cve AND p.asset_id = a.id\n        )\n SELECT cve,\n    asset_id,\n    asset_revision,\n    snapshot_id,\n    nvd_revision,\n    generation,\n    expires_at,\n    status,\n    reason,\n    calculated_at,\n    created_at,\n    calculated_snapshot_id,\n    calculated_asset_revision,\n    calculated_generation,\n    invalid_reason,\n        CASE\n            WHEN invalid_reason = ''::text THEN status\n            ELSE 'unknown'::text\n        END AS effective_status,\n        CASE\n            WHEN invalid_reason = ''::text THEN 'current'::text\n            WHEN invalid_reason = 'calculation_pending'::text THEN 'pending'::text\n            ELSE 'stale'::text\n        END AS freshness,\n    'unknown'::text AS local_exposure\n   FROM evaluated;"
+  },
+  "view:applicability_work_status": {
+    "options": null,
+    "definition": " SELECT r.id,\n    r.idempotency_key,\n    r.scope,\n    r.input_id,\n    r.input_revision,\n    r.calculation_version,\n    r.parent_id,\n    r.due_at,\n    r.state,\n    r.phase,\n    r.page,\n    r.cursor,\n    r.upper_bound,\n    r.case_upper_bound,\n    r.pairs_processed,\n    r.cases_processed,\n    r.created_at,\n    r.updated_at,\n    r.id::text AS generation,\n        CASE\n            WHEN (j.state = ANY (ARRAY['quarantined'::text, 'cancelled'::text, 'dependency_blocked'::text, 'budget_blocked'::text])) OR failed_child.id IS NOT NULL THEN 'failed'::text\n            WHEN r.state = 'complete'::text AND NOT (EXISTS ( SELECT\n               FROM noctis_v2.applicability_requests child\n              WHERE child.parent_id = r.id AND child.state \u003c\u003e 'complete'::text)) THEN 'complete'::text\n            ELSE 'pending'::text\n        END AS calculation_state,\n    COALESCE(failed_child.id, j.id) AS job_id,\n    COALESCE(failed_child.state, j.state) AS job_state,\n    COALESCE(failed_child.attempts, j.attempts) AS attempts,\n    COALESCE(failed_child.last_error_code, j.last_error_code) AS last_error_code\n   FROM noctis_v2.applicability_requests r\n     LEFT JOIN noctis_v2.jobs j ON j.stage = 'applicability'::text AND j.input_id = r.id AND j.input_revision = r.page::text AND j.policy_version = r.calculation_version AND j.schema_version = '1'::text\n     LEFT JOIN LATERAL ( SELECT cj.id,\n            cj.state,\n            cj.attempts,\n            cj.last_error_code\n           FROM noctis_v2.applicability_requests child\n             JOIN noctis_v2.jobs cj ON cj.stage = 'applicability'::text AND cj.input_id = child.id AND cj.input_revision = child.page::text\n          WHERE child.parent_id = r.id AND (cj.state = ANY (ARRAY['quarantined'::text, 'cancelled'::text, 'dependency_blocked'::text, 'budget_blocked'::text]))\n          ORDER BY cj.id\n         LIMIT 1) failed_child ON true;"
+  },
+  "view:nvd_current_selection": {
+    "options": null,
+    "definition": " SELECT c.cve,\n    current.snapshot_id,\n    current.body,\n    current.nvd_revision,\n    current.expires_at,\n    current.selection_reason,\n    current.generation\n   FROM ( SELECT DISTINCT vulnerability_facts.cve\n           FROM noctis_v2.vulnerability_facts) c\n     CROSS JOIN LATERAL noctis_v2.select_current_nvd(c.cve) current(cve, snapshot_id, body, nvd_revision, expires_at, selection_reason, generation);"
   }
 }

@@ -234,7 +234,9 @@ func TestRunAPITLSPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		var waiting bool
-		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND wait_event_type='Lock' AND query LIKE '%noctis_v2.ai_configs%')`).Scan(&waiting)
+		// Catalog deparsing may acquire the relation lock before the explicit
+		// ai_configs SELECT. Observe that exact lock, independent of query text.
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid WHERE a.datname=current_database() AND a.pid<>pg_backend_pid() AND a.wait_event_type='Lock' AND l.locktype='relation' AND l.relation='noctis_v2.ai_configs'::regclass AND NOT l.granted)`).Scan(&waiting)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -129,15 +129,19 @@ Diagnóstico: `database=true, schema=false` exige comprobar las migraciones y lo
 objetos requeridos; `schema=true, functional=false` puede señalar permisos del
 runtime o una configuración IA ilegible. Inspeccionar con la conexión del modo
 afectado y revisar los grants posteriores a migración. Por ejemplo, la API
-necesita `INSERT` en `sessions`; worker y collector no lo necesitan. Se consideran
-los privilegios heredados, `USAGE` en los esquemas y lectura del ledger. La
+necesita `INSERT` en `sessions` y `UPDATE/DELETE` en `question_sources`; worker y
+collector no necesitan esos permisos. La cola de aplicabilidad requiere inserción
+de solicitudes en los tres modos y actualización solo en worker. Se consideran
+los privilegios heredados, `USAGE` en los esquemas, lectura del ledger y `EXECUTE`
+de las funciones SQL operativas de cada modo. La
 respuesta pública no incluye errores SQL ni credenciales. Las plantillas de
 grants siguen siendo responsabilidad del operador; readiness no certifica
 mínimo privilegio ni disponibilidad futura.
 
 El contrato está en `internal/runtimev2/readiness_contract.go` y su manifiesto
 `schema_contract.json`: relaciones operativas, columnas/tipos/defaults,
-claves y restricciones con su estado, triggers críticos y sus funciones. Excluye
+claves y restricciones con su estado, definiciones de vistas, triggers críticos
+y funciones SQL operativas (incluido el selector NVD acotado por CVE). Excluye
 índices meramente de rendimiento y tolera objetos adicionales ajenos al contrato.
 Al añadir una operación o migración, revisar los permisos por modo y regenerar
 desde **todas** las migraciones embebidas en una DB sintética aislada:

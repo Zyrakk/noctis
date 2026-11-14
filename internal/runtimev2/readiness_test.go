@@ -19,6 +19,7 @@ import (
 	"github.com/Zyrakk/noctis/internal/configv2"
 	db "github.com/Zyrakk/noctis/internal/database/v2"
 	"github.com/Zyrakk/noctis/internal/intelligence"
+	"github.com/Zyrakk/noctis/internal/vulnv2"
 	migrations "github.com/Zyrakk/noctis/migrations/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -46,6 +47,11 @@ func TestReadinessContractPostgres(t *testing.T) {
 	for _, table := range contractRelations() {
 		if _, ok := actual["relation:"+table]; !ok {
 			t.Fatalf("declared operational table missing from migrations: %s", table)
+		}
+	}
+	for _, signature := range contractFunctions() {
+		if _, ok := actual["function:"+signature]; !ok {
+			t.Fatalf("declared operational function missing from migrations: %s", signature)
 		}
 	}
 	if os.Getenv("NOCTIS_V2_UPDATE_READINESS_CONTRACT") == "1" {
@@ -91,7 +97,7 @@ func readinessExec(t *testing.T, c *pgx.Conn, sql string, args ...any) {
 }
 
 // Establishes an actual LOGIN connection. Readiness receives only the access
-// declared for this mode, and no DDL, ownership, DELETE or broad table grants.
+// declared for this mode, and no DDL, ownership or broad table/function grants.
 func readinessRole(t *testing.T, admin *pgx.Conn, dsn, mode string, inherited bool) (string, string) {
 	t.Helper()
 	role := "readiness_" + strings.ReplaceAll(uuid.NewString(), "-", "")
@@ -116,6 +122,9 @@ func readinessRole(t *testing.T, admin *pgx.Conn, dsn, mode string, inherited bo
 	tables, privileges := privilegesForMode(mode)
 	for i, table := range tables {
 		readinessExec(t, admin, "GRANT "+privileges[i]+" ON noctis_v2."+pgx.Identifier{table}.Sanitize()+" TO "+grantRole)
+	}
+	for _, signature := range readinessFunctions[mode] {
+		readinessExec(t, admin, "GRANT EXECUTE ON FUNCTION "+signature+" TO "+grantRole)
 	}
 	u, err := url.Parse(dsn)
 	if err != nil {
@@ -151,6 +160,7 @@ func TestReadinessRestrictedModesPostgres(t *testing.T) {
 	dsn := productDB(t)
 	admin := readinessConnection(t, dsn)
 	readinessExec(t, admin, `REVOKE CREATE ON SCHEMA public FROM PUBLIC`)
+	readinessExec(t, admin, `REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA noctis_v2 FROM PUBLIC`)
 	for _, mode := range []string{"api", "worker", "collector"} {
 		for _, inherited := range []bool{false, true} {
 			t.Run(mode+map[bool]string{false: "/direct", true: "/inherited"}[inherited], func(t *testing.T) {
@@ -172,6 +182,39 @@ func TestReadinessRestrictedModesPostgres(t *testing.T) {
 					readinessExec(t, admin, "GRANT INSERT ON noctis_v2.sessions TO "+grantRole)
 					assertReady(t, runtimeDSN, mode)
 				} else {
+					assertReady(t, runtimeDSN, mode)
+				}
+				for _, requirement := range []struct {
+					table, privilege string
+					required         bool
+				}{
+					{"question_sources", "UPDATE", mode == "api"},
+					{"question_sources", "DELETE", mode == "api"},
+					{"telegram_generation_transitions", "SELECT", mode == "api"},
+					{"applicability_requests", "INSERT", true},
+					{"applicability_requests", "UPDATE", mode == "worker"},
+					{"applicability_effective", "SELECT", mode != "collector"},
+					{"asset_versions", "UPDATE", mode == "worker"},
+				} {
+					readinessExec(t, admin, "REVOKE "+requirement.privilege+" ON noctis_v2."+requirement.table+" FROM "+grantRole)
+					if requirement.required {
+						assertUnready(t, runtimeDSN, mode, true)
+						readinessExec(t, admin, "GRANT "+requirement.privilege+" ON noctis_v2."+requirement.table+" TO "+grantRole)
+					}
+					assertReady(t, runtimeDSN, mode)
+				}
+				for _, signature := range []string{
+					"noctis_v2.select_current_nvd(text)",
+					"noctis_v2.change_effective_body(uuid,jsonb)",
+					"noctis_v2.enqueue_applicability(text,text,integer,text,timestamp with time zone,uuid)",
+				} {
+					readinessExec(t, admin, "REVOKE EXECUTE ON FUNCTION "+signature+" FROM "+grantRole)
+					for _, required := range readinessFunctions[mode] {
+						if required == signature {
+							assertUnready(t, runtimeDSN, mode, true)
+							readinessExec(t, admin, "GRANT EXECUTE ON FUNCTION "+signature+" TO "+grantRole)
+						}
+					}
 					assertReady(t, runtimeDSN, mode)
 				}
 				readinessExec(t, admin, "REVOKE USAGE ON SCHEMA noctis_v2 FROM "+grantRole)
@@ -236,6 +279,11 @@ func TestReadinessDriftAndHTTPPostgres(t *testing.T) {
 	if err = admin.QueryRow(context.Background(), `SELECT pg_get_functiondef('noctis_v2.ai_immutable_revision()'::regprocedure)`).Scan(&immutableDefinition); err != nil {
 		t.Fatal(err)
 	}
+	var nvdDefinition, nvdView string
+	if err = admin.QueryRow(context.Background(), `SELECT pg_get_functiondef('noctis_v2.nvd_revision(text)'::regprocedure),pg_get_viewdef('noctis_v2.nvd_current_selection'::regclass,true)`).Scan(&nvdDefinition, &nvdView); err != nil {
+		t.Fatal(err)
+	}
+	nvdView = strings.TrimSuffix(strings.TrimSpace(nvdView), ";")
 	cases := []struct {
 		name, change, restore string
 		schema                bool
@@ -249,6 +297,13 @@ func TestReadinessDriftAndHTTPPostgres(t *testing.T) {
 		{"trigger_function_altered", `CREATE OR REPLACE FUNCTION noctis_v2.ai_immutable_revision() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW; END$$`, immutableDefinition, false},
 		{"foreign_key_disabled", `ALTER TABLE noctis_v2.ai_secrets DISABLE TRIGGER ALL`, `ALTER TABLE noctis_v2.ai_secrets ENABLE TRIGGER ALL`, false},
 		{"row_security", `ALTER TABLE noctis_v2.sessions ENABLE ROW LEVEL SECURITY`, `ALTER TABLE noctis_v2.sessions DISABLE ROW LEVEL SECURITY`, false},
+		{"generation_trigger_disabled", `ALTER TABLE noctis_v2.telegram_generation_transitions DISABLE TRIGGER generation_transition_immutable`, `ALTER TABLE noctis_v2.telegram_generation_transitions ENABLE TRIGGER generation_transition_immutable`, false},
+		{"applicability_queue_missing", `ALTER TABLE noctis_v2.applicability_requests RENAME TO missing_applicability_requests`, `ALTER TABLE noctis_v2.missing_applicability_requests RENAME TO applicability_requests`, false},
+		{"applicability_trigger_disabled", `ALTER TABLE noctis_v2.observations DISABLE TRIGGER applicability_evidence`, `ALTER TABLE noctis_v2.observations ENABLE TRIGGER applicability_evidence`, false},
+		{"nvd_function_altered", `CREATE OR REPLACE FUNCTION noctis_v2.nvd_revision(value text) RETURNS timestamptz LANGUAGE plpgsql IMMUTABLE AS $$BEGIN RETURN NULL; END$$`, nvdDefinition, false},
+		{"nvd_selector_altered", `ALTER FUNCTION noctis_v2.select_current_nvd(text) VOLATILE`, `ALTER FUNCTION noctis_v2.select_current_nvd(text) STABLE`, false},
+		{"nvd_view_altered", `CREATE OR REPLACE VIEW noctis_v2.nvd_current_selection AS SELECT * FROM (` + nvdView + `) selected WHERE false`, `CREATE OR REPLACE VIEW noctis_v2.nvd_current_selection AS ` + nvdView, false},
+		{"governance_constraint_missing", `ALTER TABLE noctis_v2.question_sources DROP CONSTRAINT question_sources_one_governor`, `ALTER TABLE noctis_v2.question_sources ADD CONSTRAINT question_sources_one_governor UNIQUE(source_id)`, false},
 		{"ledger_pending", `DELETE FROM public.noctis_v2_migrations WHERE name='` + ms[len(ms)-1].Name + `'`, `INSERT INTO public.noctis_v2_migrations(name,checksum) VALUES('` + ms[len(ms)-1].Name + `','` + ms[len(ms)-1].Checksum + `')`, false},
 		{"ledger_additional", `INSERT INTO public.noctis_v2_migrations(name,checksum) VALUES('999_future.sql','bad')`, `DELETE FROM public.noctis_v2_migrations WHERE name='999_future.sql'`, false},
 		{"ledger_checksum", `UPDATE public.noctis_v2_migrations SET checksum='bad' WHERE name='` + ms[0].Name + `'`, `UPDATE public.noctis_v2_migrations SET checksum='` + ms[0].Checksum + `' WHERE name='` + ms[0].Name + `'`, false},
@@ -300,6 +355,7 @@ func TestReadinessDriftAndHTTPPostgres(t *testing.T) {
 func TestReadinessRestrictedOperationsPostgres(t *testing.T) {
 	dsn := productDB(t)
 	admin := readinessConnection(t, dsn)
+	readinessExec(t, admin, `REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA noctis_v2 FROM PUBLIC`)
 	collectorDSN, _ := readinessRole(t, admin, dsn, "collector", true)
 	workerDSN, _ := readinessRole(t, admin, dsn, "worker", true)
 	apiDSN, _ := readinessRole(t, admin, dsn, "api", true)
@@ -324,9 +380,50 @@ func TestReadinessRestrictedOperationsPostgres(t *testing.T) {
 		if err := worker.Once(context.Background()); err != nil {
 			t.Fatal("worker operational grant contract", err)
 		}
+		drainApplicability(t, workerDSN)
 		if err := worker.Brief(context.Background(), time.Now().UTC().Format("2006-01-02"), "readiness"); err != nil {
 			t.Fatal("worker brief grant contract", err)
 		}
+	}
+	// Exercise new input -> durable queue -> pair/case projection using only
+	// each mode's declared grants, including nested SQL function execution.
+	asset := uuid.NewString()
+	saveAsset := inventorySaveFixture(t, context.Background(), apiDSN, admin)
+	saveAsset(asset, 0)
+	nvd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"startIndex":0,"totalResults":1,"resultsPerPage":1,"timestamp":%q,"vulnerabilities":[{"cve":{"id":"CVE-2026-12345","lastModified":"2026-01-01T00:00:00Z","configurations":[{"cpeMatch":[{"vulnerable":true,"criteria":"cpe:2.3:a:synthetic:product:*:*:*:*:*:*:*:*","versionEndExcluding":"2.0"}]}]}}]}`, time.Now().UTC().Format(time.RFC3339Nano))
+	}))
+	defer nvd.Close()
+	if _, err := (vulnv2.Store{DSN: collectorDSN, Fetcher: capture.Fetcher{AllowLocal: map[string]bool{strings.TrimPrefix(nvd.URL, "http://"): true}}}).PollPage(context.Background(), "nvd", nvd.URL, time.Hour); err != nil {
+		t.Fatal("collector applicability enqueue grant contract", err)
+	}
+	drainApplicability(t, workerDSN)
+	var projected bool
+	if err := admin.QueryRow(context.Background(), `SELECT
+ EXISTS(SELECT FROM noctis_v2.applicability_current WHERE asset_id=$1 AND status='affected_version')
+ AND EXISTS(SELECT FROM noctis_v2.applicability_transitions WHERE asset_id=$1)
+ AND EXISTS(SELECT FROM noctis_v2.case_applicability_projection WHERE body->>'local_applicability'='affected_version')`, asset).Scan(&projected); err != nil || !projected {
+		t.Fatal("restricted pipeline did not publish applicability projections", err)
+	}
+	apiLogin := readinessConnection(t, apiDSN)
+	first, second := uuid.NewString(), uuid.NewString()
+	readinessExec(t, admin, `INSERT INTO noctis_v2.questions(id,title) VALUES($1,'first'),($2,'second')`, first, second)
+	tx, err := apiLogin.Begin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(context.Background())
+	for _, question := range []string{first, second, ""} {
+		if err = replaceSourceGovernanceTx(context.Background(), tx, source, question); err != nil {
+			t.Fatal("API governance replacement/removal grant contract", err)
+		}
+		var actual string
+		if err = tx.QueryRow(context.Background(), `SELECT COALESCE((SELECT question_id::text FROM noctis_v2.question_sources WHERE source_id=$1),'')`, source).Scan(&actual); err != nil || actual != question {
+			t.Fatal("API governance replacement/removal result", actual, err)
+		}
+	}
+	if err = tx.Commit(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 	secret := filepath.Join(t.TempDir(), "admin.json")
 	if err := os.WriteFile(secret, []byte(`{"username":"fixture","password":"synthetic-password-only"}`), 0600); err != nil {
@@ -343,12 +440,22 @@ func TestReadinessRestrictedOperationsPostgres(t *testing.T) {
 	if w.Code != 200 || len(w.Result().Cookies()) != 1 {
 		t.Fatalf("API login operational grant contract: %d %s", w.Code, w.Body)
 	}
+	sessionCookie := w.Result().Cookies()[0]
 	read := httptest.NewRequest(http.MethodGet, "/api/v2/cases", nil)
-	read.AddCookie(w.Result().Cookies()[0])
+	read.AddCookie(sessionCookie)
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, read)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "CVE-2026-12345") {
 		t.Fatalf("authenticated case read: %d %s", w.Code, w.Body)
+	}
+	for _, path := range []string{"assets", "applicability", "applicability-work", "changes", "today"} {
+		read := httptest.NewRequest(http.MethodGet, "/api/v2/"+path, nil)
+		read.AddCookie(sessionCookie)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, read)
+		if w.Code != http.StatusOK {
+			t.Fatalf("restricted %s read: %d %s", path, w.Code, w.Body)
+		}
 	}
 	assertReady(t, collectorDSN, "collector")
 	assertReady(t, workerDSN, "worker")
