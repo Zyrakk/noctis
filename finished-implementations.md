@@ -2,7 +2,11 @@
 
 Veinte propuestas aceptadas, implementadas en ramas independientes desde `dev` y fusionadas secuencialmente. Cada sección fue escrita por un agente Astra en `max` tras contrastar el código final y los recibos de su rama.
 
-Integración de las veinte ramas: `e3a2080f424b6aac7cddd8ee5344caad514aa1ba`. Las verificaciones de cada sección corresponden a su integración. La validación conjunta de CI, imagen y despliegue sigue en curso.
+Integración de las veinte ramas: `e3a2080f424b6aac7cddd8ee5344caad514aa1ba`. Candidato final publicado y desplegado: `f7b45739088f134ee22bf59e266705022af26fa0`. `dev` y las veinte ramas están publicadas en GitHub.
+
+**Cierre conjunto verificado:** Go/race con 105 pruebas obligatorias y cero omisiones inesperadas, 63 pruebas Python, 56/56 pruebas UI y 10/10 pruebas E2E sobre el binario extraído de la imagen. Producción ejecuta las trece migraciones y el digest probado; API y worker disponibles, HTTPS/login/lecturas/logout comprobados. Véase el [recibo de despliegue](docs/deployment-avance-2026-11-14.md).
+
+Las verificaciones de cada sección conservan el alcance de su integración; el cierre conjunto anterior completa esos recibos sin atribuirles pruebas productivas de Telegram o inferencia pagada.
 
 La validación conjunta conserva además los estados completos de trabajo derivado en las pruebas de rollback y comprueba el lease original en recuperación SIGKILL. La PK nueva de transiciones usa UUID para mantener backups sin secuencias; backup y restauración sintéticos de las trece migraciones fueron verificados.
 
@@ -20,7 +24,7 @@ El ajuste posterior adapta exclusivamente el helper al trabajo de aplicabilidad 
 
 **Verificación:** código contrastado con `dev`. `integration-01-followup-race.jsonl` acredita focalizadas con `-race`, 13 migraciones y PostgreSQL16/HTTP(S) sintéticos: 8 pruebas principales y 11 subpruebas aprobadas, sin fallos ni omisiones.
 
-**Límites:** CI global aún en curso; estas pruebas no acreditan despliegue ni fuentes productivas.
+**Límites:** estas regresiones usan fuentes sintéticas; el cierre conjunto y el despliegue se acreditan por separado en el recibo anterior.
 
 
 ## 02- Recuperación de canales antes de confirmar el cursor global de Telegram
@@ -212,7 +216,7 @@ Cada continuación adquiere un bloqueo inmediato y captura su cursor. Las activa
 
 Las [19 regresiones de paginación](web/tests/v2-paged.spec.js) cubren concurrencia, cursor codificado, reintentos, éxitos y errores tardíos, desmontaje y remontaje. El transporte sintético ignora deliberadamente la cancelación para comprobar las guardas. La [configuración final](web/playwright.v2.config.js) conserva esta suite junto con las incorporadas después; `Paged` y sus pruebas permanecen idénticos a la implementación revisada.
 
-Verificación registrada en `integration-15-playwright.json`: **19 pruebas de paginación + 11 de producto aprobadas**, sin omisiones, fallos ni reintentos. El build combinado de esa integración terminó correctamente, con aviso de chunks superiores a 500 kB. Son pruebas con respuestas sintéticas; queda pendiente la validación E2E del conjunto final, incluida la paginación real 50→51. Esta rama no acredita despliegue.
+Verificación registrada en `integration-15-playwright.json`: **19 pruebas de paginación + 11 de producto aprobadas**, sin omisiones, fallos ni reintentos. El build combinado de esa integración terminó correctamente, con aviso de chunks superiores a 500 kB. El E2E final del candidato completa la paginación real 50→51 en `v2-operations-real.spec.js`; la UI conjunta aprueba 56/56. El despliegue se acredita por separado.
 
 
 ## 16- Recuperar conflictos operativos conservando la edición
@@ -225,7 +229,7 @@ Los editores de fuente, control global y retención separan borrador/intención,
 
 **Verificación registrada:** recibos `integration-16-*`: build correcto; 11 pruebas Go y 6 subpruebas con PostgreSQL sintético; 37/37 Playwright simuladas —7 conflictos, 19 paginación, 11 producto—, sin fallos ni omisiones. Cubren CAS, permisos, lecturas sin efectos, borradores y exclusión de escrituras duplicadas; las purgas usan exclusivamente fixtures sintéticas.
 
-**Pendiente global:** ejecutar el [escenario de dos sesiones reales](web/tests/v2-operations-real.spec.js#L68) mediante el harness HTTPS+PostgreSQL `--product`. Su presencia en el código no acredita ejecución; no se afirma despliegue.
+**Cierre global:** el [escenario de dos sesiones reales](web/tests/v2-operations-real.spec.js#L68) pasó en el E2E HTTPS+PostgreSQL del binario extraído del candidato final, junto con las otras nueve pruebas. Las sesiones son reales contra la fixture sintética; no se modificaron fuentes productivas para esta prueba.
 
 
 ## 17- Ejecución fiel del plan de consulta revisado
@@ -277,4 +281,4 @@ Antes del primer `docker push`, valida ambos archivos, carga sus imágenes y vue
 
 Verificación registrada en `integration-20-verification.json` y logs asociados: **63 pruebas Python aprobadas, sin omisiones**, incluidas 16 del gate con Docker/harness simulados; actionlint 1.7.7 sin diagnósticos, 13 checksums de migraciones correctos y simulaciones `make -n` satisfactorias. Se inspeccionó el código integrado en `dev`; no se repitieron pruebas para esta documentación.
 
-Pendientes del principal: imágenes reales, E2E completo del candidato final, `image-verify` y CI global. Esta evidencia no acredita publicación, despliegue ni ejecución ARM64; aquí ARM64 conserva validación ELF/manifests.
+**Cierre global:** imágenes AMD64/ARM64 construidas; E2E exacto del candidato y preflight de publicación aprobados. Se publicaron los archivos probados sin reconstrucción y se verificaron los manifests remotos. API y worker ejecutan esa versión en el nodo ARM64 de producción. El [recibo](docs/deployment-avance-2026-11-14.md) separa validación local, publicación y comprobaciones productivas.
