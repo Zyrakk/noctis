@@ -6,5 +6,5 @@
   "005_operations.sql": "9843477ed13ebf6cf8f1466de699217f5b9980e66e686cc987accce98f087189",
   "006_native_capture_budget.sql": "abf256d884fd564880b83cd423d7bd6fc24de193a293742bca75e34c65689ab1",
   "007_production_capture_onboarding.sql": "b91b42e63dd27e47417d855fd779d3cdf247324304cc3aa4f0d6465785c876d7",
-  "010_applicability_queue.sql": "3cb0c3adb05f5cc7fccd647c5fd2e2128d5600d11c8e7135d69071500395344f"
+  "010_applicability_queue.sql": "b8c95222bfd9342b17cea534331a81e114486bb32a0e2f86ceeb6864f2766cc1"
 }

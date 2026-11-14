@@ -513,11 +513,42 @@ func TestApplicabilityQueueBoundedCasesAndEvidenceChildrenPostgres(t *testing.T)
 	if err = c.QueryRow(ctx, `SELECT calculation_state FROM noctis_v2.applicability_work_status WHERE id=$1`, evidenceRequest).Scan(&state); err != nil || state != "pending" {
 		t.Fatal("parent completed before child publication", state, err)
 	}
+	var failedChild, recoveryJob string
+	if err = c.QueryRow(ctx, `UPDATE noctis_v2.jobs j SET state='quarantined',attempts=5,last_error_code='synthetic_child_failure' FROM noctis_v2.applicability_requests child WHERE child.parent_id=$1 AND j.stage='applicability' AND j.input_id=child.id AND j.input_revision=child.page::text RETURNING j.id::text`, evidenceRequest).Scan(&failedChild); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.QueryRow(ctx, `SELECT calculation_state,job_id::text FROM noctis_v2.applicability_work_status WHERE id=$1`, evidenceRequest).Scan(&state, &recoveryJob); err != nil || state != "failed" || recoveryJob != failedChild {
+		t.Fatal("parent did not expose replayable child", state, recoveryJob, failedChild, err)
+	}
+	// A newer asset revision commits while the child's old page is quarantined.
+	// Replaying the exposed job must not restore its obsolete revision.
+	tx, err = c.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO noctis_v2.asset_versions(id,revision,cpe,version,evidence,producer) SELECT id,2,cpe,'3.0',evidence,producer FROM noctis_v2.asset_versions WHERE id=$1 AND revision=1`, asset); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = vulnv2.EnqueueAssetApplicabilityTx(ctx, tx, asset, 2); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = (jobs.Store{DSN: dsn}).Replay(ctx, recoveryJob); err != nil {
+		t.Fatal(err)
+	}
 	drainApplicability(t, dsn)
 	if err = c.QueryRow(ctx, `SELECT count(*) FROM noctis_v2.case_applicability_projection WHERE body->>'local_applicability'='unknown'`).Scan(&count); err != nil || count != 77 {
 		t.Fatal("evidence retract coverage", count, err)
 	}
 	if err = c.QueryRow(ctx, `SELECT count(*) FROM noctis_v2.applicability_work_status WHERE calculation_state<>'complete'`).Scan(&count); err != nil || count != 0 {
 		t.Fatal("unfinished evidence children", count, err)
+	}
+	if err = c.QueryRow(ctx, `SELECT count(*) FROM noctis_v2.applicability_current WHERE asset_id=$1 AND asset_revision=2`, asset).Scan(&count); err != nil || count != 26 {
+		t.Fatal("child replay restored obsolete inventory", count, err)
+	}
+	if err = c.QueryRow(ctx, `SELECT count(*) FROM (SELECT case_id,generation FROM noctis_v2.publication_audit GROUP BY case_id,generation HAVING count(*)>1)a`).Scan(&count); err != nil || count != 0 {
+		t.Fatal("child replay duplicated a publication", count, err)
 	}
 }

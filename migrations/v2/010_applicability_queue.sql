@@ -48,12 +48,19 @@ END $$;
 CREATE VIEW noctis_v2.applicability_work_status AS
 SELECT r.*,r.id::text AS generation,
  CASE WHEN j.state IN ('quarantined','cancelled','dependency_blocked','budget_blocked')
-       OR EXISTS(SELECT FROM noctis_v2.applicability_requests child JOIN noctis_v2.jobs cj ON cj.stage='applicability' AND cj.input_id=child.id AND cj.input_revision=child.page::text WHERE child.parent_id=r.id AND cj.state IN ('quarantined','cancelled','dependency_blocked','budget_blocked')) THEN 'failed'
+       OR failed_child.id IS NOT NULL THEN 'failed'
       WHEN r.state='complete' AND NOT EXISTS(SELECT FROM noctis_v2.applicability_requests child WHERE child.parent_id=r.id AND child.state<>'complete') THEN 'complete'
       ELSE 'pending' END AS calculation_state,
- j.id AS job_id,j.state AS job_state,j.attempts,j.last_error_code
+ COALESCE(failed_child.id,j.id) AS job_id,COALESCE(failed_child.state,j.state) AS job_state,
+ COALESCE(failed_child.attempts,j.attempts) AS attempts,COALESCE(failed_child.last_error_code,j.last_error_code) AS last_error_code
 FROM noctis_v2.applicability_requests r
-LEFT JOIN noctis_v2.jobs j ON j.stage='applicability' AND j.input_id=r.id AND j.input_revision=r.page::text AND j.policy_version=r.calculation_version AND j.schema_version='1';
+LEFT JOIN noctis_v2.jobs j ON j.stage='applicability' AND j.input_id=r.id AND j.input_revision=r.page::text AND j.policy_version=r.calculation_version AND j.schema_version='1'
+LEFT JOIN LATERAL(
+ SELECT cj.id,cj.state,cj.attempts,cj.last_error_code
+ FROM noctis_v2.applicability_requests child JOIN noctis_v2.jobs cj ON cj.stage='applicability' AND cj.input_id=child.id AND cj.input_revision=child.page::text
+ WHERE child.parent_id=r.id AND cj.state IN ('quarantined','cancelled','dependency_blocked','budget_blocked')
+ ORDER BY cj.id LIMIT 1
+) failed_child ON true;
 
 CREATE FUNCTION noctis_v2.queue_applicability_membership() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE row_case uuid;
