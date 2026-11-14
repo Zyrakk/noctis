@@ -19,14 +19,15 @@ import (
 func TestAIExplicitPriceRejectedWithoutConfigSideEffectsPostgres(t *testing.T) {
 	f := newAIFixture(t)
 	ctx := context.Background()
-	const token, csrf, origin = "synthetic-session", "synthetic-csrf", "https://console.invalid"
+	const csrf, origin = "synthetic-csrf", "https://console.invalid"
+	token := random()
 	if _, err := f.conn.Exec(ctx, `INSERT INTO noctis_v2.sessions(token_hash,username,csrf,expires_at) VALUES($1,'fixture-admin',$2,clock_timestamp()+interval '1 hour')`, tokenHash(token), csrf); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.conn.Exec(ctx, `INSERT INTO noctis_v2.ai_promotions(id,function_id,config_revision,dataset_version,status) VALUES($1,$2,$3,'synthetic-v1','validated')`, uuid.NewString(), f.cfg.Bindings[0].Function, f.cfg.Revision); err != nil {
 		t.Fatal(err)
 	}
-	api := &API{cfg: configv2.Config{DatabaseURL: f.store.DSN, AIKeyFile: f.store.KeyFile, AICAFile: f.store.CAFile, Origin: origin}}
+	api := newAPI(configv2.Config{DatabaseURL: f.store.DSN, AIKeyFile: f.store.KeyFile, AICAFile: f.store.CAFile, Origin: origin}, "fixture-admin", "synthetic-test-password-only")
 	for authority := range f.store.AllowLocal {
 		api.cfg.AIAuthorities = append(api.cfg.AIAuthorities, authority)
 	}

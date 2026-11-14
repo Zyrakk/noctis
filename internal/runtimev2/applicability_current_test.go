@@ -101,7 +101,7 @@ func (f *applicabilityFixture) api() func(string) string {
 	f.must(os.WriteFile(admin, []byte(`{"Username":"operator","Password":"synthetic-secret-password"}`), 0600))
 	h, err := NewHandler(configv2.Config{DatabaseURL: f.dsn, AdminFile: admin, Origin: "https://fixture.invalid"})
 	f.must(err)
-	token := uuid.NewString()
+	token := random()
 	f.exec(`INSERT INTO noctis_v2.sessions VALUES($1,'operator','csrf',clock_timestamp()+interval '1 hour',false)`, tokenHash(token))
 	return func(path string) string {
 		f.t.Helper()

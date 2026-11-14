@@ -77,7 +77,7 @@ func inventorySaveFixture(t *testing.T, ctx context.Context, dsn string, c *pgx.
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, csrf := uuid.NewString(), uuid.NewString()
+	token, csrf := random(), random()
 	if _, err = c.Exec(ctx, `INSERT INTO noctis_v2.sessions VALUES($1,'operator',$2,clock_timestamp()+interval '1 hour',false)`, tokenHash(token), csrf); err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,6 @@ import (
 	"github.com/Zyrakk/noctis/internal/intelligence"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -24,6 +23,8 @@ import (
 type API struct {
 	cfg                configv2.Config
 	username, password string
+	admission          *apiAdmission
+	connect            func(context.Context, string) (*pgx.Conn, error)
 }
 
 func NewHandler(cfg configv2.Config) (http.Handler, error) {
@@ -41,7 +42,7 @@ func NewHandler(cfg configv2.Config) (http.Handler, error) {
 	if a.Username == inference.AutomaticActor {
 		return nil, fmt.Errorf("admin username %q is reserved for automatic inference", inference.AutomaticActor)
 	}
-	api := &API{cfg: cfg, username: a.Username, password: a.Password}
+	api := newAPI(cfg, a.Username, a.Password)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v2/", api.handle)
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, r *http.Request) {
@@ -94,19 +95,34 @@ func (a *API) handle(w http.ResponseWriter, r *http.Request) {
 		failure(w, 403, "origin_denied")
 		return
 	}
-	c, e := pgx.Connect(ctx, a.cfg.DatabaseURL)
+	login := path == "auth/login" && r.Method == "POST"
+	var cookie *http.Cookie
+	if login {
+		if !a.admitLogin(w, r) {
+			return
+		}
+	} else {
+		var e error
+		cookie, e = r.Cookie("noctis_v2_session")
+		if e != nil || !validSessionToken(cookie.Value) {
+			failure(w, 401, "authentication_required")
+			return
+		}
+	}
+	if !a.admission.acquireDB() {
+		failure(w, 503, "request_capacity_exhausted")
+		return
+	}
+	defer a.admission.releaseDB()
+	c, e := a.connect(ctx, a.cfg.DatabaseURL)
 	if e != nil {
 		failure(w, 503, "database_unavailable")
 		return
 	}
-	defer c.Close(context.Background())
-	if path == "auth/login" && r.Method == "POST" {
+	// Deferred close runs before releaseDB, including when the request is cancelled.
+	defer closeAPIConnection(c)
+	if login {
 		a.login(w, r, c)
-		return
-	}
-	cookie, e := r.Cookie("noctis_v2_session")
-	if e != nil {
-		failure(w, 401, "authentication_required")
 		return
 	}
 	var username, csrf string
@@ -171,19 +187,6 @@ func (a *API) handle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (a *API) login(w http.ResponseWriter, r *http.Request, c *pgx.Conn) {
-	var input struct{ Username, Password string }
-	dec := json.NewDecoder(io.LimitReader(r.Body, 4097))
-	dec.DisallowUnknownFields()
-	if e := dec.Decode(&input); e != nil {
-		failure(w, 400, "invalid_login")
-		return
-	}
-	expected := sha256.Sum256([]byte(a.username + "\x00" + a.password))
-	actual := sha256.Sum256([]byte(input.Username + "\x00" + input.Password))
-	if subtle.ConstantTimeCompare(expected[:], actual[:]) != 1 {
-		failure(w, 401, "invalid_credentials")
-		return
-	}
 	token, csrf := random(), random()
 	_, e := c.Exec(r.Context(), `INSERT INTO noctis_v2.sessions(token_hash,username,csrf,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '8 hours')`, tokenHash(token), a.username, csrf)
 	if e != nil {
