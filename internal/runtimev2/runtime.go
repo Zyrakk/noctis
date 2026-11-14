@@ -220,10 +220,16 @@ func runLoop(ctx context.Context, cfg configv2.Config) error {
 }
 
 func runAutomaticInference(ctx context.Context, cfg configv2.Config) error {
-	if !cfg.AutomaticInference {
+	if !cfg.AutomaticInference && !cfg.ManualInference {
 		return nil
 	}
-	err := inferenceStore(cfg).Once(ctx)
+	store := inferenceStore(cfg)
+	var err error
+	if cfg.AutomaticInference {
+		err = store.Once(ctx)
+	} else {
+		err = store.OnceManual(ctx)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}

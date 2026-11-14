@@ -27,7 +27,7 @@ func newV2Cmd() *cobra.Command {
 	var fixtureAuthorities []string
 	var aiKeyFile, aiCAFile string
 	var aiAuthorities []string
-	var automaticInference bool
+	var automaticInference, manualInference bool
 	root.PersistentFlags().StringVar(&dbRef, "database-secret-file", "", "File containing independent v2 database DSN")
 	serve := &cobra.Command{Use: "serve", RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, e := configv2.Load(mode, listen, dbRef)
@@ -44,12 +44,14 @@ func newV2Cmd() *cobra.Command {
 		cfg.AICAFile = aiCAFile
 		cfg.AIAuthorities = aiAuthorities
 		cfg.AutomaticInference = automaticInference
+		cfg.ManualInference = manualInference
 		ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
 		return runtimev2.Run(ctx, cfg)
 	}}
 	serve.Flags().StringVar(&mode, "mode", "api", "api, worker or collector")
 	serve.Flags().BoolVar(&automaticInference, "automatic-inference", false, "Explicitly enable automatic paid inference execution and planning (worker only)")
+	serve.Flags().BoolVar(&manualInference, "manual-inference", false, "Enable paid manual inference, including older eligible requests, without automatic planning (worker only)")
 	serve.Flags().StringVar(&aiKeyFile, "ai-master-key-file", "", "Mounted private AEAD key JSON (key_id, hex key); outside PostgreSQL")
 	serve.Flags().StringVar(&aiCAFile, "ai-ca-file", "", "Server-mounted additional inference TLS trust root")
 	serve.Flags().StringSliceVar(&aiAuthorities, "ai-local-authority", nil, "Server-authorized exact local inference host:port")

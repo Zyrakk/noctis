@@ -222,7 +222,18 @@ type leasedJob struct {
 // Once performs one bounded physical invocation. Running leases survive crashes;
 // possible remote execution is quarantined as uncertainty, never blindly retried.
 func (s Store) Once(ctx context.Context) error {
-	x, e := s.claim(ctx)
+	return s.once(ctx, false)
+}
+
+// OnceManual executes one eligible non-planner request, including requests
+// queued before the worker opted in. Abandoned attempts of either origin are
+// still reconciled, without authorizing another automatic invocation.
+func (s Store) OnceManual(ctx context.Context) error {
+	return s.once(ctx, true)
+}
+
+func (s Store) once(ctx context.Context, manualOnly bool) error {
+	x, e := s.claim(ctx, manualOnly)
 	if e != nil {
 		return e
 	}
@@ -248,7 +259,7 @@ func (s Store) Once(ctx context.Context) error {
 	}
 	return s.publish(ctx, x, g.Result)
 }
-func (s Store) claim(ctx context.Context) (execution, error) {
+func (s Store) claim(ctx context.Context, manualOnly bool) (execution, error) {
 	var x execution
 	c, e := pgx.Connect(ctx, s.DSN)
 	if e != nil {
@@ -268,7 +279,7 @@ func (s Store) claim(ctx context.Context) (execution, error) {
 		return x, e
 	}
 	var sr []byte
-	e = tx.QueryRow(ctx, `SELECT id::text,actor,function_id,config_revision,snapshot,cache_key,fence+1,attempts+1 FROM noctis_v2.ai_jobs WHERE state='queued' OR (state='retry_wait' AND retry_at<=clock_timestamp() AND attempts<5) OR (state='running' AND lease_until<=clock_timestamp()) ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`).Scan(&x.ID, &x.Actor, &x.Function, &x.Revision, &sr, &x.Cache, &x.Fence, &x.Attempts)
+	e = tx.QueryRow(ctx, `SELECT id::text,actor,function_id,config_revision,snapshot,cache_key,fence+1,attempts+1 FROM noctis_v2.ai_jobs WHERE (state='queued' OR (state='retry_wait' AND retry_at<=clock_timestamp() AND attempts<5) OR (state='running' AND lease_until<=clock_timestamp())) AND (NOT $1::boolean OR actor<>$2) ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, manualOnly, AutomaticActor).Scan(&x.ID, &x.Actor, &x.Function, &x.Revision, &sr, &x.Cache, &x.Fence, &x.Attempts)
 	if errors.Is(e, pgx.ErrNoRows) {
 		if ce := tx.Commit(ctx); ce != nil {
 			return x, ce

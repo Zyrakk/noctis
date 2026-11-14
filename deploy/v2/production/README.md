@@ -173,10 +173,13 @@ producción; el template anterior de presupuesto piloto no autoriza producción.
 
 Después de revisar esos recibos, escalar worker mecánico, RSS y Telegram por
 separado a una réplica donde corresponda. El worker lleva
-`--automatic-inference=false`: ni `Once` de IA ni `PlanEligible` se ejecutan,
+`--automatic-inference=false` y `--manual-inference=false` (predeterminado):
+ni `Once` de IA ni `PlanEligible` se ejecutan,
 incluso si después se configura un proveedor. El envío no se activa mientras
 `--delivery-endpoint` esté ausente. Habilitar IA automática y envío requiere
-cambios explícitos independientes, con revisión humana de calidad; no hacerlo
+cambios explícitos independientes, con revisión humana de calidad; el opt-in
+manual también habilita gasto y solicitudes antiguas elegibles, según la
+[matriz de modos](../README.md). No hacerlo
 como parte de este arranque conservador. No crear fuentes RSS por defecto.
 
 Guardar comprobaciones de operaciones/consentimiento, progreso/checkpoints,

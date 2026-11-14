@@ -20,6 +20,7 @@ type Config struct {
 	AICAFile           string
 	AIAuthorities      []string
 	AutomaticInference bool
+	ManualInference    bool
 }
 
 // Load reads a secret file reference, never the legacy configuration or LLM variables.
