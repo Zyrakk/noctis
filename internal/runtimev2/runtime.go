@@ -81,6 +81,11 @@ func Check(ctx context.Context, dsn, mode string) (Health, error) {
 	return h, nil
 }
 func Run(ctx context.Context, cfg configv2.Config) error {
+	if cfg.Mode == "worker" && cfg.DeliveryEndpoint != "" {
+		if e := intelligence.ValidateDeliveryEndpoint(cfg.DeliveryEndpoint); e != nil {
+			return e
+		}
+	}
 	if _, e := Check(ctx, cfg.DatabaseURL, cfg.Mode); e != nil {
 		return e
 	}

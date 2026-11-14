@@ -185,6 +185,9 @@ func newV2Cmd() *cobra.Command {
 		return (jobs.Store{DSN: dsn}).Replay(cmd.Context(), args[0])
 	}}
 	dispatch := &cobra.Command{Use: "dispatch-once ENDPOINT", Args: cobra.ExactArgs(1), Short: "Explicitly deliver one queued event; uncertainty never auto-retried", RunE: func(cmd *cobra.Command, args []string) error {
+		if e := intelligence.ValidateDeliveryEndpoint(args[0]); e != nil {
+			return e
+		}
 		c, dsn, e := connect(cmd.Context())
 		if e != nil {
 			return e
