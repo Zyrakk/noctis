@@ -176,9 +176,6 @@ func (s Store) runClientOnce(ctx context.Context, cfg ClientConfig, action func(
 		return e
 	}
 	_, e = db.Exec(ctx, `INSERT INTO noctis_v2.telegram_accounts(id,auth_generation) VALUES($1,$2) ON CONFLICT DO NOTHING`, cfg.Account, generation)
-	if e == nil && cfg.Authenticate {
-		_, e = db.Exec(ctx, `UPDATE noctis_v2.telegram_accounts SET status='paused' WHERE id=$1 AND closed AND status='revoked'`, cfg.Account)
-	}
 	db.Close(context.Background())
 	if e != nil {
 		return e
@@ -198,7 +195,7 @@ func (s Store) runClientOnce(ctx context.Context, cfg ClientConfig, action func(
 		defer cancel()
 		slog.Info("native_capture_start", "kind", "process", "stage", string(stageRun), "started_at", time.Now().UTC(), "process_timeout_ms", int64(policy.ProcessSeconds)*1000)
 	}
-	result := s.RunOwned(ctx, cfg.Account, func(runCtx context.Context, o Owner) error {
+	result := s.runOwnedRequest(ctx, cfg.Account, 5*time.Second, ownerRequest{authenticate: cfg.Authenticate}, func(runCtx context.Context, o Owner) error {
 		if !cfg.Authenticate && o.Generation != generation {
 			return errors.New("Telegram auth generation changed; explicit protected auth required")
 		}
@@ -279,23 +276,11 @@ func (s Store) runClientOnce(ctx context.Context, cfg ClientConfig, action func(
 			if e != nil {
 				return e
 			}
-			if actual != o.Generation {
-				if !cfg.Authenticate {
-					return errors.New("Telegram key rotation requires explicit auth")
-				}
-				db, e := pgx.Connect(clientCtx, s.DSN)
-				if e != nil {
-					return e
-				}
-				defer db.Close(context.Background())
-				_, e = db.Exec(clientCtx, `UPDATE noctis_v2.telegram_accounts SET auth_generation=$4,state='{"pts":0,"qts":0,"date":0,"seq":0}',gap=true WHERE id=$1 AND owner=$2 AND owner_fence=$3`, o.Account, o.ID, o.Fence, actual)
-				if e != nil {
-					return e
-				}
-				coordinator.Owner.Generation = actual
-			}
 			if cfg.Authenticate {
-				return nil
+				return s.prepareAuthenticatedGeneration(clientCtx, o, actual)
+			}
+			if actual != o.Generation {
+				return errors.New("Telegram key rotation requires explicit auth")
 			}
 			current, e := s.State(clientCtx, cfg.Account)
 			if e != nil {

@@ -50,7 +50,7 @@ Migration007 adds independent production consent, period usage and private inven
 
 Production policy `version: 2` retains the v1 identity/limits/peers fields and adds `period_anchor`, `expires_at`, `predecessor` (empty on first install), `revision` (starting at1), `actor` and `reason`. The hourly period is explicit (`window_seconds:3600`); each process remains bounded to at most300seconds. `capture-consent-propose --account ACCOUNT --actor OPERATOR --reason PURPOSE` writes a protected proposal to `--capture-policy-file`, without installing it or contacting Telegram. Defaults are seven days of consent, the existing global ceilings per hour (256 API admissions,1000 observations,64MiB payload,4MiB metadata),64control admissions and192live admissions. Bootstrap capture is disabled. These conservative limits do not assert capacity for any specific channel count.
 
-After reviewing the protected file, `capture-consent-install` explicitly installs it. Installation/renewal uses the account row lock, immutable policy digest, predecessor and revision CAS, and requires the previous owner to have recorded closure. Expired leases alone cannot authorize renewal. Repeating the same installation is idempotent. Renewal preserves generation, period anchor, global and phase limits; changing the consent ID or peer set does not reset usage. Usage is keyed by `(account_id,auth_generation,period_start)` and retained across restarts, renewals and source changes. Immutable consent versions and historical usage remain available for audit. Explicit key-generation rotation is outside this workflow and fails closed.
+After reviewing the protected file, `capture-consent-install` explicitly installs it. Installation/renewal uses the account row lock, immutable policy digest, predecessor and revision CAS, and requires the previous owner to have recorded closure. Expired leases alone cannot authorize renewal. Repeating the same installation is idempotent. Renewal preserves generation, period anchor, global and phase limits; changing the consent ID or peer set does not reset usage. Usage is keyed by `(account_id,auth_generation,period_start)` and retained across restarts, renewals and source changes. Immutable consent versions and historical usage remain available for audit. Key-generation replacement requires the separate transition below.
 
 `capture-consent-revoke` revokes exactly the protected policy's current ID/revision under the projection guard. Expiry or revocation stops capture and requires explicit operator action. `capture-status` exposes sanitized state, expiry, current counters and next period time. The production collector closes each gotd run and records owner closure before reopening. Exhaustion waits until the next anchored period without opening a client. Only a planned process deadline or persisted FloodWait authorizes automatic reopening; uncertain transport/database/closure failures stop the supervisor. Restarting never resets usage or replays an uncertain API reservation.
 
@@ -63,6 +63,49 @@ After diagnosing the failure and proving closure, an operator may explicitly run
 Planned process completion is recognized only when the full error tree contains cancellation/deadline results caused by that process window. An `errors.Join` containing an additional error is terminal; the process-window marker cannot mask it. Only a persisted known FloodWait, a known quota denial, a pure planned process close or a completed intentional shutdown permits the corresponding controlled restart. A heartbeat/closure/persistence error remains terminal even when another joined error is retryable.
 
 With capture stopped and all other copies of the authorization excluded, run `telegram inventory-import --actor OPERATOR` using the existing protected credential/session flags. This operation uses the durable native owner fence and local session lock, existing authorization only, and the read-only active/archived dialogs RPC allowlist. It neither logs in, joins/leaves, fetches history, nor imports legacy data. Only current channel identities, names, private access hashes, auth generation and `Dialog.Pts` baselines enter a new private snapshot. Message payloads from dialogs are not persisted. Access hashes and auth generation never appear in candidate product responses.
+
+## Explicit generation replacement (008)
+
+For a production account, `telegram auth` verifies the account identity and
+prepares the authenticated key generation. It retains the installed generation
+and consent until an explicit transition, and returns only after recording
+transport closure. A prepared different key blocks both policy versions and old
+inventory imports. Accounts with a bound v1 pilot budget fail authentication
+preflight before any account/session mutation; pilot migration is not supported.
+
+With all session copies excluded and any capture failure explicitly acknowledged:
+
+1. Authenticate the replacement protected session with the existing `auth`
+   command. This also prepares repair of a legacy account-B/consent-A mismatch.
+2. Run `capture-generation-propose --account ACCOUNT --actor OPERATOR --reason
+   REASON --transition-file /private/transition.json`. Review its account,
+   account/consent/destination generations, consent ID/revision and owner fence.
+3. Apply `capture-generation-transition /private/transition.json --session-file
+   /private/session.json`. Local session exclusion and SQL row locking protect
+   exact CAS. Closure requires `closed=true`, no owner/lease and no pending
+   failure; lease expiry alone is insufficient. Repeating the same ID/content
+   succeeds; changed content or an obsolete CAS fails. Revoking the predecessor,
+   updating generation and appending immutable audit commit atomically, leaving
+   capture pending. This never acknowledges failures or deletes historical data.
+4. Run `inventory-import --actor OPERATOR` for B. Import each selected current
+   candidate and explicitly approve its source policy. Reimport under a pending
+   transition replaces the private key binding and pauses the source until that
+   approval; source epochs and channel cursors remain unchanged. This workflow
+   neither resolves a gap nor recovers history. Inventory failure while capture
+   is pending cannot be attributed to the retired consent.
+5. Propose/review/install B's consent using the normal commands. Its
+   `generation_transition` must match the exact pending ID and its predecessor
+   must identify A's audited consent. Current B inventory and authorization are
+   mandatory. Installation clears the capture-pending marker atomically. Normal
+   later renewal proposals omit `generation_transition` and cannot cross keys.
+
+Rotation forfeits all remaining allowance until the next boundary of the
+original one-hour period. The original anchor, window, global/phase limits and
+usage history remain intact. Any later quota wait or FloodWait remains in force;
+repeated rotations do not shorten it. This conservative rule deliberately does
+not copy counters between generations. Neither transition nor consent
+installation opens a collector. A legacy mismatch with an unacknowledged failure
+remains blocked; transition does not serve as failure repair or acknowledgment.
 
 The Sources panel lists candidates from the latest snapshot, including private channels without usernames. Selecting **Importar canal en pausa** creates an inactive source/binding only. Reload the source list, assign an existing explicit PIR policy and activate the source separately. First activation sets the live epoch/activation time and initializes channel pts from the current snapshot. Missing/zero pts rejects activation with `current_channel_baseline_required`; stale or wrong-generation snapshots reject import/activation. Reimporting an existing source preserves its enabled/pause decision, epochs and capture cursors. Consent installation requires current snapshot bindings and nonzero channel baselines. No list of legacy sources is loaded automatically.
 

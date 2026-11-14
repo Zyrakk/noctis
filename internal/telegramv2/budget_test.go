@@ -33,6 +33,10 @@ type budgetFixture struct {
 }
 
 func newBudgetFixture(t *testing.T, mutate func(*CapturePolicy)) *budgetFixture {
+	return newNativeFixture(t, mutate, true)
+}
+
+func newNativeFixture(t *testing.T, mutate func(*CapturePolicy), pilot bool) *budgetFixture {
 	t.Helper()
 	ctx := context.Background()
 	dsn := os.Getenv("NOCTIS_V2_TEST_DATABASE_URL")
@@ -78,8 +82,10 @@ func newBudgetFixture(t *testing.T, mutate func(*CapturePolicy)) *budgetFixture 
 	peer := p.Peers[0]
 	f.exec(t, `INSERT INTO noctis_v2.sources(id,kind,native_id,enabled,epoch,policy_version) VALUES($1,'telegram','123:channel:77',true,$2,'p1')`, peer.SourceID, peer.LiveEpoch)
 	f.exec(t, `INSERT INTO noctis_v2.telegram_peers(account_id,peer_type,peer_id,source_id,auth_generation,access_hash,allowed,bootstrap_epoch) VALUES($1,'channel',77,$2,$3,123,true,$4)`, p.Account, peer.SourceID, p.Generation, peer.BootstrapEpoch)
-	if _, e = f.BindCapturePolicy(ctx, p); e != nil {
-		t.Fatal(e)
+	if pilot {
+		if _, e = f.BindCapturePolicy(ctx, p); e != nil {
+			t.Fatal(e)
+		}
 	}
 	f.owner, e = f.Acquire(ctx, p.Account, "budget-fixture", time.Minute)
 	if e != nil {

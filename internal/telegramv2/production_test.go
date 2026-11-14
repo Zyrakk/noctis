@@ -102,7 +102,7 @@ func TestProductionNoHistoryBeforePayloadAndTooLongPostgres(t *testing.T) {
 
 func newProductionFixture(t *testing.T, cap int64, mutations ...func(*CapturePolicy)) *budgetFixture {
 	t.Helper()
-	f := newBudgetFixture(t, nil)
+	f := newNativeFixture(t, nil, false)
 	prepareProductionPeers(t, f)
 	f.exec(t, `UPDATE noctis_v2.telegram_accounts SET closed=true,owner=NULL,lease_expires_at=NULL,status='paused'`)
 	p := f.policy
@@ -327,7 +327,7 @@ func TestProductionConcurrentFinalAdmissionAndRolloverPostgres(t *testing.T) {
 	f.exec(t, `UPDATE noctis_v2.telegram_accounts SET closed=true,owner=NULL,lease_expires_at=NULL,status='paused'`)
 	// Test actual anchored rollover using a new account/generation fixture rather
 	// than changing an installed anchor or resetting any row.
-	g := newBudgetFixture(t, nil)
+	g := newNativeFixture(t, nil, false)
 	prepareProductionPeers(t, g)
 	g.exec(t, `UPDATE noctis_v2.telegram_accounts SET closed=true,owner=NULL,lease_expires_at=NULL,status='paused'`)
 	p := f.policy
@@ -381,7 +381,7 @@ func TestProductionExpiryRevocationWrongGenerationAndDBDownPostgres(t *testing.T
 	if e := dead.guardAPI(ctx, f.owner, "live", "", nil, nil, func(context.Context) error { t.Fatal("DB down invoked"); return nil }); e == nil {
 		t.Fatal("DB down accepted")
 	}
-	g := newBudgetFixture(t, nil)
+	g := newNativeFixture(t, nil, false)
 	prepareProductionPeers(t, g)
 	g.exec(t, `UPDATE noctis_v2.telegram_accounts SET closed=true,owner=NULL,lease_expires_at=NULL,status='paused'`)
 	p := f.policy
