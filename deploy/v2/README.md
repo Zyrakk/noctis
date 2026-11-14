@@ -77,6 +77,16 @@ una colisión: revisar su origen antes de cualquier habilitación automática.
 Para entrega, autorizar un único worker sender y añadir su endpoint privado;
 mantener collector único y demostrar cierre de dueño anterior antes de takeover.
 
+Antes de habilitar inferencia, cada binding debe declarar una `price.version`
+explícita: se rechazan versiones vacías, de solo espacios o equivalentes a
+`unconfigured` sin distinguir mayúsculas ni espacios exteriores. La comparación
+no modifica la versión guardada. Una tarifa cero con versión explícita permite
+una ruta deliberadamente gratuita; no verifica el precio del proveedor. Las
+configuraciones heredadas ya habilitadas no se neutralizan automáticamente:
+revisar su tarifa vigente antes de activar inferencia. Pueden leerse y guardarse
+con el marcador tras deshabilitar los bindings afectados, y habilitarse después
+de declarar una tarifa explícita. Se conservan los límites de precios y presupuestos.
+
 Antes de cualquier cambio externo: comprobar cuenta/contexto/host, namespace,
 UID y propietarios de DB/PVC, rollback exacto y backup/restore; preparar revisión
 concreta. Un template válido no autoriza `apply`, migración, escala ni red real.
