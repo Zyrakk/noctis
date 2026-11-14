@@ -2,6 +2,7 @@ package runtimev2
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"github.com/Zyrakk/noctis/internal/capture"
@@ -81,6 +82,20 @@ func Check(ctx context.Context, dsn, mode string) (Health, error) {
 	return h, nil
 }
 func Run(ctx context.Context, cfg configv2.Config) error {
+	var handler http.Handler
+	var tlsConfig *tls.Config
+	var e error
+	if cfg.Mode == "api" {
+		if e = validateOrigin(cfg.Origin); e != nil {
+			return e
+		}
+		if tlsConfig, e = loadAPITLS(cfg); e != nil {
+			return e
+		}
+		if handler, e = NewHandler(cfg); e != nil {
+			return e
+		}
+	}
 	if _, e := Check(ctx, cfg.DatabaseURL, cfg.Mode); e != nil {
 		return e
 	}
@@ -90,19 +105,15 @@ func Run(ctx context.Context, cfg configv2.Config) error {
 	if cfg.Mode != "api" {
 		return fmt.Errorf("invalid mode")
 	}
-	handler, e := NewHandler(cfg)
-	if e != nil {
-		return e
-	}
-	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Handler: handler, TLSConfig: tlsConfig, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
 	ln, e := net.Listen("tcp", cfg.Listen)
 	if e != nil {
 		return e
 	}
 	done := make(chan error, 1)
 	go func() {
-		if cfg.TLSCert != "" && cfg.TLSKey != "" {
-			done <- server.ServeTLS(ln, cfg.TLSCert, cfg.TLSKey)
+		if tlsConfig != nil {
+			done <- server.ServeTLS(ln, "", "")
 		} else {
 			done <- server.Serve(ln)
 		}
