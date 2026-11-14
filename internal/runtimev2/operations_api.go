@@ -115,6 +115,30 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 	}
 	if r.Method == "GET" {
 		switch {
+		case path == "retention":
+			source, class := r.URL.Query().Get("source_id"), r.URL.Query().Get("data_class")
+			sourceID, e := uuid.Parse(source)
+			if e != nil {
+				return true, reject(400, "source_required")
+			}
+			source = sourceID.String()
+			if strings.TrimSpace(class) == "" || len(class) > 64 {
+				return true, reject(400, "data_class_required")
+			}
+			tx, e := c.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+			if e != nil {
+				return true, e
+			}
+			defer tx.Rollback(ctx)
+			if e = permissionTx(ctx, tx, actor, "retention"); e != nil {
+				return true, e
+			}
+			var raw []byte
+			e = tx.QueryRow(ctx, `SELECT jsonb_build_object('source_id',s.id,'data_class',$2::text,'present',p.source_id IS NOT NULL,'revision',COALESCE(p.revision,0),'retain_seconds',p.retain_seconds) FROM noctis_v2.sources s LEFT JOIN noctis_v2.retention_policies p ON p.source_id=s.id AND p.data_class=$2 WHERE s.id=$1`, source, class).Scan(&raw)
+			if e != nil {
+				return true, e
+			}
+			response(w, json.RawMessage(raw))
 		case path == "telegram/candidates":
 			return true, jsonPage(ctx, w, r, c, path, `SELECT i.snapshot_id::text||':'||i.peer_id::text,jsonb_build_object('snapshot_id',i.snapshot_id,'account_id',n.account_id,'peer_type',i.peer_type,'peer_id',i.peer_id::text,'name',i.name,'folder',i.folder,'source_id',COALESCE(i.source_id,(SELECT s.id FROM noctis_v2.sources s WHERE s.kind='telegram' AND s.native_id=n.account_id||':channel:'||i.peer_id::text)),'provenance','current Telegram dialogs','created_at',n.created_at) FROM noctis_v2.telegram_inventory_candidates i JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=i.snapshot_id JOIN noctis_v2.telegram_accounts a ON a.id=n.account_id AND a.auth_generation=n.auth_generation WHERE n.id=(SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=n.account_id ORDER BY z.created_at DESC,z.id DESC LIMIT 1) AND ($1='' OR i.snapshot_id::text||':'||i.peer_id::text>$1) ORDER BY i.snapshot_id::text||':'||i.peer_id::text LIMIT $2`)
 		case isCase && parts[2] == "attention":
@@ -359,7 +383,7 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 				return true, err
 			}
 		}
-		_, err = tx.Exec(ctx, `UPDATE noctis_v2.sources SET enabled=$2,policy_version=$3,policy_revision=policy_revision+1 WHERE id::text=$1`, parts[1], in.Enabled, in.PolicyVersion)
+		err = tx.QueryRow(ctx, `UPDATE noctis_v2.sources SET enabled=$2,policy_version=$3,policy_revision=policy_revision+1 WHERE id::text=$1 RETURNING policy_revision`, parts[1], in.Enabled, in.PolicyVersion).Scan(&rev)
 		if in.QuestionID == "" && strings.HasPrefix(in.PolicyVersion, "question:") {
 			pieces := strings.Split(in.PolicyVersion, ":")
 			if len(pieces) > 1 {
@@ -376,7 +400,7 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 		} else if err == nil {
 			err = pauseSourceParseTx(ctx, tx, parts[1])
 		}
-		result = map[string]any{"source_id": parts[1], "enabled": in.Enabled, "policy_version": in.PolicyVersion}
+		result = map[string]any{"source_id": parts[1], "enabled": in.Enabled, "policy_version": in.PolicyVersion, "policy_revision": rev}
 	case isCase && parts[2] == "lifecycle":
 		if in.Action != "following" && in.Action != "resolved" && in.Action != "archived" {
 			return true, reject(400, "invalid_lifecycle")
