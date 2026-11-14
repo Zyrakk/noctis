@@ -114,6 +114,11 @@ func checkMigrationLedger(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 func Run(ctx context.Context, cfg configv2.Config) error {
+	if cfg.Mode == "worker" && cfg.DeliveryEndpoint != "" {
+		if e := intelligence.ValidateDeliveryEndpoint(cfg.DeliveryEndpoint); e != nil {
+			return e
+		}
+	}
 	var handler http.Handler
 	var tlsConfig *tls.Config
 	var e error

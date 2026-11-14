@@ -5,12 +5,53 @@ import (
 	"context"
 	"errors"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/net/http/httpguts"
 	"io"
 	"net/http"
+	"net/netip"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 )
 
 var ErrDeliveryBlocked = errors.New("delivery blocked by current source policy or evidence state")
+var ErrInvalidDeliveryEndpoint = errors.New("invalid delivery endpoint: absolute HTTP(S) URL with a valid host and port required")
+
+// ValidateDeliveryEndpoint checks syntax without DNS or network I/O. Empty
+// configuration may disable delivery at the caller, but is never a destination.
+func ValidateDeliveryEndpoint(endpoint string) error {
+	u, err := url.Parse(endpoint)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Opaque != "" {
+		return ErrInvalidDeliveryEndpoint
+	}
+	host := u.Hostname()
+	if host == "" {
+		return ErrInvalidDeliveryEndpoint
+	}
+	if strings.HasPrefix(u.Host, "[") {
+		addr, err := netip.ParseAddr(host)
+		if err != nil || !addr.Is6() {
+			return ErrInvalidDeliveryEndpoint
+		}
+	} else if strings.ContainsAny(host, ":[]") {
+		return ErrInvalidDeliveryEndpoint
+	}
+	if strings.HasSuffix(u.Host, ":") {
+		return ErrInvalidDeliveryEndpoint
+	}
+	if port := u.Port(); port != "" {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 {
+			return ErrInvalidDeliveryEndpoint
+		}
+	}
+	// Parse validates escapes in the path/authority/fragment, but not RawQuery.
+	if _, err := url.PathUnescape(u.RawQuery); err != nil {
+		return ErrInvalidDeliveryEndpoint
+	}
+	return nil
+}
 
 // DispatchOnce records sending before network I/O. A crash or ambiguous response
 // leaves uncertain delivery: receivers without proven idempotency are never retried.
@@ -20,6 +61,9 @@ var ErrDeliveryBlocked = errors.New("delivery blocked by current source policy o
 // deadline (including lock acquisition). A lost DB session releases its lock;
 // remote acceptance remains uncertain and cannot be undone by later revocation.
 func (w Worker) DispatchOnce(ctx context.Context, endpoint string, client *http.Client) error {
+	if e := ValidateDeliveryEndpoint(endpoint); e != nil {
+		return e
+	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	c, e := pgx.Connect(ctx, w.DSN)
@@ -70,6 +114,17 @@ func (w Worker) DispatchOnce(ctx context.Context, endpoint string, client *http.
 		}
 		return ErrDeliveryBlocked
 	}
+	// Complete local preparation while rollback still preserves the queued row.
+	// Only the durable admission below permits network I/O.
+	req, e := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
+	if e != nil {
+		return e
+	}
+	if !httpguts.ValidHeaderFieldValue(key) {
+		return errors.New("invalid delivery idempotency key")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", key)
 	_, e = tx.Exec(ctx, `UPDATE noctis_v2.outbox SET state='uncertain' WHERE id=$1`, id)
 	if e != nil {
 		return e
@@ -77,12 +132,6 @@ func (w Worker) DispatchOnce(ctx context.Context, endpoint string, client *http.
 	if e = tx.Commit(ctx); e != nil {
 		return e
 	}
-	req, e := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
-	if e != nil {
-		return e
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotency-Key", key)
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
