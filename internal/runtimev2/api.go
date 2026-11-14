@@ -205,7 +205,7 @@ func (a *API) read(w http.ResponseWriter, r *http.Request, c *pgx.Conn, path str
 			failure(w, 400, "invalid_pagination")
 			return nil
 		}
-		rows, e := c.Query(ctx, `SELECT cr.body,ic.updated_at,ic.id::text FROM noctis_v2.intelligence_cases ic JOIN noctis_v2.case_revisions cr ON cr.case_id=ic.id AND cr.revision=ic.revision WHERE ($1='' OR ic.title ILIKE '%'||$1||'%') AND ($2='' OR (ic.updated_at,ic.id::text)<($3::timestamptz,$2)) ORDER BY ic.updated_at DESC,ic.id DESC LIMIT $4`, r.URL.Query().Get("q"), cursor.ID, cursor.At, limit+1)
+		rows, e := c.Query(ctx, `SELECT noctis_v2.case_effective_body(ic.id,cr.body),ic.updated_at,ic.id::text FROM noctis_v2.intelligence_cases ic JOIN noctis_v2.case_revisions cr ON cr.case_id=ic.id AND cr.revision=ic.revision WHERE ($1='' OR ic.title ILIKE '%'||$1||'%') AND ($2='' OR (ic.updated_at,ic.id::text)<($3::timestamptz,$2)) ORDER BY ic.updated_at DESC,ic.id DESC LIMIT $4`, r.URL.Query().Get("q"), cursor.ID, cursor.At, limit+1)
 		if e != nil {
 			return e
 		}
@@ -245,7 +245,7 @@ func (a *API) read(w http.ResponseWriter, r *http.Request, c *pgx.Conn, path str
 		}
 		var raw []byte
 		var updated time.Time
-		e := c.QueryRow(ctx, `SELECT cr.body,ic.updated_at FROM noctis_v2.intelligence_cases ic JOIN noctis_v2.case_revisions cr ON cr.case_id=ic.id AND cr.revision=ic.revision WHERE ic.id=$1`, id).Scan(&raw, &updated)
+		e := c.QueryRow(ctx, `SELECT noctis_v2.case_effective_body(ic.id,cr.body),ic.updated_at FROM noctis_v2.intelligence_cases ic JOIN noctis_v2.case_revisions cr ON cr.case_id=ic.id AND cr.revision=ic.revision WHERE ic.id=$1`, id).Scan(&raw, &updated)
 		if e != nil {
 			return e
 		}
@@ -291,7 +291,7 @@ func (a *API) read(w http.ResponseWriter, r *http.Request, c *pgx.Conn, path str
 		}
 		var raw []byte
 		var brief any
-		e = c.QueryRow(ctx, `SELECT body||jsonb_build_object('invalidated',invalidated) FROM noctis_v2.briefs WHERE period=$1 ORDER BY policy_version DESC LIMIT 1`, time.Now().UTC().Format("2006-01-02")).Scan(&raw)
+		e = c.QueryRow(ctx, `SELECT body||jsonb_build_object('invalidated',invalidated OR NOT noctis_v2.brief_applicability_current(body),'current_for_alerts',NOT invalidated AND noctis_v2.brief_applicability_current(body),'status',CASE WHEN invalidated OR NOT noctis_v2.brief_applicability_current(body) THEN 'requires_review' ELSE COALESCE(body->>'status','current') END) FROM noctis_v2.briefs WHERE period=$1 ORDER BY policy_version DESC LIMIT 1`, time.Now().UTC().Format("2006-01-02")).Scan(&raw)
 		if e == nil {
 			if e = json.Unmarshal(raw, &brief); e != nil {
 				return e
@@ -390,7 +390,7 @@ func (a *API) read(w http.ResponseWriter, r *http.Request, c *pgx.Conn, path str
 	return nil
 }
 func readChanges(ctx context.Context, c *pgx.Conn, caseID string) ([]any, error) {
-	rows, e := c.Query(ctx, `SELECT body,created_at FROM noctis_v2.case_changes WHERE ($1='' OR case_id::text=$1) AND ($1<>'' OR created_at>=date_trunc('day',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') ORDER BY created_at DESC,id LIMIT 200`, caseID)
+	rows, e := c.Query(ctx, `SELECT noctis_v2.change_effective_body(case_id,body),created_at FROM noctis_v2.case_changes WHERE ($1='' OR case_id::text=$1) AND ($1<>'' OR created_at>=date_trunc('day',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') ORDER BY created_at DESC,id LIMIT 200`, caseID)
 	if e != nil {
 		return nil, e
 	}

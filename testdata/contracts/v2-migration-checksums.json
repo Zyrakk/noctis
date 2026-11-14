@@ -6,5 +6,6 @@
   "005_operations.sql": "9843477ed13ebf6cf8f1466de699217f5b9980e66e686cc987accce98f087189",
   "006_native_capture_budget.sql": "abf256d884fd564880b83cd423d7bd6fc24de193a293742bca75e34c65689ab1",
   "007_production_capture_onboarding.sql": "b91b42e63dd27e47417d855fd779d3cdf247324304cc3aa4f0d6465785c876d7",
-  "008_capture_generation_transition.sql": "a2bcc21f034f6e30b4f94d214fd3b93ce6e5724171fd23d4a8b1df24e4db8970"
+  "008_capture_generation_transition.sql": "a2bcc21f034f6e30b4f94d214fd3b93ce6e5724171fd23d4a8b1df24e4db8970",
+  "009_applicability_current.sql": "471b991b87bc0ee13ea452889dc0d21d291de36df43508512ee92330e3ea574d"
 }
