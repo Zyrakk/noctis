@@ -18,7 +18,8 @@ import (
 
 type productionTooLongRPC struct {
 	RPC
-	calls int
+	calls       int
+	globalCalls int
 }
 
 func TestProductionRuntimeRoleAdmissionAndAtomicCommitPostgres(t *testing.T) {
@@ -66,6 +67,11 @@ func (f *productionTooLongRPC) UpdatesGetChannelDifference(context.Context, *tg.
 	return &tg.UpdatesChannelDifferenceTooLong{Final: true, Dialog: &tg.Dialog{Pts: 200}, Messages: []tg.MessageClass{&tg.Message{ID: 22, Message: "historical snapshot must not become evidence", PeerID: &tg.PeerChannel{ChannelID: 77}}}}, nil
 }
 
+func (f *productionTooLongRPC) UpdatesGetDifference(context.Context, *tg.UpdatesGetDifferenceRequest) (tg.UpdatesDifferenceClass, error) {
+	f.globalCalls++
+	return globalChannelGap(11, 77), nil
+}
+
 func TestProductionNoHistoryBeforePayloadAndTooLongPostgres(t *testing.T) {
 	f := newProductionFixture(t, 10)
 	ctx := context.Background()
@@ -98,6 +104,14 @@ func TestProductionNoHistoryBeforePayloadAndTooLongPostgres(t *testing.T) {
 	if _, e = co.HistoryPage(ctx, &tg.InputPeerChannel{ChannelID: 77, AccessHash: 123}, 0, 10); e == nil {
 		t.Fatal("production history RPC accepted")
 	}
+	f.exec(t, `UPDATE noctis_v2.telegram_accounts SET state='{"pts":10,"qts":0,"date":20,"seq":1}'`)
+	if e = co.Difference(ctx); e == nil {
+		t.Fatal("global difference accepted historical channel snapshot")
+	}
+	if rpc.globalCalls != 1 || rpc.calls != 2 {
+		t.Fatal("global difference did not recover channel", rpc.globalCalls, rpc.calls)
+	}
+	assertDifferenceProgress(t, f, 10, 0, map[int64]int{77: 100})
 }
 
 func newProductionFixture(t *testing.T, cap int64, mutations ...func(*CapturePolicy)) *budgetFixture {
