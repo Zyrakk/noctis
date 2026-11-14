@@ -213,7 +213,7 @@ func run() (runErr error) {
 	if e != nil {
 		return e
 	}
-	if _, e = runtimeConn.Exec(ctx, "CREATE ROLE "+roleSQL+" LOGIN;GRANT USAGE ON SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT ON public.noctis_v2_migrations TO "+roleSQL); e != nil {
+	if _, e = runtimeConn.Exec(ctx, "CREATE ROLE "+roleSQL+" LOGIN;GRANT USAGE ON SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT DELETE ON noctis_v2.question_sources TO "+roleSQL+";GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT ON public.noctis_v2_migrations TO "+roleSQL); e != nil {
 		runtimeConn.Close(ctx)
 		return e
 	}

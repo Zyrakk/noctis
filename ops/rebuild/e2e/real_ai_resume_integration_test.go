@@ -20,6 +20,7 @@ import (
 	database "github.com/Zyrakk/noctis/internal/database/v2"
 	"github.com/Zyrakk/noctis/internal/evidence"
 	"github.com/Zyrakk/noctis/internal/inference"
+	"github.com/Zyrakk/noctis/internal/runtimev2"
 	migrations "github.com/Zyrakk/noctis/migrations/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -82,7 +83,7 @@ func runRealAIResumePostgresHTTPS(t *testing.T, publication bool) {
 	}
 	role := "resume_" + uuid.NewString()[:8]
 	roleSQL := pgx.Identifier{role}.Sanitize()
-	if _, e = c.Exec(ctx, "CREATE ROLE "+roleSQL+" LOGIN;GRANT USAGE ON SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA noctis_v2 TO "+roleSQL); e != nil {
+	if _, e = c.Exec(ctx, "CREATE ROLE "+roleSQL+" LOGIN;GRANT USAGE ON SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT DELETE ON noctis_v2.question_sources TO "+roleSQL+";GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT ON public.noctis_v2_migrations TO "+roleSQL); e != nil {
 		t.Fatal(e)
 	}
 	defer func() {
@@ -91,6 +92,37 @@ func runRealAIResumePostgresHTTPS(t *testing.T, publication bool) {
 	}()
 	runtimeURL := *u
 	runtimeURL.User = url.User(role)
+	// Exercise startup with the actual LOGIN, including the governance DELETE
+	// grant, without turning the harness role into an owner or DDL principal.
+	runtimeConn, e := pgx.Connect(ctx, runtimeURL.String())
+	if e != nil {
+		t.Fatal(e)
+	}
+	var restricted bool
+	e = runtimeConn.QueryRow(ctx, `SELECT NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication
+ AND NOT has_schema_privilege(current_user,'noctis_v2','CREATE')
+ AND NOT has_table_privilege(current_user,'noctis_v2.sessions','DELETE')
+ AND NOT EXISTS(SELECT FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='noctis_v2' AND c.relowner=r.oid)
+ FROM pg_roles r WHERE rolname=current_user`).Scan(&restricted)
+	runtimeConn.Close(context.Background())
+	if e != nil || !restricted {
+		t.Fatal("runtime LOGIN acquired owner, DDL or unrelated DELETE privileges", e)
+	}
+	if health, err := runtimev2.Check(ctx, runtimeURL.String(), "api"); err != nil || !health.Functional {
+		t.Fatal("restricted runtime failed readiness", health, err)
+	}
+	if _, e = c.Exec(ctx, "REVOKE DELETE ON noctis_v2.question_sources FROM "+roleSQL); e != nil {
+		t.Fatal(e)
+	}
+	if health, err := runtimev2.Check(ctx, runtimeURL.String(), "api"); err == nil || !health.Database || !health.Schema || health.Functional {
+		t.Fatal("missing governance grant did not fail closed", health, err)
+	}
+	if _, e = c.Exec(ctx, "GRANT DELETE ON noctis_v2.question_sources TO "+roleSQL); e != nil {
+		t.Fatal(e)
+	}
+	if health, err := runtimev2.Check(ctx, runtimeURL.String(), "api"); err != nil || !health.Functional {
+		t.Fatal("governance grant did not restore readiness", health, err)
+	}
 	dir := t.TempDir()
 	os.Chmod(dir, 0700)
 	secret := filepath.Join(dir, "database.secret")

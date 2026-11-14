@@ -344,7 +344,7 @@ func resumeRealAI(binary, dir, campaignPath, auditPath string, inputs realAIInpu
 	defer c.Close(context.Background())
 	role := "e2e_" + uuid.NewString()[:8]
 	roleSQL := pgx.Identifier{role}.Sanitize()
-	_, e = c.Exec(ctx, "CREATE ROLE "+roleSQL+" LOGIN;GRANT USAGE ON SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT ON public.noctis_v2_migrations TO "+roleSQL)
+	_, e = c.Exec(ctx, "CREATE ROLE "+roleSQL+" LOGIN;GRANT USAGE ON SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT DELETE ON noctis_v2.question_sources TO "+roleSQL+";GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT ON public.noctis_v2_migrations TO "+roleSQL)
 	if e != nil {
 		return e
 	}
