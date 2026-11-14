@@ -113,6 +113,45 @@ revisar su tarifa vigente antes de activar inferencia. Pueden leerse y guardarse
 con el marcador tras deshabilitar los bindings afectados, y habilitarse después
 de declarar una tarifa explícita. Se conservan los límites de precios y presupuestos.
 
+`/readyz` y `/healthz` conservan los campos JSON de salud. La comprobación tiene
+un plazo total de tres segundos: conexión y aislamiento de DB, ledger exacto de
+nombres/checksums, contrato estructural y permisos efectivos del modo. `schema`
+solo es verdadero después de validar ledger y estructura; `functional`,
+`ai_enabled` y las capacidades operativas se publican al terminar todas las
+fases, incluida la lectura de `ai_configs`. Las capacidades corresponden al modo:
+collector anuncia captura; worker, procesamiento; la API conserva sus capacidades
+de acceso y operación. Una base recién migrada queda lista
+sin fuentes, sesiones ni configuración IA. La sonda usa una transacción de solo
+lectura y consultas agrupadas de catálogos; no ejecuta DDL, grants ni escrituras
+de prueba. `/livez` continúa disponible aunque PostgreSQL falle.
+
+Diagnóstico: `database=true, schema=false` exige comprobar las migraciones y los
+objetos requeridos; `schema=true, functional=false` puede señalar permisos del
+runtime o una configuración IA ilegible. Inspeccionar con la conexión del modo
+afectado y revisar los grants posteriores a migración. Por ejemplo, la API
+necesita `INSERT` en `sessions`; worker y collector no lo necesitan. Se consideran
+los privilegios heredados, `USAGE` en los esquemas y lectura del ledger. La
+respuesta pública no incluye errores SQL ni credenciales. Las plantillas de
+grants siguen siendo responsabilidad del operador; readiness no certifica
+mínimo privilegio ni disponibilidad futura.
+
+El contrato está en `internal/runtimev2/readiness_contract.go` y su manifiesto
+`schema_contract.json`: relaciones operativas, columnas/tipos/defaults,
+claves y restricciones con su estado, triggers críticos y sus funciones. Excluye
+índices meramente de rendimiento y tolera objetos adicionales ajenos al contrato.
+Al añadir una operación o migración, revisar los permisos por modo y regenerar
+desde **todas** las migraciones embebidas en una DB sintética aislada:
+
+```sh
+NOCTIS_V2_UPDATE_READINESS_CONTRACT=1 go test ./internal/runtimev2 -run '^TestReadinessContractPostgres$' -count=1
+go test ./internal/runtimev2 -run '^TestReadiness.*Postgres$' -count=1
+```
+
+Ambos comandos requieren `NOCTIS_V2_TEST_DATABASE_URL` local. La prueba crea una
+base nueva, no copia el esquema de producción y comprueba el manifiesto exacto
+sin la variable de regeneración. Revisar su diff; no regenerarlo para ocultar
+deriva de una base existente ni modificar migraciones ya publicadas.
+
 Antes de cualquier cambio externo: comprobar cuenta/contexto/host, namespace,
 UID y propietarios de DB/PVC, rollback exacto y backup/restore; preparar revisión
 concreta. Un template válido no autoriza `apply`, migración, escala ni red real.

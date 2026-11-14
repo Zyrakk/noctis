@@ -1,0 +1,4530 @@
+{
+  "column:action_receipts.action": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:action_receipts.actor": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:action_receipts.digest": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:action_receipts.request_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:action_receipts.result": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempt_jobs.attempt_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempt_jobs.fence": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempt_jobs.job_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.accounting_exception": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:ai_attempts.actual_units": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:ai_attempts.binding": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.config_revision": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.connection": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.declared_model": {
+    "type": "text",
+    "default": "'unknown'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.exposure_units": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.fence": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.function_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.functions": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.job_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.maximum_units": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.requested_model": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.state": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_attempts.usage": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:ai_configs.actor": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_configs.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_configs.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_configs.revision": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.actor": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.attempts": {
+    "type": "integer",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.cache_key": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.config_revision": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.error_code": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:ai_jobs.fence": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.function_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.input": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.lease_until": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:ai_jobs.request_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.result": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:ai_jobs.retry_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:ai_jobs.snapshot": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_jobs.state": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_products.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_products.dependencies": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_products.function_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_products.input_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_products.input_kind": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_products.input_revision": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_products.job_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_products.result": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_promotions.config_revision": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_promotions.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_promotions.dataset_version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_promotions.function_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_promotions.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_promotions.status": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_publications.cache_key": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_publications.function_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_publications.job_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_query_results.actor": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_query_results.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_query_results.dependencies": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_query_results.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_query_results.plan": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_query_results.rows": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_secrets.ciphertext": {
+    "type": "bytea",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_secrets.config_revision": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_secrets.connection_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_secrets.key_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:ai_secrets.nonce": {
+    "type": "bytea",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analyses.gate": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analyses.input_revision": {
+    "type": "text",
+    "default": "''::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analyses.observables": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analyses.observation_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analyses.policy_version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analyses.schema_version": {
+    "type": "text",
+    "default": "'1'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analyses.stage": {
+    "type": "text",
+    "default": "'parse'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analysis_results.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analysis_results.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analysis_results.digest": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:analysis_results.job_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:asset_versions.cpe": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:asset_versions.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:asset_versions.evidence": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:asset_versions.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:asset_versions.producer": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:asset_versions.revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:asset_versions.version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:batch_receipts.batch_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:batch_receipts.digest": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:batch_receipts.receipt": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:briefs.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:briefs.invalidated": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:briefs.period": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:briefs.policy_version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_attention.case_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_attention.exception": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:case_attention.mode": {
+    "type": "text",
+    "default": "'automatic'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_attention.policy_version": {
+    "type": "text",
+    "default": "'attention-v1'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_attention.reason": {
+    "type": "text",
+    "default": "''::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_attention.revision": {
+    "type": "bigint",
+    "default": "1",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_attention.seen_revision": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_attention.silent_until": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:case_changes.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_changes.case_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_changes.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_changes.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_changes.material_key": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_changes.observation_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_group_conflicts.content_case": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_group_conflicts.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_group_conflicts.native_case": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_group_conflicts.observation_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_memberships.case_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_memberships.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_memberships.observation_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_revisions.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_revisions.case_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_revisions.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:case_revisions.revision": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:checkpoints.epoch": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:checkpoints.mode": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:checkpoints.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:checkpoints.value": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:checkpoints.version": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_dependencies.claim_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_dependencies.claim_revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_dependencies.dependency_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_dependencies.dependency_revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_dependencies.relation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.case_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.evidence": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.invalidated": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.object": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.policy_version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.predicate": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.producer": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.reason": {
+    "type": "text",
+    "default": "''::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.status": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:claim_versions.subject": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:content_blobs.created_at": {
+    "type": "timestamp with time zone",
+    "default": "now()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:content_blobs.hash": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:content_blobs.payload": {
+    "type": "bytea",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:content_blobs.representation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.endpoint": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.kind": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.permission_status": {
+    "type": "text",
+    "default": "'proposed'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.policy": {
+    "type": "jsonb",
+    "default": "'{}'::jsonb",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.provenance": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.question_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.revision": {
+    "type": "bigint",
+    "default": "1",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.score": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_proposals.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:discovery_trials.coverage": {
+    "type": "text",
+    "default": "'unknown'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_trials.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_trials.expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_trials.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_trials.last_error": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:discovery_trials.last_success_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:discovery_trials.proposal_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_trials.proposal_revision": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_trials.quota": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_trials.state": {
+    "type": "text",
+    "default": "'active'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:discovery_trials.used": {
+    "type": "integer",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:domain_audit.action": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:domain_audit.actor": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:domain_audit.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:domain_audit.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:domain_audit.result": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:enrichment_policies.data_classes": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:enrichment_policies.enabled": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:enrichment_policies.provider": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:enrichment_policies.quota_per_day": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:enrichment_policies.ttl_seconds": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:enrichment_policies.version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:enrichment_policy_revisions.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:enrichment_policy_revisions.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:enrichment_policy_revisions.provider": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:enrichment_policy_revisions.version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entities.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entities.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entities.kind": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_aliases.alias": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_aliases.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_aliases.entity_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_aliases.evidence": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_aliases.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_aliases.language": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_aliases.revoked": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_aliases.scope": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_hypotheses.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_hypotheses.evidence": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_hypotheses.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_hypotheses.left_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_hypotheses.relation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_hypotheses.right_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:entity_hypotheses.status": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_cursors.cursor": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_cursors.kind": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_cursors.snapshot_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_cursors.url": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_snapshots.as_of": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_snapshots.collected_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_snapshots.expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_snapshots.hash": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_snapshots.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_snapshots.kind": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_snapshots.payload": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:feed_snapshots.url": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.evidence": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.observable_type": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.policy_version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.producer": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.scope": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.status": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.valid_from": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.valid_until": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:indicator_versions.value": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:intelligence_cases.group_key": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:intelligence_cases.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:intelligence_cases.lifecycle": {
+    "type": "text",
+    "default": "'following'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:intelligence_cases.revision": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:intelligence_cases.title": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:intelligence_cases.updated_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:invalidated_products.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:invalidated_products.job_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:invalidated_products.reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.attempts": {
+    "type": "integer",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.fence": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.input_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.input_revision": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.last_error_code": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:jobs.lease_expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:jobs.lease_owner": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:jobs.policy_version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.retry_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:jobs.schema_version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.stage": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:jobs.state": {
+    "type": "text",
+    "default": "'queued'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:legacy_records.archive_digest": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:legacy_records.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:legacy_records.legacy_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:legacy_records.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:legacy_records.table_name": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:local_applicability.asset_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:local_applicability.asset_revision": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:local_applicability.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:local_applicability.cve": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:local_applicability.reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:local_applicability.snapshot_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:local_applicability.status": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observable_sightings.end_byte": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observable_sightings.evidence": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observable_sightings.observable_type": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observable_sightings.observation_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observable_sightings.revision": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observable_sightings.start_byte": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observable_sightings.value": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.collected_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.data_class": {
+    "type": "text",
+    "default": "'private'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.epoch": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.hash": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.mode": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.native_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.published_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:observations.representation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.retention_expired_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:observations.revision": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.source_deleted": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:observations.superseded_by": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:operator_permissions.actor": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:operator_permissions.granted": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:operator_permissions.permission": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:outbox.blocked_reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:outbox.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:outbox.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:outbox.delivery_key": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:outbox.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:outbox.policy_version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:outbox.state": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:policies.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:policies.terms": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:policies.version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:private_exports.actor": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:private_exports.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:private_exports.case_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:private_exports.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:private_exports.expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:private_exports.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:private_exports.revision": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:question_sources.independence": {
+    "type": "text",
+    "default": "'unknown'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:question_sources.question_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:question_sources.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:questions.enabled": {
+    "type": "boolean",
+    "default": "true",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:questions.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:questions.revision": {
+    "type": "bigint",
+    "default": "1",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:questions.terms": {
+    "type": "jsonb",
+    "default": "'[]'::jsonb",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:questions.title": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_policies.data_class": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_policies.retain_seconds": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_policies.revision": {
+    "type": "bigint",
+    "default": "1",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_policies.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_runs.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_runs.cutoff": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_runs.data_class": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_runs.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_runs.policy_revision": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_runs.processed": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_runs.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_runs.state": {
+    "type": "text",
+    "default": "'active'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_tombstones.expired_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_tombstones.hash": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_tombstones.observation_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_tombstones.representation": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_tombstones.run_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:retention_tombstones.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:runtime_control.paused": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:runtime_control.reason": {
+    "type": "text",
+    "default": "''::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:runtime_control.revision": {
+    "type": "bigint",
+    "default": "1",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:runtime_control.singleton": {
+    "type": "boolean",
+    "default": "true",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sessions.csrf": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sessions.expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sessions.revoked": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sessions.token_hash": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sessions.username": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:source_dispositions.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:source_dispositions.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:source_dispositions.identity": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:source_dispositions.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:source_imports.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:source_imports.digest": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:source_imports.manifest": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:source_imports.manifest_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:source_imports.receipt": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sources.activated_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:sources.adapter_config": {
+    "type": "jsonb",
+    "default": "'{}'::jsonb",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sources.coverage": {
+    "type": "text",
+    "default": "'unknown'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sources.enabled": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sources.epoch": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:sources.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sources.kind": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sources.last_error": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:sources.last_success_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:sources.name": {
+    "type": "text",
+    "default": "''::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sources.native_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sources.policy_revision": {
+    "type": "bigint",
+    "default": "1",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sources.policy_version": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:sources.poll_after": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.active_capture_budget": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_accounts.active_capture_consent": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_accounts.auth_generation": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.capture_failure_revision": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.capture_resume_revision": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.closed": {
+    "type": "boolean",
+    "default": "true",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.consent_revision": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.gap": {
+    "type": "boolean",
+    "default": "true",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.lease_expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_accounts.owner": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_accounts.owner_fence": {
+    "type": "bigint",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.quota_wait_reason": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_accounts.quota_wait_until": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_accounts.retry_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_accounts.state": {
+    "type": "jsonb",
+    "default": "'{\"pts\": 0, \"qts\": 0, \"seq\": 0, \"date\": 0}'::jsonb",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.status": {
+    "type": "text",
+    "default": "'paused'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_accounts.updated_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_capture_budgets.account_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_capture_budgets.auth_generation": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_capture_budgets.counters": {
+    "type": "jsonb",
+    "default": "'{\"live\": {\"api\": 0, \"observations\": 0, \"payload_bytes\": 0, \"metadata_bytes\": 0}, \"control\": {\"api\": 0, \"observations\": 0, \"payload_bytes\": 0, \"metadata_bytes\": 0}, \"bootstrap\": {\"api\": 0, \"observations\": 0, \"payload_bytes\": 0, \"metadata_bytes\": 0}}'::jsonb",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_capture_budgets.expires_at": {
+    "type": "timestamp with time zone",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_capture_budgets.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_capture_budgets.policy": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_capture_budgets.policy_digest": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_capture_budgets.started_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_capture_budgets.state": {
+    "type": "text",
+    "default": "'active'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_channel_states.account_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_channel_states.channel_id": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_channel_states.pts": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inbox.account_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inbox.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inbox.disposition": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inbox.event": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inbox.message_id": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inbox.metadata": {
+    "type": "jsonb",
+    "default": "'{}'::jsonb",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inbox.peer_id": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inbox.peer_type": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inbox.revision": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_candidates.access_hash": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_candidates.folder": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_candidates.name": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_candidates.peer_id": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_candidates.peer_type": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_candidates.pts": {
+    "type": "integer",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_candidates.snapshot_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_candidates.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_inventory_snapshots.account_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_snapshots.actor": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_snapshots.auth_generation": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_snapshots.created_at": {
+    "type": "timestamp with time zone",
+    "default": "clock_timestamp()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_inventory_snapshots.id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_peers.access_hash": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_peers.account_id": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_peers.allowed": {
+    "type": "boolean",
+    "default": "false",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_peers.auth_generation": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_peers.bootstrap_epoch": {
+    "type": "uuid",
+    "default": "gen_random_uuid()",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_peers.inventory_snapshot": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": false,
+    "generated": ""
+  },
+  "column:telegram_peers.peer_id": {
+    "type": "bigint",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_peers.peer_type": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_peers.pts": {
+    "type": "integer",
+    "default": "0",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:telegram_peers.source_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:vulnerability_facts.applicability": {
+    "type": "text",
+    "default": "'unknown'::text",
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:vulnerability_facts.body": {
+    "type": "jsonb",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:vulnerability_facts.cve": {
+    "type": "text",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "column:vulnerability_facts.snapshot_id": {
+    "type": "uuid",
+    "default": null,
+    "identity": "",
+    "not_null": true,
+    "generated": ""
+  },
+  "constraint:action_receipts.action_receipts_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (actor, request_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_attempt_jobs.ai_attempt_jobs_attempt_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (attempt_id) REFERENCES noctis_v2.ai_attempts(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:ai_attempt_jobs.ai_attempt_jobs_job_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (job_id) REFERENCES noctis_v2.ai_jobs(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:ai_attempt_jobs.ai_attempt_jobs_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (attempt_id, job_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_attempts.ai_attempts_exposure_units_check": {
+    "validated": true,
+    "definition": "CHECK (exposure_units \u003e= 0)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_attempts.ai_attempts_job_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (job_id) REFERENCES noctis_v2.ai_jobs(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:ai_attempts.ai_attempts_maximum_units_check": {
+    "validated": true,
+    "definition": "CHECK (maximum_units \u003e= 0)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_attempts.ai_attempts_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_attempts.ai_attempts_state_check": {
+    "validated": true,
+    "definition": "CHECK (state = ANY (ARRAY['reserved'::text, 'sent'::text, 'settled'::text, 'uncertain'::text, 'released'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_configs.ai_configs_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_jobs.ai_jobs_actor_request_id_key": {
+    "validated": true,
+    "definition": "UNIQUE (actor, request_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_jobs.ai_jobs_config_revision_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (config_revision) REFERENCES noctis_v2.ai_configs(revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:ai_jobs.ai_jobs_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_jobs.ai_jobs_state_check": {
+    "validated": true,
+    "definition": "CHECK (state = ANY (ARRAY['queued'::text, 'running'::text, 'retry_wait'::text, 'budget_blocked'::text, 'dependency_blocked'::text, 'succeeded'::text, 'failed'::text, 'cancelled'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_products.ai_products_job_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (job_id) REFERENCES noctis_v2.ai_jobs(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:ai_products.ai_products_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (job_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_promotions.ai_promotions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_promotions.ai_promotions_status_check": {
+    "validated": true,
+    "definition": "CHECK (status = ANY (ARRAY['pending'::text, 'invalidated'::text, 'validated'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_publications.ai_publications_job_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (job_id) REFERENCES noctis_v2.ai_jobs(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:ai_publications.ai_publications_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (cache_key, function_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_query_results.ai_query_results_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:ai_secrets.ai_secrets_config_revision_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (config_revision) REFERENCES noctis_v2.ai_configs(revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:ai_secrets.ai_secrets_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (config_revision, connection_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:analyses.analyses_observation_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (observation_id) REFERENCES noctis_v2.observations(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:analyses.analyses_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (stage, observation_id, input_revision, policy_version, schema_version)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:analysis_results.analysis_results_job_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (job_id) REFERENCES noctis_v2.jobs(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:analysis_results.analysis_results_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (job_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:asset_versions.asset_versions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id, revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:asset_versions.asset_versions_revision_check": {
+    "validated": true,
+    "definition": "CHECK (revision \u003e 0)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:batch_receipts.batch_receipts_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (batch_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:briefs.briefs_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (period, policy_version)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:case_attention.case_attention_case_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (case_id) REFERENCES noctis_v2.intelligence_cases(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:case_attention.case_attention_mode_check": {
+    "validated": true,
+    "definition": "CHECK (mode = ANY (ARRAY['automatic'::text, 'silent_until_change'::text, 'exception'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:case_attention.case_attention_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (case_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:case_changes.case_changes_case_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (case_id) REFERENCES noctis_v2.intelligence_cases(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:case_changes.case_changes_material_key_key": {
+    "validated": true,
+    "definition": "UNIQUE (material_key)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:case_changes.case_changes_observation_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (observation_id) REFERENCES noctis_v2.observations(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:case_changes.case_changes_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:case_group_conflicts.case_group_conflicts_content_case_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (content_case) REFERENCES noctis_v2.intelligence_cases(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:case_group_conflicts.case_group_conflicts_native_case_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (native_case) REFERENCES noctis_v2.intelligence_cases(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:case_group_conflicts.case_group_conflicts_observation_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (observation_id) REFERENCES noctis_v2.observations(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:case_group_conflicts.case_group_conflicts_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (observation_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:case_memberships.case_memberships_case_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (case_id) REFERENCES noctis_v2.intelligence_cases(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:case_memberships.case_memberships_observation_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (observation_id) REFERENCES noctis_v2.observations(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:case_memberships.case_memberships_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (case_id, observation_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:case_revisions.case_revisions_case_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (case_id) REFERENCES noctis_v2.intelligence_cases(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:case_revisions.case_revisions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (case_id, revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:checkpoints.checkpoints_mode_check": {
+    "validated": true,
+    "definition": "CHECK (mode = ANY (ARRAY['live'::text, 'bootstrap'::text, 'legacy_import'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:checkpoints.checkpoints_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (source_id, epoch, mode)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:checkpoints.checkpoints_source_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (source_id) REFERENCES noctis_v2.sources(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:checkpoints.checkpoints_version_check": {
+    "validated": true,
+    "definition": "CHECK (version \u003e= 0)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:claim_dependencies.claim_dependencies_claim_id_claim_revision_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (claim_id, claim_revision) REFERENCES noctis_v2.claim_versions(id, revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:claim_dependencies.claim_dependencies_dependency_id_dependency_revision_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (dependency_id, dependency_revision) REFERENCES noctis_v2.claim_versions(id, revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:claim_dependencies.claim_dependencies_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (claim_id, claim_revision, dependency_id, dependency_revision, relation)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:claim_dependencies.claim_dependencies_relation_check": {
+    "validated": true,
+    "definition": "CHECK (relation = ANY (ARRAY['supports'::text, 'contradicts'::text, 'depends_on'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:claim_versions.claim_versions_case_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (case_id) REFERENCES noctis_v2.intelligence_cases(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:claim_versions.claim_versions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id, revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:claim_versions.claim_versions_revision_check": {
+    "validated": true,
+    "definition": "CHECK (revision \u003e 0)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:claim_versions.claim_versions_status_check": {
+    "validated": true,
+    "definition": "CHECK (status = ANY (ARRAY['source_claim'::text, 'supported'::text, 'contradicted'::text, 'unresolved'::text, 'retracted'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:content_blobs.content_blobs_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (hash, representation)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:discovery_proposals.discovery_proposals_permission_status_check": {
+    "validated": true,
+    "definition": "CHECK (permission_status = ANY (ARRAY['proposed'::text, 'authorized'::text, 'revoked'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:discovery_proposals.discovery_proposals_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:discovery_proposals.discovery_proposals_question_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (question_id) REFERENCES noctis_v2.questions(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:discovery_proposals.discovery_proposals_source_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (source_id) REFERENCES noctis_v2.sources(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:discovery_trials.discovery_trials_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:discovery_trials.discovery_trials_proposal_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (proposal_id) REFERENCES noctis_v2.discovery_proposals(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:discovery_trials.discovery_trials_quota_check": {
+    "validated": true,
+    "definition": "CHECK (quota \u003e= 1 AND quota \u003c= 100)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:domain_audit.domain_audit_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:enrichment_policies.enrichment_policies_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (provider)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:enrichment_policies.enrichment_policies_quota_per_day_check": {
+    "validated": true,
+    "definition": "CHECK (quota_per_day \u003e= 0)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:enrichment_policies.enrichment_policies_ttl_seconds_check": {
+    "validated": true,
+    "definition": "CHECK (ttl_seconds \u003e 0 AND ttl_seconds \u003c= 604800)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:enrichment_policy_revisions.enrichment_policy_revisions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (provider, version)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:entities.entities_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:entity_aliases.entity_aliases_entity_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (entity_id) REFERENCES noctis_v2.entities(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:entity_aliases.entity_aliases_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:entity_hypotheses.entity_hypotheses_check": {
+    "validated": true,
+    "definition": "CHECK (left_id \u003c\u003e right_id)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:entity_hypotheses.entity_hypotheses_left_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (left_id) REFERENCES noctis_v2.entities(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:entity_hypotheses.entity_hypotheses_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:entity_hypotheses.entity_hypotheses_right_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (right_id) REFERENCES noctis_v2.entities(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:entity_hypotheses.entity_hypotheses_status_check": {
+    "validated": true,
+    "definition": "CHECK (status = ANY (ARRAY['unresolved'::text, 'retracted'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:feed_cursors.feed_cursors_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (kind, url)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:feed_cursors.feed_cursors_snapshot_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (snapshot_id) REFERENCES noctis_v2.feed_snapshots(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:feed_snapshots.feed_snapshots_kind_url_hash_key": {
+    "validated": true,
+    "definition": "UNIQUE (kind, url, hash)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:feed_snapshots.feed_snapshots_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:indicator_versions.indicator_versions_check": {
+    "validated": true,
+    "definition": "CHECK (valid_until \u003e valid_from)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:indicator_versions.indicator_versions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id, revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:indicator_versions.indicator_versions_revision_check": {
+    "validated": true,
+    "definition": "CHECK (revision \u003e 0)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:indicator_versions.indicator_versions_status_check": {
+    "validated": true,
+    "definition": "CHECK (status = ANY (ARRAY['active'::text, 'revoked'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:intelligence_cases.intelligence_cases_group_key_key": {
+    "validated": true,
+    "definition": "UNIQUE (group_key)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:intelligence_cases.intelligence_cases_lifecycle_check": {
+    "validated": true,
+    "definition": "CHECK (lifecycle = ANY (ARRAY['following'::text, 'resolved'::text, 'archived'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:intelligence_cases.intelligence_cases_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:invalidated_products.invalidated_products_job_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (job_id) REFERENCES noctis_v2.ai_jobs(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:invalidated_products.invalidated_products_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (job_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:jobs.jobs_check": {
+    "validated": true,
+    "definition": "CHECK ((state = 'leased'::text) = (lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:jobs.jobs_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:jobs.jobs_stage_input_id_input_revision_policy_version_schema_ve_key": {
+    "validated": true,
+    "definition": "UNIQUE (stage, input_id, input_revision, policy_version, schema_version)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:jobs.jobs_state_check": {
+    "validated": true,
+    "definition": "CHECK (state = ANY (ARRAY['queued'::text, 'leased'::text, 'succeeded'::text, 'retry_wait'::text, 'budget_blocked'::text, 'dependency_blocked'::text, 'quarantined'::text, 'cancelled'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:legacy_records.legacy_records_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (archive_digest, table_name, legacy_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:legacy_records.legacy_records_source_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (source_id) REFERENCES noctis_v2.sources(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:local_applicability.local_applicability_asset_id_asset_revision_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (asset_id, asset_revision) REFERENCES noctis_v2.asset_versions(id, revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:local_applicability.local_applicability_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (snapshot_id, cve, asset_id, asset_revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:local_applicability.local_applicability_snapshot_id_cve_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (snapshot_id, cve) REFERENCES noctis_v2.vulnerability_facts(snapshot_id, cve)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:local_applicability.local_applicability_status_check": {
+    "validated": true,
+    "definition": "CHECK (status = ANY (ARRAY['affected_version'::text, 'not_affected_version'::text, 'unknown'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:observable_sightings.observable_sightings_observation_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (observation_id) REFERENCES noctis_v2.observations(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:observable_sightings.observable_sightings_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (observable_type, value, observation_id, revision, start_byte, end_byte)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:observations.observations_hash_representation_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (hash, representation) REFERENCES noctis_v2.content_blobs(hash, representation)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:observations.observations_mode_check": {
+    "validated": true,
+    "definition": "CHECK (mode = ANY (ARRAY['live'::text, 'bootstrap'::text, 'legacy_import'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:observations.observations_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:observations.observations_source_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (source_id) REFERENCES noctis_v2.sources(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:observations.observations_source_id_native_id_revision_key": {
+    "validated": true,
+    "definition": "UNIQUE (source_id, native_id, revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:observations.observations_superseded_by_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (superseded_by) REFERENCES noctis_v2.observations(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:operator_permissions.operator_permissions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (actor, permission)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:outbox.outbox_delivery_key_key": {
+    "validated": true,
+    "definition": "UNIQUE (delivery_key)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:outbox.outbox_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:outbox.outbox_state_check": {
+    "validated": true,
+    "definition": "CHECK (state = ANY (ARRAY['queued'::text, 'sending'::text, 'delivered'::text, 'uncertain'::text, 'blocked'::text, 'cancelled'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:policies.policies_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (version)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:private_exports.private_exports_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:question_sources.question_sources_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (question_id, source_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:question_sources.question_sources_question_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (question_id) REFERENCES noctis_v2.questions(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:question_sources.question_sources_source_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (source_id) REFERENCES noctis_v2.sources(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:questions.questions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:retention_policies.retention_policies_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (source_id, data_class)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:retention_policies.retention_policies_retain_seconds_check": {
+    "validated": true,
+    "definition": "CHECK (retain_seconds \u003e= 0)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:retention_policies.retention_policies_source_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (source_id) REFERENCES noctis_v2.sources(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:retention_runs.retention_runs_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:retention_tombstones.retention_tombstones_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (observation_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:retention_tombstones.retention_tombstones_run_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (run_id) REFERENCES noctis_v2.retention_runs(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:runtime_control.runtime_control_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (singleton)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:runtime_control.runtime_control_singleton_check": {
+    "validated": true,
+    "definition": "CHECK (singleton)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:sessions.sessions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (token_hash)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:source_dispositions.source_dispositions_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (identity)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:source_dispositions.source_dispositions_source_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (source_id) REFERENCES noctis_v2.sources(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:source_imports.source_imports_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (manifest_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:sources.sources_kind_native_id_key": {
+    "validated": true,
+    "definition": "UNIQUE (kind, native_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:sources.sources_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_accounts.capture_failure_revision_order": {
+    "validated": true,
+    "definition": "CHECK (capture_resume_revision \u003c= capture_failure_revision)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_accounts.telegram_accounts_active_capture_budget_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (active_capture_budget) REFERENCES noctis_v2.telegram_capture_budgets(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_accounts.telegram_accounts_active_capture_consent_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (active_capture_consent) REFERENCES noctis_v2.telegram_capture_consents(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_accounts.telegram_accounts_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_capture_budgets.telegram_capture_budgets_account_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (account_id) REFERENCES noctis_v2.telegram_accounts(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_capture_budgets.telegram_capture_budgets_account_id_key": {
+    "validated": true,
+    "definition": "UNIQUE (account_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_capture_budgets.telegram_capture_budgets_check": {
+    "validated": true,
+    "definition": "CHECK (expires_at \u003e started_at)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_capture_budgets.telegram_capture_budgets_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_capture_budgets.telegram_capture_budgets_policy_digest_check": {
+    "validated": true,
+    "definition": "CHECK (policy_digest ~ '^[0-9a-f]{64}$'::text)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_capture_budgets.telegram_capture_budgets_state_check": {
+    "validated": true,
+    "definition": "CHECK (state = ANY (ARRAY['active'::text, 'exhausted'::text, 'revoked'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_channel_states.telegram_channel_states_account_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (account_id) REFERENCES noctis_v2.telegram_accounts(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_channel_states.telegram_channel_states_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (account_id, channel_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_inbox.telegram_inbox_account_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (account_id) REFERENCES noctis_v2.telegram_accounts(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_inbox.telegram_inbox_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (account_id, peer_type, peer_id, message_id, revision)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_inventory_candidates.telegram_inventory_candidates_peer_id_check": {
+    "validated": true,
+    "definition": "CHECK (peer_id \u003e 0)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_inventory_candidates.telegram_inventory_candidates_peer_type_check": {
+    "validated": true,
+    "definition": "CHECK (peer_type = 'channel'::text)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_inventory_candidates.telegram_inventory_candidates_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (snapshot_id, peer_type, peer_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_inventory_candidates.telegram_inventory_candidates_pts_check": {
+    "validated": true,
+    "definition": "CHECK (pts \u003e= 0)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_inventory_candidates.telegram_inventory_candidates_snapshot_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (snapshot_id) REFERENCES noctis_v2.telegram_inventory_snapshots(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_inventory_candidates.telegram_inventory_candidates_source_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (source_id) REFERENCES noctis_v2.sources(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_inventory_snapshots.telegram_inventory_snapshots_account_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (account_id) REFERENCES noctis_v2.telegram_accounts(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_inventory_snapshots.telegram_inventory_snapshots_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_peers.telegram_peers_account_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (account_id) REFERENCES noctis_v2.telegram_accounts(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_peers.telegram_peers_inventory_snapshot_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (inventory_snapshot) REFERENCES noctis_v2.telegram_inventory_snapshots(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_peers.telegram_peers_peer_type_check": {
+    "validated": true,
+    "definition": "CHECK (peer_type = ANY (ARRAY['user'::text, 'chat'::text, 'channel'::text]))",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_peers.telegram_peers_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (account_id, peer_type, peer_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:telegram_peers.telegram_peers_source_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (source_id) REFERENCES noctis_v2.sources(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "constraint:telegram_peers.telegram_peers_source_id_key": {
+    "validated": true,
+    "definition": "UNIQUE (source_id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:vulnerability_facts.vulnerability_facts_applicability_check": {
+    "validated": true,
+    "definition": "CHECK (applicability = 'unknown'::text)",
+    "index_ready": null,
+    "index_valid": null,
+    "fk_triggers_enabled": null
+  },
+  "constraint:vulnerability_facts.vulnerability_facts_pkey": {
+    "validated": true,
+    "definition": "PRIMARY KEY (snapshot_id, cve)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": null
+  },
+  "constraint:vulnerability_facts.vulnerability_facts_snapshot_id_fkey": {
+    "validated": true,
+    "definition": "FOREIGN KEY (snapshot_id) REFERENCES noctis_v2.feed_snapshots(id)",
+    "index_ready": true,
+    "index_valid": true,
+    "fk_triggers_enabled": true
+  },
+  "function:noctis_v2.ai_immutable_revision()": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.ai_immutable_revision()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$BEGIN\n IF TG_TABLE_NAME='ai_products' AND TG_OP='UPDATE' THEN\n  IF NEW.result='{}'::jsonb AND NEW.dependencies='{}'::jsonb AND (to_jsonb(NEW)-'result'-'dependencies')=(to_jsonb(OLD)-'result'-'dependencies') AND (EXISTS(SELECT FROM noctis_v2.retention_tombstones t WHERE OLD.dependencies::text LIKE '%'||t.observation_id::text||'%') OR EXISTS(SELECT FROM noctis_v2.invalidated_products p WHERE p.job_id=OLD.job_id AND p.reason='retention_expired')) THEN RETURN NEW; END IF;\n END IF;\n RAISE EXCEPTION 'immutable AI revision';\nEND$function$\n"
+  },
+  "function:noctis_v2.native_budget_binding()": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.native_budget_binding()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$BEGIN\n IF OLD.active_capture_budget IS NOT NULL AND NEW.active_capture_budget IS DISTINCT FROM OLD.active_capture_budget THEN RAISE EXCEPTION 'immutable native budget binding'; END IF;\n IF NEW.active_capture_budget IS NOT NULL AND NOT EXISTS(SELECT FROM noctis_v2.telegram_capture_budgets b WHERE b.id=NEW.active_capture_budget AND b.account_id=NEW.id AND b.auth_generation=NEW.auth_generation) THEN RAISE EXCEPTION 'native budget account generation mismatch'; END IF;\n RETURN NEW;\nEND$function$\n"
+  },
+  "function:noctis_v2.native_budget_immutable()": {
+    "definition": "CREATE OR REPLACE FUNCTION noctis_v2.native_budget_immutable()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nDECLARE phase text; counter text;\nBEGIN\n IF TG_OP='DELETE' THEN RAISE EXCEPTION 'immutable native budget'; END IF;\n IF TG_OP='UPDATE' AND (to_jsonb(NEW)-'counters'-'state')\u003c\u003e(to_jsonb(OLD)-'counters'-'state') THEN RAISE EXCEPTION 'immutable native budget policy'; END IF;\n IF TG_OP='UPDATE' AND OLD.state\u003c\u003e'active' AND NEW.state\u003c\u003eOLD.state THEN RAISE EXCEPTION 'terminal native budget'; END IF;\n IF jsonb_typeof(NEW.counters)\u003c\u003e'object' OR (SELECT count(*) FROM jsonb_object_keys(NEW.counters))\u003c\u003e3 THEN RAISE EXCEPTION 'invalid native counters'; END IF;\n FOREACH phase IN ARRAY ARRAY['control','bootstrap','live'] LOOP\n  IF jsonb_typeof(NEW.counters-\u003ephase)\u003c\u003e'object' OR (SELECT count(*) FROM jsonb_object_keys(NEW.counters-\u003ephase))\u003c\u003e4 THEN RAISE EXCEPTION 'invalid native phase'; END IF;\n  FOREACH counter IN ARRAY ARRAY['api','observations','payload_bytes','metadata_bytes'] LOOP\n   IF jsonb_typeof(NEW.counters-\u003ephase-\u003ecounter)\u003c\u003e'number' OR NOT COALESCE((NEW.counters-\u003ephase-\u003e\u003ecounter) ~ '^[0-9]+$',false) THEN RAISE EXCEPTION 'invalid native counter'; END IF;\n   PERFORM (NEW.counters-\u003ephase-\u003e\u003ecounter)::bigint;\n   IF TG_OP='UPDATE' AND (NEW.counters-\u003ephase-\u003e\u003ecounter)::bigint\u003c(OLD.counters-\u003ephase-\u003e\u003ecounter)::bigint THEN RAISE EXCEPTION 'native counter cannot decrease'; END IF;\n  END LOOP;\n END LOOP;\n RETURN NEW;\nEND$function$\n"
+  },
+  "relation:action_receipts": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:ai_attempt_jobs": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:ai_attempts": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:ai_configs": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:ai_jobs": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:ai_products": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:ai_promotions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:ai_publications": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:ai_query_results": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:ai_secrets": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:analyses": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:analysis_results": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:asset_versions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:batch_receipts": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:briefs": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:case_attention": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:case_changes": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:case_group_conflicts": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:case_memberships": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:case_revisions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:checkpoints": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:claim_dependencies": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:claim_versions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:content_blobs": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:discovery_proposals": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:discovery_trials": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:domain_audit": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:enrichment_policies": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:enrichment_policy_revisions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:entities": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:entity_aliases": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:entity_hypotheses": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:feed_cursors": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:feed_snapshots": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:indicator_versions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:intelligence_cases": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:invalidated_products": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:jobs": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:legacy_records": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:local_applicability": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:observable_sightings": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:observations": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:operator_permissions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:outbox": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:policies": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:private_exports": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:question_sources": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:questions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:retention_policies": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:retention_runs": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:retention_tombstones": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:runtime_control": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:sessions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:source_dispositions": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:source_imports": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:sources": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:telegram_accounts": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:telegram_capture_budgets": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:telegram_channel_states": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:telegram_inbox": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:telegram_inventory_candidates": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:telegram_inventory_snapshots": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:telegram_peers": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "relation:vulnerability_facts": {
+    "kind": "r",
+    "persistence": "p",
+    "row_security": false
+  },
+  "trigger:ai_configs.ai_configs_immutable": {
+    "enabled": true,
+    "definition": "CREATE TRIGGER ai_configs_immutable BEFORE DELETE OR UPDATE ON noctis_v2.ai_configs FOR EACH ROW EXECUTE FUNCTION noctis_v2.ai_immutable_revision()"
+  },
+  "trigger:ai_products.ai_products_immutable": {
+    "enabled": true,
+    "definition": "CREATE TRIGGER ai_products_immutable BEFORE DELETE OR UPDATE ON noctis_v2.ai_products FOR EACH ROW EXECUTE FUNCTION noctis_v2.ai_immutable_revision()"
+  },
+  "trigger:ai_secrets.ai_secrets_immutable": {
+    "enabled": true,
+    "definition": "CREATE TRIGGER ai_secrets_immutable BEFORE DELETE OR UPDATE ON noctis_v2.ai_secrets FOR EACH ROW EXECUTE FUNCTION noctis_v2.ai_immutable_revision()"
+  },
+  "trigger:telegram_accounts.native_budget_binding": {
+    "enabled": true,
+    "definition": "CREATE TRIGGER native_budget_binding BEFORE UPDATE ON noctis_v2.telegram_accounts FOR EACH ROW EXECUTE FUNCTION noctis_v2.native_budget_binding()"
+  },
+  "trigger:telegram_capture_budgets.native_budget_immutable": {
+    "enabled": true,
+    "definition": "CREATE TRIGGER native_budget_immutable BEFORE INSERT OR DELETE OR UPDATE ON noctis_v2.telegram_capture_budgets FOR EACH ROW EXECUTE FUNCTION noctis_v2.native_budget_immutable()"
+  }
+}
