@@ -54,7 +54,7 @@ CREATE TABLE noctis_v2.case_applicability_projection(
   generation text NOT NULL,transition bigint NOT NULL CHECK(transition>0),body jsonb NOT NULL
 );
 CREATE TABLE noctis_v2.applicability_transitions(
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,cve text NOT NULL,asset_id uuid NOT NULL,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),cve text NOT NULL,asset_id uuid NOT NULL,
   asset_revision integer NOT NULL,snapshot_id uuid NOT NULL,generation text NOT NULL,status text NOT NULL,
   reason text NOT NULL,created_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );

@@ -945,9 +945,9 @@
     "generated": ""
   },
   "column:applicability_transitions.id": {
-    "type": "bigint",
-    "default": null,
-    "identity": "a",
+    "type": "uuid",
+    "default": "gen_random_uuid()",
+    "identity": "",
     "not_null": true,
     "generated": ""
   },
