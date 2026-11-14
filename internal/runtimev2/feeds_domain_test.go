@@ -20,7 +20,6 @@ import (
 	"github.com/Zyrakk/noctis/internal/configv2"
 	"github.com/Zyrakk/noctis/internal/enrichmentv2"
 	"github.com/Zyrakk/noctis/internal/vulnv2"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -133,7 +132,7 @@ func TestStructuredFeedsPermissionQuotaTTLAndPrivateDomainAPIPostgres(t *testing
 	must(os.WriteFile(admin, []byte(`{"Username":"operator","Password":"synthetic-secret-password"}`), 0600))
 	handler, e := NewHandler(configv2.Config{DatabaseURL: dsn, AdminFile: admin, Origin: "https://fixture.invalid"})
 	must(e)
-	token, csrf := uuid.NewString(), uuid.NewString()
+	token, csrf := random(), random()
 	_, e = c.Exec(ctx, `INSERT INTO noctis_v2.sessions VALUES($1,'operator',$2,clock_timestamp()+interval '1 hour',false)`, tokenHash(token), csrf)
 	must(e)
 	get := func(path string) map[string]json.RawMessage {

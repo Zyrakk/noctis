@@ -49,6 +49,33 @@ estos contratos requieren el backend005. Worker/collector son bucles sin HTTP:
 Kubernetes supervisa el proceso y el operador comprueba progreso/cursor/backlog;
 no hay probes HTTP inventadas. Los límites son hipótesis, no sizing certificado.
 Sin destinos IA/entrega ni fuentes habilitadas no existe efecto externo implícito.
+
+Cada instancia de la API admite una ráfaga inicial de diez intentos de login y
+repone un intento cada seis segundos (diez por minuto sostenidos). Consume el
+presupuesto antes de leer el cuerpo, también para JSON inválido y credenciales
+correctas. Al agotarlo devuelve `429` y `Retry-After` en segundos, redondeado hacia
+arriba hasta la próxima reposición; los rechazos no retrasan esa recuperación.
+El cuerpo se limita a 4096 bytes y un único objeto JSON sin campos desconocidos.
+Método y Origin se comprueban antes de consumir presupuesto. Las rutas privadas
+rechazan cookies ausentes o distintas de los 64 hexadecimales minúsculos emitidos
+por el servidor sin conectar; el formato válido sigue requiriendo una sesión
+vigente y no revocada en PostgreSQL.
+
+La fase DB admite hasta 16 solicitudes simultáneas por instancia; al saturarse
+responde `503 request_capacity_exhausted` inmediatamente, sin cola. El permiso
+se conserva durante el handler completo y hasta cerrar su conexión, con un
+plazo de cierre de dos segundos independiente de la cancelación del cliente.
+Tras una cancelación, pgx puede continuar su limpieza asíncrona interna después
+de que `Close` marque la conexión cerrada; el permiso no mide sockets pendientes.
+Este límite mide solicitudes admitidas, no conexiones totales: los almacenes
+delegados de inferencia pueden abrir conexiones adicionales. No cubre sondas,
+workers ni collectors y no garantiza capacidad global de PostgreSQL. Los valores
+están definidos en `internal/runtimev2/api_admission.go`; deben ajustarse con carga
+representativa antes de producción. El presupuesto se reinicia con el proceso y
+se multiplica con réplicas. Un atacante sostenido puede impedir nuevos logins
+consumiendo el presupuesto global; cookies falsas con formato válido compiten por
+la capacidad DB. No se usan cabeceras de IP ni bloqueos permanentes de cuenta.
+
 Para entrega, autorizar un único worker sender y añadir su endpoint privado;
 mantener collector único y demostrar cierre de dueño anterior antes de takeover.
 

@@ -132,7 +132,7 @@ func TestAcceptanceStoriesABCSyntheticPostgresAndPrivateAPI(t *testing.T) {
 	must(os.WriteFile(admin, []byte(`{"Username":"operator","Password":"synthetic-administrator"}`), 0600))
 	handler, e := NewHandler(configv2.Config{DatabaseURL: dsn, AdminFile: admin, Origin: "https://fixture.invalid"})
 	must(e)
-	token, csrf := uuid.NewString(), uuid.NewString()
+	token, csrf := random(), random()
 	_, e = c.Exec(ctx, `INSERT INTO noctis_v2.sessions VALUES($1,'operator',$2,clock_timestamp()+interval '1 hour',false)`, tokenHash(token), csrf)
 	must(e)
 	request := func(method, path string, input any) string {
