@@ -7,7 +7,7 @@ async function api(page,path,body){const session=await (await page.request.get(`
 test('core005 PIR actualizado activa su revisión vigente y revoke pausa la fuente creada',async({page})=>{
  const title=`PIR core005 ${crypto.randomUUID()}`
  await page.getByRole('link',{name:'Sources',exact:true}).click()
- await page.getByLabel('PIR question',{exact:true}).fill(title)
+ await page.getByLabel('Priority intelligence requirement',{exact:true}).fill(title)
  await page.getByLabel('Monitoring term',{exact:true}).fill('OLD_CORE005')
  await page.getByRole('button',{name:'Create question and policy',exact:true}).click()
  const questionRow=page.getByRole('listitem').filter({hasText:title}).filter({has:page.getByRole('button',{name:'Update question with the form title and term'})})

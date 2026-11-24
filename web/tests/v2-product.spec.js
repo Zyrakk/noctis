@@ -77,6 +77,17 @@ test('carga permanece explícita y cita con offset inválido falla sin inventar 
   await page.goto(`/v2/cases/9007199254740995?evidence=${encodeURIComponent(JSON.stringify(invalid))}`)
   await expect(page.locator('.v2-evidence [role=alert]')).toBeVisible();await expect(page.locator('mark')).toHaveCount(0)
 })
+test('error de carga permite reintentar sin cambiar de ruta',async({page})=>{
+  const requests=await fixture(page,{failed:true});await page.goto('/v2/cases')
+  const alert=page.getByRole('alert').filter({hasText:'Unable to load data'})
+  await expect(alert).toContainText('Base de datos no disponible')
+  const count=()=>requests.filter(r=>r.url.pathname==='/api/v2/cases').length
+  const before=count()
+  await page.getByRole('button',{name:'Try again'}).click()
+  await expect.poll(count).toBeGreaterThan(before)
+  await expect(page).toHaveURL(/\/v2\/cases$/)
+  await expect(alert).toBeVisible()
+})
 test('referencias URL malformadas no solicitan evidencia',async({page})=>{
   const requests=await fixture(page)
   for(const reference of [true,{},null,{...ref,observation_id:42},{...ref,revision:null},{...ref,hash:{}},{...ref,representation:''},{...ref,start:Number.MAX_SAFE_INTEGER+1},{...ref,start:-1},{...ref,end:0}]) {
