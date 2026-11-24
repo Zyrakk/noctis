@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react'
+import {Timestamp} from './Timestamp.jsx'
 import {useAuth} from './Auth.jsx'
 import {submitAIJob,executeQuery} from './ai.js'
 import {useAIJob,JobPresentation,jobTerminal,jobHistoryURL} from './AIJobs.jsx'
@@ -11,7 +12,7 @@ export function AIAction({functionID,input,label,select=()=>{},onPlan}){
  const monitor=useAIJob(submitted?.id,submitted),terminal=jobTerminal(monitor.job)
  useEffect(()=>{setSubmitted(null);setError('');setBusy(false);requestID.current=null;return()=>controller.current?.abort()},[session.csrf])
  async function submit(){setBusy(true);setError('');controller.current?.abort();const abort=new AbortController();controller.current=abort;if(!requestID.current||terminal)requestID.current=crypto.randomUUID();try{const r=await submitAIJob({function_id:functionID,input,request_id:requestID.current},session.csrf,{signal:abort.signal});if(!abort.signal.aborted)setSubmitted(r.data)}catch(e){if(!abort.signal.aborted)setError(e.message)}finally{if(!abort.signal.aborted)setBusy(false)}}
- return <section className="v2-job"><div className="v2-job-command"><button disabled={busy||Boolean(submitted&&!terminal)} onClick={submit}>{label}</button><small>Optional inference, subject to configuration and budget</small></div><a href={jobHistoryURL(submitted?.id)}>Open AI jobs history</a>{busy&&<p role="status">Submitting request…</p>}{error&&<><p role="alert">{error}</p><p>The response may have been lost after saving the job. Check AI jobs history before submitting again.</p></>}<JobPresentation monitor={monitor} select={select} onPlan={onPlan}/></section>
+ return <section className="v2-job"><div className="v2-job-command"><button disabled={busy||Boolean(submitted&&!terminal)} onClick={submit}>{label}</button><small>Optional · needs AI setup and budget</small></div><a href={jobHistoryURL(submitted?.id)}>Open AI jobs history</a>{busy&&<p role="status">Submitting request…</p>}{error&&<><p role="alert">{error}</p><p>The response may have been lost after saving the job. Check AI jobs history before submitting again.</p></>}<JobPresentation monitor={monitor} select={select} onPlan={onPlan}/></section>
 }
 
 export function TypedQuery({url,navigate,select}){
@@ -33,7 +34,7 @@ export function TypedQuery({url,navigate,select}){
   {reviewError?.key===planKey&&<p role="alert">Could not run proposed plan: {reviewError.message}</p>}
   {error?<p role="alert">Could not run query: {error}</p>:!started?<p>Enter criteria or run an empty query to search the authorized archive.</p>:<>
    {current.loading?<p role="status">Running query…</p>:current.error?<p role="alert">Could not run query: {current.error.message}</p>:current.result&&<>
-    <aside className="v2-coverage">Coverage: {current.result.meta?.coverage||'unknown'} · Updated {current.result.meta?.generated_at||'unknown'}{current.result.meta?.degraded&&<strong>Query degraded; results may be incomplete.</strong>}</aside>
+    <aside className="v2-coverage">Coverage: {current.result.meta?.coverage||'unknown'} · Updated <Timestamp value={current.result.meta?.generated_at}/>{current.result.meta?.degraded&&<strong>Query degraded; results may be incomplete.</strong>}</aside>
     {!current.result.data.rows?.length?<p>No results for this query.</p>:<ul className="v2-rows">{current.result.data.rows.map((row,i)=><li key={row.id||i}><strong>{row.title||row.alias||row.value||row.id}</strong><p>{row.summary||row.text||row.kind}</p>{row.case_id&&<a href={`/v2/cases/${encodeURIComponent(row.case_id)}`} onClick={e=>{e.preventDefault();navigate(`/v2/cases/${encodeURIComponent(row.case_id)}`)}}>Open case</a>}{entity==='cases'&&<a href={`/v2/cases/${encodeURIComponent(row.id)}`} onClick={e=>{e.preventDefault();navigate(`/v2/cases/${encodeURIComponent(row.id)}`)}}>Open case</a>}{entity==='entities'&&<button onClick={()=>openDossier(row.id)}>Open dossier</button>}<Refs items={row.citations||row.refs||(validEvidenceRef(row.ref)?[row.ref]:[])} select={select}/></li>)}</ul>}
     <PageLink url={url} navigate={navigate} cursor={current.result.data.next_cursor}/><AIAction key={`explain-${current.result.data.id}`} functionID="query.explain" input={{kind:'query_result',id:current.result.data.id}} label="Explain results with AI" select={select}/>
    </>}

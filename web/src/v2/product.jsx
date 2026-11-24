@@ -4,6 +4,7 @@ import { useAuth } from './Auth.jsx'
 import {Discovery,Paged} from './Operations.jsx'
 import EntityDossier from './EntityDossier.jsx'
 import {AIAction} from './Consumers.jsx'
+import {Timestamp} from './Timestamp.jsx'
 
 export function Resource({path, children}) {
   const [state,setState]=useState({path,loading:true})
@@ -11,7 +12,7 @@ export function Resource({path, children}) {
   if(state.path!==path||state.loading)return <p role="status">Loading data…</p>
   if(state.error)return <p role="alert">Could not load data: {state.error.message}</p>
   const {data,meta={}}=state.result
-  return <><aside className="v2-coverage">Coverage: {meta.coverage||'unknown'} · Updated: {meta.generated_at||'unknown'}{meta.degraded&&<strong>Service degraded · data may be incomplete or stale</strong>}</aside>{children(data,meta)}</>
+  return <><aside className="v2-coverage">Coverage: {meta.coverage||'unknown'} · Updated: <Timestamp value={meta.generated_at}/>{meta.degraded&&<strong>Service degraded · data may be incomplete or stale</strong>}</aside>{children(data,meta)}</>
 }
 export function Refs({items,select}) {return (Array.isArray(items)?items:[]).map((ref,i)=><button key={i} className="v2-citation" onClick={()=>select(ref)} aria-label={`Open evidence ${i+1}`}>[{i+1}]</button>)}
 export function Field({label,value}) {return <><dt>{label}</dt><dd>{value===null||value===undefined||value===''?'Unknown':String(value)}</dd></>}
