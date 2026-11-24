@@ -193,6 +193,12 @@ func (s Store) wire(ctx context.Context, b Binding, c Connection, key, attempt s
 	if len(raw) > 2<<20 {
 		return out, &GatewayError{"response_limit", true, true, 0}
 	}
+	// Only 200 carries a supported synchronous response. Other successful
+	// statuses may already have executed the request, so never retry or release
+	// its exposure based on their body, Location or Retry-After headers.
+	if res.StatusCode > http.StatusOK && res.StatusCode < http.StatusMultipleChoices {
+		return out, &GatewayError{"response_status_invalid", true, true, 0}
+	}
 	if res.StatusCode != 200 {
 		g := &GatewayError{Code: "upstream_error", Permanent: res.StatusCode >= 400 && res.StatusCode < 500, Uncertain: res.StatusCode >= 500}
 		switch res.StatusCode {

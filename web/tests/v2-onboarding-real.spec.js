@@ -17,7 +17,7 @@ test('proyecto vacío → inventario actual → importar en pausa → política 
  await page.reload()
  const sourceRow=page.getByRole('listitem').filter({has:page.locator('strong').filter({hasText:'Canal privado sintético'})}).first()
  await expect(sourceRow).toContainText('Status: paused')
- await page.getByLabel('PIR question',{exact:true}).fill('PIR sintético explícito')
+ await page.getByLabel('Priority intelligence requirement',{exact:true}).fill('PIR sintético explícito')
  await page.getByLabel('Monitoring term',{exact:true}).fill('synthetic')
  await page.getByRole('button',{name:'Create question and policy',exact:true}).click()
  await expect(page.getByRole('listitem').filter({hasText:'PIR sintético explícito'}).filter({has:page.getByRole('button',{name:'Pause question',exact:true})})).toBeVisible()

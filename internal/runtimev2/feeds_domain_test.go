@@ -20,7 +20,6 @@ import (
 	"github.com/Zyrakk/noctis/internal/configv2"
 	"github.com/Zyrakk/noctis/internal/enrichmentv2"
 	"github.com/Zyrakk/noctis/internal/vulnv2"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -71,6 +70,9 @@ func TestStructuredFeedsPermissionQuotaTTLAndPrivateDomainAPIPostgres(t *testing
 	if p1.Complete || p1.Cursor.Offset != 1 {
 		t.Fatal("NVD pagination", p1)
 	}
+	if p1.CalculationState != "pending" {
+		t.Fatal("NVD receipt did not expose asynchronous applicability", p1)
+	}
 	p2, e := feed.PollPage(ctx, "nvd", server.URL+"/nvd", 24*time.Hour)
 	must(e)
 	if !p2.Complete || p2.Cursor.Offset != 0 {
@@ -84,6 +86,16 @@ func TestStructuredFeedsPermissionQuotaTTLAndPrivateDomainAPIPostgres(t *testing
 	must(c.QueryRow(ctx, `SELECT count(*) FROM noctis_v2.vulnerability_facts WHERE applicability='unknown'`).Scan(&n))
 	if n != 4 {
 		t.Fatal("facts lost", n)
+	}
+	must(c.QueryRow(ctx, `SELECT count(*) FROM noctis_v2.local_applicability`).Scan(&n))
+	if n != 0 {
+		t.Fatal("feed capture performed synchronous applicability")
+	}
+	drainApplicability(t, dsn)
+	replayed, err := feed.PollPage(ctx, "nvd", server.URL+"/nvd", 24*time.Hour)
+	must(err)
+	if replayed.CalculationState != "complete" {
+		t.Fatal("idempotent snapshot replay lost completed calculation state", replayed)
 	}
 	_, e = c.Exec(ctx, `INSERT INTO noctis_v2.enrichment_policies VALUES('virustotal','p1',true,'["public"]',2,60)`)
 	must(e)
@@ -133,7 +145,7 @@ func TestStructuredFeedsPermissionQuotaTTLAndPrivateDomainAPIPostgres(t *testing
 	must(os.WriteFile(admin, []byte(`{"Username":"operator","Password":"synthetic-secret-password"}`), 0600))
 	handler, e := NewHandler(configv2.Config{DatabaseURL: dsn, AdminFile: admin, Origin: "https://fixture.invalid"})
 	must(e)
-	token, csrf := uuid.NewString(), uuid.NewString()
+	token, csrf := random(), random()
 	_, e = c.Exec(ctx, `INSERT INTO noctis_v2.sessions VALUES($1,'operator',$2,clock_timestamp()+interval '1 hour',false)`, tokenHash(token), csrf)
 	must(e)
 	get := func(path string) map[string]json.RawMessage {
@@ -183,7 +195,7 @@ func TestStructuredFeedsPermissionQuotaTTLAndPrivateDomainAPIPostgres(t *testing
 	if !strings.Contains(string(body["data"]), `"local_exposure":"unknown"`) {
 		t.Fatal("exposure inferred", string(body["data"]))
 	}
-	for _, path := range []string{"claims", "entities", "indicators", "source-imports", "source-dispositions", "history", "changes"} {
+	for _, path := range []string{"claims", "entities", "indicators", "source-imports", "source-dispositions", "history", "changes", "applicability-work"} {
 		get(path)
 	}
 	req := httptest.NewRequest("POST", "https://fixture.invalid/api/v2/indicators", strings.NewReader(`{}`))

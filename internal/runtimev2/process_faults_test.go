@@ -183,6 +183,12 @@ func TestWorkerSIGKILLDerivedTransactionRollsBackAndReclaimsPostgres(t *testing.
 	if e != nil {
 		t.Fatal(e)
 	}
+	var jobID string
+	if e = c.QueryRow(ctx, `SELECT j.id::text FROM noctis_v2.jobs j
+ JOIN noctis_v2.observations o ON o.id=j.input_id
+ WHERE j.stage='parse' AND o.source_id=$1`, source).Scan(&jobID); e != nil {
+		t.Fatal(e)
+	}
 	_, e = c.Exec(ctx, `CREATE FUNCTION noctis_v2.worker_barrier() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN PERFORM pg_sleep(2);RETURN NEW;END$$;CREATE TRIGGER worker_barrier BEFORE INSERT ON noctis_v2.analyses FOR EACH ROW EXECUTE FUNCTION noctis_v2.worker_barrier()`)
 	if e != nil {
 		t.Fatal(e)
@@ -225,16 +231,19 @@ func TestWorkerSIGKILLDerivedTransactionRollsBackAndReclaimsPostgres(t *testing.
 			t.Fatal("partial derived write", table, n, e)
 		}
 	}
-	_, e = c.Exec(ctx, `UPDATE noctis_v2.jobs SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE state='leased'`)
-	if e != nil {
-		t.Fatal(e)
+	tag, e := c.Exec(ctx, `UPDATE noctis_v2.jobs
+ SET lease_expires_at=clock_timestamp()-interval '1 second'
+ WHERE id=$1 AND stage='parse' AND state='leased'
+ AND lease_owner='crash-fixture' AND fence=1 AND attempts=1`, jobID)
+	if e != nil || tag.RowsAffected() != 1 {
+		t.Fatal("original worker lease missing after rollback", tag.RowsAffected(), e)
 	}
 	if e = (intelligence.Worker{DSN: dsn, Owner: "replacement"}).Once(ctx); e != nil {
 		t.Fatal(e)
 	}
 	var state string
 	var fence int
-	if e = c.QueryRow(ctx, `SELECT state,fence FROM noctis_v2.jobs`).Scan(&state, &fence); e != nil || state != "succeeded" || fence != 2 {
+	if e = c.QueryRow(ctx, `SELECT state,fence FROM noctis_v2.jobs WHERE id=$1`, jobID).Scan(&state, &fence); e != nil || state != "succeeded" || fence != 2 {
 		t.Fatal("lease recovery failed", state, fence, e)
 	}
 }

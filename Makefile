@@ -5,8 +5,10 @@ LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
 IMAGE ?= ghcr.io/zyrakk/noctis
 TAG ?= dev
+IMAGE_CHECK_OUTPUT ?= /tmp/noctis-image-check
+COMMIT ?= $(shell git rev-parse HEAD)
 
-.PHONY: build test lint clean docker-build frontend-build frontend-test ci v2-check v2-e2e
+.PHONY: build test lint clean docker-build frontend-build frontend-test ci ci-check v2-check v2-e2e image-check image-verify
 
 build: frontend-build
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/noctis
@@ -17,9 +19,18 @@ frontend-build:
 frontend-test: frontend-build
 	cd web && npm run test:build
 
-ci: v2-check frontend-test
+ci: ci-check
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/noctis
 	$(MAKE) v2-e2e
+
+ci-check: v2-check frontend-test
+
+# Uses an unused output directory; the E2E executes /noctis from the AMD64 image.
+image-check:
+	python3 ops/rebuild/operations/image_checks.py --output "$(IMAGE_CHECK_OUTPUT)" --version "$(VERSION)" --commit "$(COMMIT)"
+
+image-verify:
+	python3 ops/rebuild/operations/image_checks.py --output "$(IMAGE_CHECK_OUTPUT)" --version "$(VERSION)" --commit "$(COMMIT)" --verify
 
 v2-check:
 	python3 tools/check_v2_migrations.py

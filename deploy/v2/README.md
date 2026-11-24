@@ -49,8 +49,112 @@ estos contratos requieren el backend005. Worker/collector son bucles sin HTTP:
 Kubernetes supervisa el proceso y el operador comprueba progreso/cursor/backlog;
 no hay probes HTTP inventadas. Los límites son hipótesis, no sizing certificado.
 Sin destinos IA/entrega ni fuentes habilitadas no existe efecto externo implícito.
+
+La ejecución IA requiere opt-in por worker, además de la configuración por función:
+
+| `--automatic-inference` | `--manual-inference` | Comportamiento del worker |
+| --- | --- | --- |
+| `false` (predeterminado) | `false` (predeterminado) | Solo trabajo mecánico; no ejecuta ni planifica IA. |
+| `false` | `true` | Ejecuta solicitudes manuales elegibles; no ejecuta ni planifica trabajos automáticos. |
+| `true` | `false` | Conserva ejecución de ambas procedencias y planificación automática. |
+| `true` | `true` | Igual que automático solo. |
+
+`--manual-inference` permite gasto, incluidas solicitudes manuales antiguas aún
+elegibles. Revisar la cola y presupuestos antes de habilitarlo; no borrar ni reenviar
+trabajos para vaciarla. Conserva límites, pausa general, cancelación, reservas y
+fences. Los intentos abandonados de cualquier procedencia se reconcilian como
+inciertos, retienen exposición y no se reenvían. Cada flag afecta solo al worker
+que lo recibe: desactivarlo no cancela peticiones ya enviadas ni otros procesos.
+La API continúa admitiendo solicitudes aunque ambos flags estén desactivados.
+
+La identidad `system:semantic-planner` está reservada al planificador automático;
+no usarla como username administrativo. La API rechaza esa configuración y las
+sesiones antiguas que colisionen con ella con un diagnóstico explícito. La
+procedencia deriva del actor autenticado; `request_id` no la decide y el POST no
+acepta campos de actor/procedencia. No se reclasifican trabajos históricos ante
+una colisión: revisar su origen antes de cualquier habilitación automática.
+
+Cada instancia de la API admite una ráfaga inicial de diez intentos de login y
+repone un intento cada seis segundos (diez por minuto sostenidos). Consume el
+presupuesto antes de leer el cuerpo, también para JSON inválido y credenciales
+correctas. Al agotarlo devuelve `429` y `Retry-After` en segundos, redondeado hacia
+arriba hasta la próxima reposición; los rechazos no retrasan esa recuperación.
+El cuerpo se limita a 4096 bytes y un único objeto JSON sin campos desconocidos.
+Método y Origin se comprueban antes de consumir presupuesto. Las rutas privadas
+rechazan cookies ausentes o distintas de los 64 hexadecimales minúsculos emitidos
+por el servidor sin conectar; el formato válido sigue requiriendo una sesión
+vigente y no revocada en PostgreSQL.
+
+La fase DB admite hasta 16 solicitudes simultáneas por instancia; al saturarse
+responde `503 request_capacity_exhausted` inmediatamente, sin cola. El permiso
+se conserva durante el handler completo y hasta cerrar su conexión, con un
+plazo de cierre de dos segundos independiente de la cancelación del cliente.
+Tras una cancelación, pgx puede continuar su limpieza asíncrona interna después
+de que `Close` marque la conexión cerrada; el permiso no mide sockets pendientes.
+Este límite mide solicitudes admitidas, no conexiones totales: los almacenes
+delegados de inferencia pueden abrir conexiones adicionales. No cubre sondas,
+workers ni collectors y no garantiza capacidad global de PostgreSQL. Los valores
+están definidos en `internal/runtimev2/api_admission.go`; deben ajustarse con carga
+representativa antes de producción. El presupuesto se reinicia con el proceso y
+se multiplica con réplicas. Un atacante sostenido puede impedir nuevos logins
+consumiendo el presupuesto global; cookies falsas con formato válido compiten por
+la capacidad DB. No se usan cabeceras de IP ni bloqueos permanentes de cuenta.
+
 Para entrega, autorizar un único worker sender y añadir su endpoint privado;
 mantener collector único y demostrar cierre de dueño anterior antes de takeover.
+
+Antes de habilitar inferencia, cada binding debe declarar una `price.version`
+explícita: se rechazan versiones vacías, de solo espacios o equivalentes a
+`unconfigured` sin distinguir mayúsculas ni espacios exteriores. La comparación
+no modifica la versión guardada. Una tarifa cero con versión explícita permite
+una ruta deliberadamente gratuita; no verifica el precio del proveedor. Las
+configuraciones heredadas ya habilitadas no se neutralizan automáticamente:
+revisar su tarifa vigente antes de activar inferencia. Pueden leerse y guardarse
+con el marcador tras deshabilitar los bindings afectados, y habilitarse después
+de declarar una tarifa explícita. Se conservan los límites de precios y presupuestos.
+
+`/readyz` y `/healthz` conservan los campos JSON de salud. La comprobación tiene
+un plazo total de tres segundos: conexión y aislamiento de DB, ledger exacto de
+nombres/checksums, contrato estructural y permisos efectivos del modo. `schema`
+solo es verdadero después de validar ledger y estructura; `functional`,
+`ai_enabled` y las capacidades operativas se publican al terminar todas las
+fases, incluida la lectura de `ai_configs`. Las capacidades corresponden al modo:
+collector anuncia captura; worker, procesamiento; la API conserva sus capacidades
+de acceso y operación. Una base recién migrada queda lista
+sin fuentes, sesiones ni configuración IA. La sonda usa una transacción de solo
+lectura y consultas agrupadas de catálogos; no ejecuta DDL, grants ni escrituras
+de prueba. `/livez` continúa disponible aunque PostgreSQL falle.
+
+Diagnóstico: `database=true, schema=false` exige comprobar las migraciones y los
+objetos requeridos; `schema=true, functional=false` puede señalar permisos del
+runtime o una configuración IA ilegible. Inspeccionar con la conexión del modo
+afectado y revisar los grants posteriores a migración. Por ejemplo, la API
+necesita `INSERT` en `sessions` y `UPDATE/DELETE` en `question_sources`; worker y
+collector no necesitan esos permisos. La cola de aplicabilidad requiere inserción
+de solicitudes en los tres modos y actualización solo en worker. Se consideran
+los privilegios heredados, `USAGE` en los esquemas, lectura del ledger y `EXECUTE`
+de las funciones SQL operativas de cada modo. La
+respuesta pública no incluye errores SQL ni credenciales. Las plantillas de
+grants siguen siendo responsabilidad del operador; readiness no certifica
+mínimo privilegio ni disponibilidad futura.
+
+El contrato está en `internal/runtimev2/readiness_contract.go` y su manifiesto
+`schema_contract.json`: relaciones operativas, columnas/tipos/defaults,
+claves y restricciones con su estado, definiciones de vistas, triggers críticos
+y funciones SQL operativas (incluido el selector NVD acotado por CVE). Excluye
+índices meramente de rendimiento y tolera objetos adicionales ajenos al contrato.
+Al añadir una operación o migración, revisar los permisos por modo y regenerar
+desde **todas** las migraciones embebidas en una DB sintética aislada:
+
+```sh
+NOCTIS_V2_UPDATE_READINESS_CONTRACT=1 go test ./internal/runtimev2 -run '^TestReadinessContractPostgres$' -count=1
+go test ./internal/runtimev2 -run '^TestReadiness.*Postgres$' -count=1
+```
+
+Ambos comandos requieren `NOCTIS_V2_TEST_DATABASE_URL` local. La prueba crea una
+base nueva, no copia el esquema de producción y comprueba el manifiesto exacto
+sin la variable de regeneración. Revisar su diff; no regenerarlo para ocultar
+deriva de una base existente ni modificar migraciones ya publicadas.
 
 Antes de cualquier cambio externo: comprobar cuenta/contexto/host, namespace,
 UID y propietarios de DB/PVC, rollback exacto y backup/restore; preparar revisión

@@ -80,7 +80,7 @@
 .pres-metric-card { padding: 17px 18px; min-height: 112px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(18,18,26,.65); }
 .pres-metric-value { font-family: 'Fira Code', monospace; color: #f8fafc; font-size: 27px; letter-spacing: -.04em; }
 .pres-metric-label { color: #cbd5e1; font-size: 12px; margin-top: 4px; }
-.pres-metric-detail { color: #64748b; font-family: 'Fira Code', monospace; font-size: 9px; margin-top: 12px; }
+.pres-metric-detail { color: #94a3b8; font-family: 'Fira Code', monospace; font-size: 12px; margin-top: 12px; }
 .pres-overview-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(330px, .75fr); gap: 14px; }
 .pres-signal-panel, .pres-funnel-panel { padding: 23px; }
 .pres-signal-table { margin-top: 20px; border-top: 1px solid rgba(255,255,255,.07); }
@@ -213,3 +213,6 @@
 @media (max-width: 520px) {
   .pres-header { padding-left: 15px; padding-right: 15px; }.pres-demo-badge { font-size: 8px; padding: 6px 8px; }.pres-main { padding: 38px 15px 24px; }.pres-footer-nav { padding-left: 15px; padding-right: 15px; }.pres-metric-grid { gap: 7px; }.pres-metric-card { padding: 13px; min-height: 98px; }.pres-metric-value { font-size: 23px; }.pres-signal-panel, .pres-funnel-panel, .pres-brief-main, .pres-brief-side, .pres-path-panel, .pres-decision-panel, .pres-lesson-main, .pres-pause-panel { padding: 17px; }.pres-brief-title-row { flex-direction: column; }.pres-evidence-grid { grid-template-columns: 1fr; }.pres-rule-item { grid-template-columns: 8px 1fr; }.pres-rule-text { grid-column: 2; }.pres-path-canvas { min-height: 290px; }.node-0 { left: 3%; }.node-1 { left: 34%; }.node-2 { right: 3%; }.node-3 { left: 3%; bottom: 9%; }.pres-layer-stack { margin-left: -4px; margin-right: -4px; }.pres-loop-node { font-size: 9px; }
 }
+.pres-metric-card:last-child{border-color:rgba(167,139,250,.45);background:rgba(167,139,250,.08)}
+.pres-metric-card:last-child .pres-metric-value{color:#c4b5fd}
+.pres-metric-note{margin:-4px 0 14px;color:#94a3b8;font-size:12px}

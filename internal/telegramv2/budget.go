@@ -56,6 +56,7 @@ type CapturePolicy struct {
 	Revision       int64                    `json:"revision,omitempty"`
 	Actor          string                   `json:"actor,omitempty"`
 	Reason         string                   `json:"reason,omitempty"`
+	TransitionID   string                   `json:"generation_transition,omitempty"`
 }
 
 // Keep the v1 canonical bytes stable: its existing protected files and stored
@@ -79,7 +80,7 @@ func (p CapturePolicy) MarshalJSON() ([]byte, error) {
 }
 
 func (p CapturePolicy) validate() error {
-	if p.Version == 1 && (!p.PeriodAnchor.IsZero() || !p.ExpiresAt.IsZero() || p.Predecessor != "" || p.Revision != 0 || p.Actor != "" || p.Reason != "") {
+	if p.Version == 1 && (!p.PeriodAnchor.IsZero() || !p.ExpiresAt.IsZero() || p.Predecessor != "" || p.Revision != 0 || p.Actor != "" || p.Reason != "" || p.TransitionID != "") {
 		return ErrBudget
 	}
 	maxWindow := 600
@@ -90,6 +91,11 @@ func (p CapturePolicy) validate() error {
 		}
 		if p.Predecessor != "" {
 			if _, e := uuid.Parse(p.Predecessor); e != nil {
+				return ErrBudget
+			}
+		}
+		if p.TransitionID != "" {
+			if _, e := uuid.Parse(p.TransitionID); e != nil || p.Predecessor == "" {
 				return ErrBudget
 			}
 		}
@@ -192,9 +198,12 @@ type captureBudget struct {
 }
 
 func budgetTx(ctx context.Context, tx pgx.Tx, o Owner) (captureBudget, error) {
-	var production bool
-	if e := tx.QueryRow(ctx, `SELECT active_capture_consent IS NOT NULL FROM noctis_v2.telegram_accounts WHERE id=$1`, o.Account).Scan(&production); e != nil {
+	var production, blocked bool
+	if e := tx.QueryRow(ctx, `SELECT active_capture_consent IS NOT NULL,authentication_in_progress OR prepared_auth_generation IS NOT NULL OR pending_generation_transition IS NOT NULL OR capture_failure_revision<>capture_resume_revision FROM noctis_v2.telegram_accounts WHERE id=$1`, o.Account).Scan(&production, &blocked); e != nil {
 		return captureBudget{}, e
+	}
+	if blocked {
+		return captureBudget{}, ErrBudget
 	}
 	if production {
 		return productionBudgetTx(ctx, tx, o)
@@ -373,7 +382,7 @@ func (s Store) BindCapturePolicy(ctx context.Context, p CapturePolicy) (time.Tim
 	var gen string
 	var bound *string
 	var production bool
-	if e = tx.QueryRow(ctx, `SELECT auth_generation::text,active_capture_budget::text,active_capture_consent IS NOT NULL FROM noctis_v2.telegram_accounts WHERE id=$1 FOR UPDATE`, p.Account).Scan(&gen, &bound, &production); e != nil {
+	if e = tx.QueryRow(ctx, `SELECT auth_generation::text,active_capture_budget::text,consent_revision>0 OR authentication_in_progress OR prepared_auth_generation IS NOT NULL OR pending_generation_transition IS NOT NULL FROM noctis_v2.telegram_accounts WHERE id=$1 FOR UPDATE`, p.Account).Scan(&gen, &bound, &production); e != nil {
 		return time.Time{}, e
 	}
 	if gen != p.Generation || production {

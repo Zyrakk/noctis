@@ -44,9 +44,13 @@ bin/noctis v2 --database-secret-file /ruta/privada/database migrate
 
 La migración es explícita y usa credenciales separadas del runtime. Un proceso
 v2 existente valida versión y checksum exactos; no migra al iniciar. API,
-worker y collector son modos separados de `v2 serve`. La API necesita archivos
-admin/TLS y un Origin canónico; el master key IA queda fuera de PostgreSQL y debe
-respaldarse por separado. No pasar DSN, claves ni contraseñas en argumentos.
+worker y collector son modos separados de `v2 serve`. La API necesita un archivo
+admin y un Origin HTTP(S) canónico, sin ruta ni puerto predeterminado. Configurar
+ambos archivos TLS para HTTPS directo; omitir ambos sirve HTTP interno y exige
+terminación HTTPS en un proxy para el acceso autenticado del navegador. Un solo
+archivo TLS o un par inválido impiden arrancar antes de consultar PostgreSQL o
+abrir puertos. El master key IA queda fuera de PostgreSQL y debe respaldarse por
+separado. No pasar DSN, claves ni contraseñas en argumentos.
 
 ## Imagen y despliegue
 

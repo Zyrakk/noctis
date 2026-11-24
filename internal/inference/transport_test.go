@@ -2,15 +2,97 @@ package inference
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestTransportHTTPStatusClassification(t *testing.T) {
+	result := Result{SchemaVersion: "1", Kind: "query.plan", Text: "synthetic", Labels: []string{}, Intent: "unknown", Claims: []Claim{}, Entities: []Entity{}, Roles: []Role{}, Limitations: []string{}, Plan: &QueryPlan{Version: "1", Entity: "observations", Operation: "search", Mode: "exact", Limit: 1}}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type statusCase struct {
+		name       string
+		status     int
+		invalid    bool
+		code       string
+		permanent  bool
+		uncertain  bool
+		retryAfter time.Duration
+	}
+	cases := []statusCase{
+		{"200_valid", 200, false, "", false, false, 0},
+		{"200_invalid", 200, true, "response_invalid", true, true, 0},
+		{"400", 400, false, "invalid_request", true, false, 0},
+		{"401", 401, false, "authentication_denied", true, false, 0},
+		{"403", 403, false, "authentication_denied", true, false, 0},
+		{"429", 429, false, "rate_limited", false, false, 3 * time.Second},
+		{"302", 302, false, "redirect_denied", true, false, 0},
+		{"307", 307, false, "redirect_denied", true, false, 0},
+		{"500", 500, false, "upstream_error", false, true, 0},
+	}
+	for _, status := range []int{201, 202, 203, 204, 205, 206, 207, 226, 250, 299} {
+		cases = append(cases, statusCase{fmt.Sprint(status), status, false, "response_status_invalid", true, true, 0})
+	}
+	for _, adapter := range []string{"openai-chat", "openai-responses"} {
+		t.Run(adapter, func(t *testing.T) {
+			envelope := map[string]any{"model": "synthetic", "choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]any{"content": string(raw)}}}, "usage": map[string]int{"prompt_tokens": 12, "completion_tokens": 30}}
+			if adapter == "openai-responses" {
+				envelope = map[string]any{"status": "completed", "model": "synthetic", "usage": map[string]int{"input_tokens": 12, "output_tokens": 30}, "output": []any{map[string]any{"type": "message", "status": "completed", "role": "assistant", "content": []any{map[string]any{"type": "output_text", "text": string(raw)}}}}}
+			}
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					var calls atomic.Int32
+					srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						calls.Add(1)
+						w.Header().Set("Location", "/poll")
+						w.Header().Set("Retry-After", "3")
+						w.WriteHeader(tc.status)
+						if tc.status == http.StatusNoContent {
+							return
+						}
+						if tc.invalid {
+							fmt.Fprint(w, `{`)
+							return
+						}
+						json.NewEncoder(w).Encode(envelope)
+					}))
+					defer srv.Close()
+					u, _ := url.Parse(srv.URL)
+					s := Store{AllowLocal: map[string]bool{u.Host: true}}
+					b := Binding{Model: "synthetic", PromptVersion: "1", Limits: Limits{MaxInputTokens: 65536, MaxOutputTokens: 100, DeadlineMS: 2000}}
+					out, err := s.wire(context.Background(), b, Connection{URL: srv.URL, Adapter: adapter}, "synthetic", "status-test", Snapshot{}, []Function{"query.plan"}, func(context.Context) error { return nil })
+					if calls.Load() != 1 {
+						t.Fatalf("physical calls=%d", calls.Load())
+					}
+					if tc.code == "" {
+						if err != nil || out.Model != "synthetic" || !reflect.DeepEqual(out.Result, result) || out.Usage == nil || *out.Usage != (Usage{12, 30}) {
+							t.Fatalf("valid result/usage lost: %+v, %v", out, err)
+						}
+						return
+					}
+					var ge *GatewayError
+					if !errors.As(err, &ge) || ge.Code != tc.code || ge.Permanent != tc.permanent || ge.Uncertain != tc.uncertain || ge.RetryAfter != tc.retryAfter {
+						t.Fatalf("classification=%+v, error=%v", ge, err)
+					}
+					if !reflect.DeepEqual(out, GatewayResult{}) {
+						t.Fatalf("unsupported response accepted result or usage: %+v", out)
+					}
+				})
+			}
+		})
+	}
+}
 
 func TestTransportSSRFLocalAuthorityAndRedirect(t *testing.T) {
 	ctx := context.Background()

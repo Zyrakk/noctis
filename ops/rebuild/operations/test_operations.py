@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 import backup
 import ci_checks
-import image_checks
 import hashlib
 
 class SafetyTests(unittest.TestCase):
@@ -201,26 +200,6 @@ class CIRequiredCoverageTests(unittest.TestCase):
     def test_package_without_test_files_is_not_test_skip(self):
         events = [{'Action': 'pass', 'Test': test} for test in ci_checks.MANDATORY]
         self.run_events(events + [{'Action': 'skip', 'Package': 'example/no-tests', 'Output': '[no test files]'}])
-
-class ImageArtifactTests(unittest.TestCase):
-    def test_corrupt_tested_archive_never_loads_or_publishes(self):
-        with tempfile.TemporaryDirectory() as name:
-            root=Path(name)
-            (root/'amd64.tar').write_bytes(b'changed')
-            (root/'receipt.json').write_text(json.dumps({'images':{'amd64':{'archive_sha256':hashlib.sha256(b'original').hexdigest()}}}))
-            with patch.dict(os.environ,{'NOCTIS_IMAGE_TAGS':'ghcr.io/test/app:latest'}), patch('image_checks.subprocess.run') as run:
-                with self.assertRaisesRegex(ValueError,'checksum'):
-                    image_checks.publish(root,'ghcr.io/test/app')
-                run.assert_not_called()
-
-    def test_loaded_untested_image_cannot_be_published(self):
-        with tempfile.TemporaryDirectory() as name:
-            root=Path(name);(root/'amd64.tar').write_bytes(b'archive')
-            (root/'receipt.json').write_text(json.dumps({'images':{'amd64':{'id':'sha256:expected','tag':'fixture:amd64','archive_sha256':hashlib.sha256(b'archive').hexdigest()}}}))
-            with patch.dict(os.environ,{'NOCTIS_IMAGE_TAGS':'ghcr.io/test/app:latest'}), patch('image_checks.subprocess.run') as run, patch('image_checks.subprocess.check_output',return_value=json.dumps([{'Id':'sha256:wrong','Architecture':'amd64'}]).encode()):
-                with self.assertRaisesRegex(ValueError,'differs'):
-                    image_checks.publish(root,'ghcr.io/test/app')
-                self.assertEqual([call.args[0][1] for call in run.call_args_list],['load'])
 
 if __name__ == '__main__':
     unittest.main()

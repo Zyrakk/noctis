@@ -58,7 +58,7 @@ func (s Store) ProposeProductionConsent(ctx context.Context, account, actor, rea
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	p := CapturePolicy{Version: 2, BudgetID: uuid.NewString(), Account: account, WindowSeconds: 3600, ProcessSeconds: 300, PeriodAnchor: now, ExpiresAt: now.Add(7*24*time.Hour - time.Second), Actor: actor, Reason: reason, Global: CaptureLimits{API: 256, Observations: 1000, PayloadBytes: 64 << 20, MetadataBytes: 4 << 20}, Phases: map[string]CaptureLimits{"control": {API: 64}, "bootstrap": {}, "live": {API: 192, Observations: 1000, PayloadBytes: 64 << 20, MetadataBytes: 4 << 20}}}
 	var priorRaw []byte
-	e = c.QueryRow(ctx, `SELECT a.auth_generation::text,a.consent_revision+1,COALESCE(a.active_capture_consent::text,''),b.policy FROM noctis_v2.telegram_accounts a LEFT JOIN noctis_v2.telegram_capture_consents b ON b.id=a.active_capture_consent WHERE a.id=$1`, account).Scan(&p.Generation, &p.Revision, &p.Predecessor, &priorRaw)
+	e = c.QueryRow(ctx, `SELECT a.auth_generation::text,a.consent_revision+1,COALESCE(a.active_capture_consent::text,t.consent_id::text,''),b.policy,COALESCE(a.pending_generation_transition::text,'') FROM noctis_v2.telegram_accounts a LEFT JOIN noctis_v2.telegram_generation_transitions t ON t.id=a.pending_generation_transition LEFT JOIN noctis_v2.telegram_capture_consents b ON b.id=COALESCE(a.active_capture_consent,t.consent_id) WHERE a.id=$1 AND a.prepared_auth_generation IS NULL AND NOT a.authentication_in_progress AND a.active_capture_budget IS NULL`, account).Scan(&p.Generation, &p.Revision, &p.Predecessor, &priorRaw, &p.TransitionID)
 	if e != nil {
 		return e
 	}
@@ -68,6 +68,7 @@ func (s Store) ProposeProductionConsent(ctx context.Context, account, actor, rea
 			return ErrBudget
 		}
 		p.PeriodAnchor = prior.PeriodAnchor
+		p.WindowSeconds = prior.WindowSeconds
 		p.Global = prior.Global
 		p.Phases = prior.Phases
 	}
@@ -117,8 +118,9 @@ func (s Store) InstallProductionConsent(ctx context.Context, p CapturePolicy) er
 	var gen string
 	var closed bool
 	var current *string
+	var pending *string
 	var revision int64
-	if e = tx.QueryRow(ctx, `SELECT auth_generation::text,closed,active_capture_consent::text,consent_revision FROM noctis_v2.telegram_accounts WHERE id=$1 FOR UPDATE`, p.Account).Scan(&gen, &closed, &current, &revision); e != nil {
+	if e = tx.QueryRow(ctx, `SELECT auth_generation::text,closed AND owner IS NULL AND lease_expires_at IS NULL AND NOT authentication_in_progress AND prepared_auth_generation IS NULL AND active_capture_budget IS NULL,active_capture_consent::text,consent_revision,pending_generation_transition::text FROM noctis_v2.telegram_accounts WHERE id=$1 FOR UPDATE`, p.Account).Scan(&gen, &closed, &current, &revision, &pending); e != nil {
 		return e
 	}
 	raw, digest := policyBytes(p)
@@ -133,7 +135,20 @@ func (s Store) InstallProductionConsent(ctx context.Context, p CapturePolicy) er
 	if !errors.Is(e, pgx.ErrNoRows) {
 		return e
 	}
-	if !closed || gen != p.Generation || p.Revision != revision+1 || (current == nil && p.Predecessor != "") || (current != nil && *current != p.Predecessor) {
+	predecessor := current
+	if pending != nil {
+		if current != nil || p.TransitionID != *pending {
+			return ErrBudget
+		}
+		var previous string
+		if e = tx.QueryRow(ctx, `SELECT t.consent_id::text FROM noctis_v2.telegram_generation_transitions t JOIN noctis_v2.telegram_accounts a ON a.id=t.account_id WHERE t.id=$1 AND t.account_id=$2 AND t.to_generation=$3 AND t.consent_revision=$4 AND a.capture_failure_revision=a.capture_resume_revision`, *pending, p.Account, p.Generation, revision).Scan(&previous); e != nil {
+			return errors.Join(ErrBudget, e)
+		}
+		predecessor = &previous
+	} else if p.TransitionID != "" {
+		return ErrBudget
+	}
+	if !closed || gen != p.Generation || p.Revision != revision+1 || (predecessor == nil && p.Predecessor != "") || (predecessor != nil && *predecessor != p.Predecessor) {
 		return ErrBudget
 	}
 	var valid bool
@@ -143,13 +158,13 @@ func (s Store) InstallProductionConsent(ctx context.Context, p CapturePolicy) er
 	if !valid {
 		return ErrBudget
 	}
-	if current != nil {
+	if predecessor != nil {
 		var priorRaw []byte
 		var prior CapturePolicy
-		if e = tx.QueryRow(ctx, `SELECT policy FROM noctis_v2.telegram_capture_consents WHERE id=$1`, *current).Scan(&priorRaw); e != nil {
+		if e = tx.QueryRow(ctx, `SELECT policy FROM noctis_v2.telegram_capture_consents WHERE id=$1`, *predecessor).Scan(&priorRaw); e != nil {
 			return e
 		}
-		if strictCapturePolicy(priorRaw, &prior) != nil || prior.Generation != p.Generation || prior.WindowSeconds != p.WindowSeconds || !prior.PeriodAnchor.Equal(p.PeriodAnchor) || prior.Global != p.Global {
+		if strictCapturePolicy(priorRaw, &prior) != nil || (pending == nil && prior.Generation != p.Generation) || prior.WindowSeconds != p.WindowSeconds || !prior.PeriodAnchor.Equal(p.PeriodAnchor) || prior.Global != p.Global {
 			return ErrBudget
 		}
 		for phase, v := range prior.Phases {
@@ -160,7 +175,7 @@ func (s Store) InstallProductionConsent(ctx context.Context, p CapturePolicy) er
 	}
 	for _, peer := range p.Peers {
 		var current bool
-		if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM noctis_v2.telegram_peers x JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=x.inventory_snapshot JOIN noctis_v2.telegram_channel_states cs ON cs.account_id=x.account_id AND cs.channel_id=x.peer_id WHERE x.source_id=$1 AND x.auth_generation=$2 AND n.auth_generation=$2 AND cs.pts>0 AND n.id=(SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=x.account_id ORDER BY z.created_at DESC,z.id DESC LIMIT 1))`, peer.SourceID, p.Generation).Scan(&current); e != nil {
+		if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM noctis_v2.telegram_peers x JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=x.inventory_snapshot JOIN noctis_v2.telegram_inventory_candidates i ON i.snapshot_id=n.id AND i.peer_id=x.peer_id JOIN noctis_v2.telegram_channel_states cs ON cs.account_id=x.account_id AND cs.channel_id=x.peer_id WHERE x.source_id=$1 AND x.account_id=$3 AND x.auth_generation=$2 AND n.auth_generation=$2 AND i.pts>0 AND cs.pts>0 AND n.id=(SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=x.account_id ORDER BY z.created_at DESC,z.id DESC LIMIT 1))`, peer.SourceID, p.Generation, p.Account).Scan(&current); e != nil {
 			return e
 		}
 		if !current {
@@ -174,7 +189,7 @@ func (s Store) InstallProductionConsent(ctx context.Context, p CapturePolicy) er
 	if e != nil {
 		return e
 	}
-	_, e = tx.Exec(ctx, `UPDATE noctis_v2.telegram_accounts SET active_capture_consent=$2,consent_revision=$3 WHERE id=$1`, p.Account, p.BudgetID, p.Revision)
+	_, e = tx.Exec(ctx, `UPDATE noctis_v2.telegram_accounts SET active_capture_consent=$2,consent_revision=$3,pending_generation_transition=NULL WHERE id=$1`, p.Account, p.BudgetID, p.Revision)
 	if e != nil {
 		return e
 	}
@@ -192,7 +207,7 @@ func (s Store) bindProductionPolicy(ctx context.Context, p CapturePolicy) (time.
 	defer c.Close(context.Background())
 	_, digest := policyBytes(p)
 	var expiry time.Time
-	e = c.QueryRow(ctx, `SELECT b.expires_at FROM noctis_v2.telegram_accounts a JOIN noctis_v2.telegram_capture_consents b ON b.id=a.active_capture_consent WHERE a.id=$1 AND a.auth_generation=$2 AND b.id=$3 AND b.policy_digest=$4 AND a.capture_failure_revision=a.capture_resume_revision AND b.revoked_at IS NULL AND b.expires_at>clock_timestamp()`, p.Account, p.Generation, p.BudgetID, digest).Scan(&expiry)
+	e = c.QueryRow(ctx, `SELECT b.expires_at FROM noctis_v2.telegram_accounts a JOIN noctis_v2.telegram_capture_consents b ON b.id=a.active_capture_consent WHERE a.id=$1 AND a.auth_generation=$2 AND b.auth_generation=a.auth_generation AND b.id=$3 AND b.policy_digest=$4 AND NOT a.authentication_in_progress AND a.prepared_auth_generation IS NULL AND a.pending_generation_transition IS NULL AND a.capture_failure_revision=a.capture_resume_revision AND b.revoked_at IS NULL AND b.expires_at>clock_timestamp()`, p.Account, p.Generation, p.BudgetID, digest).Scan(&expiry)
 	if e != nil {
 		return time.Time{}, errors.Join(ErrBudget, e)
 	}
@@ -283,7 +298,7 @@ func (s Store) productionStatus(ctx context.Context, p CapturePolicy) (map[strin
 	var waitUntil *time.Time
 	var waitReason *string
 	_, digest := policyBytes(p)
-	e = c.QueryRow(ctx, `SELECT b.expires_at,b.revoked_at IS NOT NULL,date_bin(make_interval(secs=>$5),clock_timestamp(),$6::timestamptz),COALESCE(a.quota_wait_until>clock_timestamp(),false),a.quota_wait_until,a.quota_wait_reason,a.capture_failure_revision>a.capture_resume_revision,a.capture_failure_revision FROM noctis_v2.telegram_accounts a JOIN noctis_v2.telegram_capture_consents b ON b.id=a.active_capture_consent WHERE a.id=$1 AND a.auth_generation=$2 AND b.id=$3 AND b.policy_digest=$4`, p.Account, p.Generation, p.BudgetID, digest, p.WindowSeconds, p.PeriodAnchor).Scan(&expiry, &revoked, &start, &waiting, &waitUntil, &waitReason, &blocked, &failureRevision)
+	e = c.QueryRow(ctx, `SELECT b.expires_at,b.revoked_at IS NOT NULL,date_bin(make_interval(secs=>$5),clock_timestamp(),$6::timestamptz),COALESCE(a.quota_wait_until>clock_timestamp(),false),a.quota_wait_until,a.quota_wait_reason,a.capture_failure_revision>a.capture_resume_revision OR a.authentication_in_progress OR a.prepared_auth_generation IS NOT NULL OR a.pending_generation_transition IS NOT NULL OR b.auth_generation<>a.auth_generation,a.capture_failure_revision FROM noctis_v2.telegram_accounts a JOIN noctis_v2.telegram_capture_consents b ON b.id=a.active_capture_consent WHERE a.id=$1 AND a.auth_generation=$2 AND b.id=$3 AND b.policy_digest=$4`, p.Account, p.Generation, p.BudgetID, digest, p.WindowSeconds, p.PeriodAnchor).Scan(&expiry, &revoked, &start, &waiting, &waitUntil, &waitReason, &blocked, &failureRevision)
 	if e != nil {
 		return nil, e
 	}
@@ -335,7 +350,7 @@ func (s Store) superviseProduction(ctx context.Context, cfg ClientConfig, p Capt
 			return ErrBudget
 		}
 		if state == "exhausted" {
-			if e = waitUntil(ctx, status["next_period_at"].(time.Time)); e != nil {
+			if e = waitUntil(ctx, productionWaitUntil(status)); e != nil {
 				return e
 			}
 			continue
@@ -375,7 +390,7 @@ func (s Store) superviseProduction(ctx context.Context, cfg ClientConfig, p Capt
 				return ce
 			}
 			if errors.Is(e, ErrQuota) {
-				if ce = waitUntil(ctx, status["next_period_at"].(time.Time)); ce != nil {
+				if ce = waitUntil(ctx, productionWaitUntil(status)); ce != nil {
 					return ce
 				}
 				continue
@@ -390,6 +405,15 @@ func (s Store) superviseProduction(ctx context.Context, cfg ClientConfig, p Capt
 		}
 	}
 }
+
+func productionWaitUntil(status map[string]any) time.Time {
+	at := status["next_period_at"].(time.Time)
+	if until, ok := status["quota_wait_until"].(*time.Time); ok && until != nil && until.After(at) {
+		at = *until
+	}
+	return at
+}
+
 func waitUntil(ctx context.Context, at time.Time) error {
 	timer := time.NewTimer(time.Until(at))
 	defer timer.Stop()

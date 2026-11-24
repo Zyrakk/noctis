@@ -115,6 +115,30 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 	}
 	if r.Method == "GET" {
 		switch {
+		case path == "retention":
+			source, class := r.URL.Query().Get("source_id"), r.URL.Query().Get("data_class")
+			sourceID, e := uuid.Parse(source)
+			if e != nil {
+				return true, reject(400, "source_required")
+			}
+			source = sourceID.String()
+			if strings.TrimSpace(class) == "" || len(class) > 64 {
+				return true, reject(400, "data_class_required")
+			}
+			tx, e := c.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+			if e != nil {
+				return true, e
+			}
+			defer tx.Rollback(ctx)
+			if e = permissionTx(ctx, tx, actor, "retention"); e != nil {
+				return true, e
+			}
+			var raw []byte
+			e = tx.QueryRow(ctx, `SELECT jsonb_build_object('source_id',s.id,'data_class',$2::text,'present',p.source_id IS NOT NULL,'revision',COALESCE(p.revision,0),'retain_seconds',p.retain_seconds) FROM noctis_v2.sources s LEFT JOIN noctis_v2.retention_policies p ON p.source_id=s.id AND p.data_class=$2 WHERE s.id=$1`, source, class).Scan(&raw)
+			if e != nil {
+				return true, e
+			}
+			response(w, json.RawMessage(raw))
 		case path == "telegram/candidates":
 			return true, jsonPage(ctx, w, r, c, path, `SELECT i.snapshot_id::text||':'||i.peer_id::text,jsonb_build_object('snapshot_id',i.snapshot_id,'account_id',n.account_id,'peer_type',i.peer_type,'peer_id',i.peer_id::text,'name',i.name,'folder',i.folder,'source_id',COALESCE(i.source_id,(SELECT s.id FROM noctis_v2.sources s WHERE s.kind='telegram' AND s.native_id=n.account_id||':channel:'||i.peer_id::text)),'provenance','current Telegram dialogs','created_at',n.created_at) FROM noctis_v2.telegram_inventory_candidates i JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=i.snapshot_id JOIN noctis_v2.telegram_accounts a ON a.id=n.account_id AND a.auth_generation=n.auth_generation WHERE n.id=(SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=n.account_id ORDER BY z.created_at DESC,z.id DESC LIMIT 1) AND ($1='' OR i.snapshot_id::text||':'||i.peer_id::text>$1) ORDER BY i.snapshot_id::text||':'||i.peer_id::text LIMIT $2`)
 		case isCase && parts[2] == "attention":
@@ -230,7 +254,7 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 		}
 		var account, generation, name string
 		var hash int64
-		e = tx.QueryRow(ctx, `SELECT n.account_id,n.auth_generation::text,i.name,i.access_hash FROM noctis_v2.telegram_inventory_candidates i JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=i.snapshot_id JOIN noctis_v2.telegram_accounts a ON a.id=n.account_id AND a.auth_generation=n.auth_generation WHERE n.id=$1 AND i.peer_id=$2 AND a.closed AND n.id=(SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=n.account_id ORDER BY z.created_at DESC,z.id DESC LIMIT 1) FOR UPDATE OF a,i`, in.SnapshotID, in.PeerID).Scan(&account, &generation, &name, &hash)
+		e = tx.QueryRow(ctx, `SELECT n.account_id,n.auth_generation::text,i.name,i.access_hash FROM noctis_v2.telegram_inventory_candidates i JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=i.snapshot_id JOIN noctis_v2.telegram_accounts a ON a.id=n.account_id AND a.auth_generation=n.auth_generation WHERE n.id=$1 AND i.peer_id=$2 AND a.closed AND a.owner IS NULL AND a.lease_expires_at IS NULL AND NOT a.authentication_in_progress AND a.prepared_auth_generation IS NULL AND n.id=(SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=n.account_id ORDER BY z.created_at DESC,z.id DESC LIMIT 1) FOR UPDATE OF a,i`, in.SnapshotID, in.PeerID).Scan(&account, &generation, &name, &hash)
 		if e != nil {
 			return true, reject(409, "inventory_stale_or_capture_running")
 		}
@@ -248,8 +272,23 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 		} else if e != nil {
 			return true, e
 		}
-		if _, e = tx.Exec(ctx, `UPDATE noctis_v2.telegram_peers SET inventory_snapshot=$4,access_hash=$5 WHERE account_id=$1 AND peer_type='channel' AND peer_id=$2 AND source_id=$3 AND auth_generation=$6`, account, in.PeerID, source, in.SnapshotID, hash, generation); e != nil {
+		// A new key requires explicit import and a fresh policy approval. Preserve
+		// the channel cursor and source epoch: changing keys is not gap recovery.
+		tag, e := tx.Exec(ctx, `UPDATE noctis_v2.telegram_peers p SET auth_generation=$4,allowed=false FROM noctis_v2.telegram_accounts a JOIN noctis_v2.telegram_generation_transitions t ON t.id=a.pending_generation_transition WHERE p.account_id=$1 AND p.peer_type='channel' AND p.peer_id=$2 AND p.source_id=$3 AND p.auth_generation<>$4 AND a.id=p.account_id AND t.account_id=a.id AND t.to_generation=$4`, account, in.PeerID, source, generation)
+		if e != nil {
 			return true, e
+		}
+		if tag.RowsAffected() == 1 {
+			if _, e = tx.Exec(ctx, `UPDATE noctis_v2.sources SET enabled=false,policy_revision=policy_revision+1 WHERE id=$1`, source); e != nil {
+				return true, e
+			}
+		}
+		tag, e = tx.Exec(ctx, `UPDATE noctis_v2.telegram_peers SET inventory_snapshot=$4,access_hash=$5 WHERE account_id=$1 AND peer_type='channel' AND peer_id=$2 AND source_id=$3 AND auth_generation=$6`, account, in.PeerID, source, in.SnapshotID, hash, generation)
+		if e != nil {
+			return true, e
+		}
+		if tag.RowsAffected() != 1 {
+			return true, reject(409, "generation_transition_required")
 		}
 		_, err = tx.Exec(ctx, `UPDATE noctis_v2.telegram_inventory_candidates SET source_id=$3 WHERE snapshot_id=$1 AND peer_id=$2`, in.SnapshotID, in.PeerID, source)
 		result = map[string]any{"source_id": source, "imported": true, "activation": "explicit source policy required"}
@@ -314,21 +353,17 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 	case isSource:
 		var version string
 		var rev int64
-		if e = tx.QueryRow(ctx, `SELECT policy_version,policy_revision FROM noctis_v2.sources WHERE id::text=$1 FOR UPDATE`, parts[1]).Scan(&version, &rev); e != nil {
+		var activated bool
+		if e = tx.QueryRow(ctx, `SELECT policy_version,policy_revision,activated_at IS NOT NULL FROM noctis_v2.sources WHERE id::text=$1 FOR UPDATE`, parts[1]).Scan(&version, &rev, &activated); e != nil {
 			return true, e
-		}
-		if in.PolicyVersion == "" {
-			in.PolicyVersion = version
-		}
-		var exists bool
-		if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM noctis_v2.policies WHERE version=$1)`, in.PolicyVersion).Scan(&exists); e != nil {
-			return true, e
-		}
-		if !exists {
-			return true, reject(400, "policy_not_found")
 		}
 		if in.ExpectedRevision != rev {
 			return true, &operationError{409, "stale_revision", rev}
+		}
+		assignPolicy := in.PolicyVersion != ""
+		var question string
+		if in.PolicyVersion, question, e = resolveSourceGovernanceTx(ctx, tx, parts[1], version, in); e != nil {
+			return true, e
 		}
 		if in.Enabled {
 			var missingBaseline bool
@@ -343,7 +378,7 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 				return true, err
 			}
 			var valid bool
-			e = tx.QueryRow(ctx, `SELECT NOT EXISTS(SELECT FROM noctis_v2.telegram_peers p JOIN noctis_v2.telegram_accounts a ON a.id=p.account_id LEFT JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=p.inventory_snapshot WHERE p.source_id::text=$1 AND p.inventory_snapshot IS NOT NULL AND (p.auth_generation<>a.auth_generation OR n.auth_generation<>a.auth_generation OR n.id IS DISTINCT FROM (SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=a.id ORDER BY z.created_at DESC,z.id DESC LIMIT 1)))`, parts[1]).Scan(&valid)
+			e = tx.QueryRow(ctx, `SELECT NOT EXISTS(SELECT FROM noctis_v2.telegram_peers p JOIN noctis_v2.telegram_accounts a ON a.id=p.account_id LEFT JOIN noctis_v2.telegram_inventory_snapshots n ON n.id=p.inventory_snapshot WHERE p.source_id::text=$1 AND p.inventory_snapshot IS NOT NULL AND (a.authentication_in_progress OR a.prepared_auth_generation IS NOT NULL OR p.auth_generation<>a.auth_generation OR n.auth_generation<>a.auth_generation OR n.id IS DISTINCT FROM (SELECT z.id FROM noctis_v2.telegram_inventory_snapshots z WHERE z.account_id=a.id ORDER BY z.created_at DESC,z.id DESC LIMIT 1)))`, parts[1]).Scan(&valid)
 			if e != nil {
 				return true, e
 			}
@@ -354,29 +389,22 @@ func (a *API) handleOperations(w http.ResponseWriter, r *http.Request, c *pgx.Co
 			if err != nil {
 				return true, err
 			}
-			_, err = tx.Exec(ctx, `UPDATE noctis_v2.telegram_peers SET allowed=true WHERE source_id::text=$1`, parts[1])
+			// Changing analytical governance does not renew Telegram consent.
+			_, err = tx.Exec(ctx, `UPDATE noctis_v2.telegram_peers SET allowed=true WHERE source_id::text=$1 AND $2`, parts[1], !activated || version == in.PolicyVersion)
 			if err != nil {
 				return true, err
 			}
 		}
-		_, err = tx.Exec(ctx, `UPDATE noctis_v2.sources SET enabled=$2,policy_version=$3,policy_revision=policy_revision+1 WHERE id::text=$1`, parts[1], in.Enabled, in.PolicyVersion)
-		if in.QuestionID == "" && strings.HasPrefix(in.PolicyVersion, "question:") {
-			pieces := strings.Split(in.PolicyVersion, ":")
-			if len(pieces) > 1 {
-				if _, parseErr := uuid.Parse(pieces[1]); parseErr == nil {
-					in.QuestionID = pieces[1]
-				}
-			}
-		}
-		if err == nil && in.QuestionID != "" {
-			_, err = tx.Exec(ctx, `INSERT INTO noctis_v2.question_sources(question_id,source_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, in.QuestionID, parts[1])
+		err = tx.QueryRow(ctx, `UPDATE noctis_v2.sources SET enabled=$2,policy_version=$3,policy_revision=policy_revision+1 WHERE id::text=$1 RETURNING policy_revision`, parts[1], in.Enabled, in.PolicyVersion).Scan(&rev)
+		if err == nil && assignPolicy {
+			err = replaceSourceGovernanceTx(ctx, tx, parts[1], question)
 		}
 		if err == nil && in.Enabled {
 			err = resumeSourceParseTx(ctx, tx, parts[1])
 		} else if err == nil {
 			err = pauseSourceParseTx(ctx, tx, parts[1])
 		}
-		result = map[string]any{"source_id": parts[1], "enabled": in.Enabled, "policy_version": in.PolicyVersion}
+		result = map[string]any{"source_id": parts[1], "enabled": in.Enabled, "policy_version": in.PolicyVersion, "policy_revision": rev}
 	case isCase && parts[2] == "lifecycle":
 		if in.Action != "following" && in.Action != "resolved" && in.Action != "archived" {
 			return true, reject(400, "invalid_lifecycle")
@@ -620,13 +648,14 @@ func (a *API) mutateDiscovery(ctx context.Context, tx pgx.Tx, actor string, part
 			return nil, e
 		}
 		// Activation always binds the current PIR revision, including after edits.
-		var questionRevision int64
-		if e = tx.QueryRow(ctx, `SELECT revision FROM noctis_v2.questions WHERE id=$1`, question).Scan(&questionRevision); e != nil {
-			return nil, e
+		if in.QuestionID != "" && in.QuestionID != question {
+			return nil, reject(400, "question_policy_mismatch")
 		}
-		in.PolicyVersion = "question:" + question
-		if questionRevision > 1 {
-			in.PolicyVersion = fmt.Sprintf("question:%s:r%d", question, questionRevision)
+		if in.PolicyVersion != "" && in.PolicyVersion != "question:"+question && !strings.HasPrefix(in.PolicyVersion, "question:"+question+":r") {
+			return nil, reject(400, "question_policy_mismatch")
+		}
+		if in.PolicyVersion, _, e = currentQuestionPolicyTx(ctx, tx, question); e != nil {
+			return nil, e
 		}
 		var valid bool
 		if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM noctis_v2.policies WHERE version=$1)`, in.PolicyVersion).Scan(&valid); e != nil {
@@ -649,7 +678,7 @@ func (a *API) mutateDiscovery(ctx context.Context, tx pgx.Tx, actor string, part
 		if e != nil {
 			return nil, e
 		}
-		_, e = tx.Exec(ctx, `INSERT INTO noctis_v2.question_sources(question_id,source_id) VALUES($1,$2)`, question, source)
+		e = replaceSourceGovernanceTx(ctx, tx, source, question)
 		if e != nil {
 			return nil, e
 		}

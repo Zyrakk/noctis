@@ -97,3 +97,12 @@
     scroll-margin-block: 150px;
   }
 }
+.v2 .v2-ai-function{margin-top:12px}
+.v2 .v2-ai-function-body[hidden]{display:none}
+.v2 .v2-ai-function-body{margin-top:16px}
+.v2 .v2-ai-function-summary{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.v2 .v2-ai-function-summary dl{display:flex;flex-wrap:wrap;gap:8px 20px;margin:0;min-width:0}
+.v2 .v2-ai-function-summary dt{font-size:12px;color:#c1b4d8}
+.v2 .v2-ai-function-summary dd{margin:0;font-size:13px;overflow-wrap:anywhere}
+.v2 .v2-ai-function-summary button{min-height:44px}
+.v2-job + .v2-job .v2-job-command small{display:none}

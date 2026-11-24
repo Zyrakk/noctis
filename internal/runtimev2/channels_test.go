@@ -82,7 +82,23 @@ func TestManifestHistoryDryRunAndStatePreservationPostgres(t *testing.T) {
 	if first.BatchID != again.BatchID {
 		t.Fatal("history replay identity changed")
 	}
-	must((intelligence.Worker{DSN: dsn, Owner: "history"}).Once(ctx))
+	if err := (intelligence.Worker{DSN: dsn, Owner: "history"}).Once(ctx); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("paused history unexpectedly claimed work: %v", err)
+	}
+	var parked bool
+	must(c.QueryRow(ctx, `SELECT count(*)=1 AND bool_and(
+ j.state='dependency_blocked' AND j.last_error_code='source_paused'
+ AND j.source_paused_at IS NOT NULL AND j.attempts=0 AND j.fence=0
+ AND j.lease_owner IS NULL AND j.lease_expires_at IS NULL
+ AND j.retry_deadline_at=j.created_at+interval '24 hours'
+ AND NOT s.enabled AND s.policy_version='p1')
+ FROM noctis_v2.jobs j
+ JOIN noctis_v2.observations o ON o.id=j.input_id
+ JOIN noctis_v2.sources s ON s.id=o.source_id
+ WHERE j.stage='parse' AND s.id=$1 AND o.mode='legacy_import'`, source).Scan(&parked))
+	if !parked {
+		t.Fatal("history import changed source state or paused retry budget")
+	}
 	must(c.QueryRow(ctx, `SELECT count(*) FROM noctis_v2.outbox`).Scan(&n))
 	if n != 0 {
 		t.Fatal("historical alert")

@@ -31,6 +31,8 @@ export async function panelFixture(page,{authenticated=true,changes=false}={}) {
     if(path==='/sources')return send([{id:'fixture-source',name:'Test channel · synthetic fixture',status:'paused',coverage:'partial',revision:1,policy_version:'fixture-v1',last_success_at:'2026-10-20T10:00:00Z'}])
     if(path==='/cases')return send([{id:'fixture-case',title:'Reported offer',status:'reported',revision:'2',summary:'A claim awaiting verification.',citations:[evidence]}])
     if(path==='/cases/fixture-case')return send({id:'fixture-case',title:'Reported offer',status:'reported',revision:'2',summary:'A claim awaiting verification.',citations:[evidence]})
+    if(path==='/ai/jobs'&&req.method()==='GET')return send({jobs:[],next_cursor:null})
+    if(path==='/cases/fixture-case/attention'&&req.method()==='GET')return send({mode:'active',revision:1,seen_revision:0,reason:''})
     if(['/source-imports','/source-dispositions','/questions','/discovery','/coverage','/telegram/candidates','/claims','/cases/fixture-case/timeline'].includes(path))return send([])
     throw new Error(`Unexpected synthetic panel request: ${req.method()} ${path}`)
   })

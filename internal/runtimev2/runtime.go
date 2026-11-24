@@ -2,6 +2,7 @@ package runtimev2
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"github.com/Zyrakk/noctis/internal/capture"
@@ -28,6 +29,8 @@ type Health struct {
 }
 
 func Check(ctx context.Context, dsn, mode string) (Health, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 	h := Health{Mode: mode, Capabilities: []string{"health_only"}}
 	if mode != "api" && mode != "worker" && mode != "collector" {
 		return h, fmt.Errorf("invalid v2 mode")
@@ -41,46 +44,95 @@ func Check(ctx context.Context, dsn, mode string) (Health, error) {
 		return h, e
 	}
 	h.Database = true
-	var count int
-	e = c.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema='noctis_v2' AND table_name IN ('sources','checkpoints','content_blobs','observations','jobs')`).Scan(&count)
-	h.Schema = e == nil && count == 5
-	if !h.Schema {
-		return h, fmt.Errorf("v2 schema unavailable; run v2 migrate explicitly")
+	// Readiness never writes, grants, changes roles or migrates. A single
+	// snapshot keeps its ledger and catalog observations coherent.
+	tx, e := c.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if e != nil {
+		return h, fmt.Errorf("v2 readiness transaction unavailable")
 	}
+	defer tx.Rollback(ctx)
+	if _, e = tx.Exec(ctx, `SET LOCAL search_path = pg_catalog`); e != nil {
+		return h, fmt.Errorf("v2 schema inspection unavailable")
+	}
+	if e = checkMigrationLedger(ctx, tx); e != nil {
+		return h, e
+	}
+	if e = checkSchemaContract(ctx, tx); e != nil {
+		return h, e
+	}
+	h.Schema = true
+	if e = checkRuntimePrivileges(ctx, tx, mode); e != nil {
+		return h, e
+	}
+	var aiEnabled bool
+	if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM noctis_v2.ai_configs c CROSS JOIN LATERAL jsonb_array_elements(c.body->'bindings') b WHERE c.revision=(SELECT max(revision) FROM noctis_v2.ai_configs) AND (b->>'enabled')::boolean)`).Scan(&aiEnabled); e != nil {
+		return h, fmt.Errorf("v2 AI configuration inspection unavailable")
+	}
+	if e = tx.Commit(ctx); e != nil {
+		return h, fmt.Errorf("v2 readiness transaction unavailable")
+	}
+	h.Functional = true
+	h.AIEnabled = aiEnabled
+	switch mode {
+	case "api":
+		h.Capabilities = []string{"capture", "jobs", "cases", "evidence", "auth", "brief", "inference_jobs", "typed_query"}
+	case "worker":
+		h.Capabilities = []string{"jobs", "cases", "evidence", "brief", "inference_jobs"}
+	case "collector":
+		h.Capabilities = []string{"capture"}
+	}
+	return h, nil
+}
+
+func checkMigrationLedger(ctx context.Context, tx pgx.Tx) error {
 	ms, e := db.Load(migrations.Files)
 	if e != nil {
-		return h, e
+		return e
 	}
-	rows, e := c.Query(ctx, `SELECT name,checksum FROM public.noctis_v2_migrations ORDER BY name`)
+	rows, e := tx.Query(ctx, `SELECT name,checksum FROM public.noctis_v2_migrations ORDER BY name`)
 	if e != nil {
-		return h, e
+		return fmt.Errorf("v2 migration ledger unavailable")
 	}
 	defer rows.Close()
 	index := 0
 	for rows.Next() {
 		var name, checksum string
 		if e = rows.Scan(&name, &checksum); e != nil {
-			return h, e
+			return fmt.Errorf("v2 migration ledger unavailable")
 		}
 		if index >= len(ms) || ms[index].Name != name || ms[index].Checksum != checksum {
-			return h, fmt.Errorf("v2 schema checksum/version incompatible")
+			return fmt.Errorf("v2 schema checksum/version incompatible")
 		}
 		index++
 	}
 	if e = rows.Err(); e != nil {
-		return h, e
+		return fmt.Errorf("v2 migration ledger unavailable")
 	}
 	if index != len(ms) {
-		return h, fmt.Errorf("v2 schema requires migration")
+		return fmt.Errorf("v2 schema requires migration")
 	}
-	h.Functional = true
-	if e = c.QueryRow(ctx, `SELECT EXISTS(SELECT FROM noctis_v2.ai_configs c CROSS JOIN LATERAL jsonb_array_elements(c.body->'bindings') b WHERE c.revision=(SELECT max(revision) FROM noctis_v2.ai_configs) AND (b->>'enabled')::boolean)`).Scan(&h.AIEnabled); e != nil {
-		return h, e
-	}
-	h.Capabilities = []string{"capture", "jobs", "cases", "evidence", "auth", "brief", "inference_jobs", "typed_query"}
-	return h, nil
+	return nil
 }
 func Run(ctx context.Context, cfg configv2.Config) error {
+	if cfg.Mode == "worker" && cfg.DeliveryEndpoint != "" {
+		if e := intelligence.ValidateDeliveryEndpoint(cfg.DeliveryEndpoint); e != nil {
+			return e
+		}
+	}
+	var handler http.Handler
+	var tlsConfig *tls.Config
+	var e error
+	if cfg.Mode == "api" {
+		if e = validateOrigin(cfg.Origin); e != nil {
+			return e
+		}
+		if tlsConfig, e = loadAPITLS(cfg); e != nil {
+			return e
+		}
+		if handler, e = NewHandler(cfg); e != nil {
+			return e
+		}
+	}
 	if _, e := Check(ctx, cfg.DatabaseURL, cfg.Mode); e != nil {
 		return e
 	}
@@ -90,19 +142,15 @@ func Run(ctx context.Context, cfg configv2.Config) error {
 	if cfg.Mode != "api" {
 		return fmt.Errorf("invalid mode")
 	}
-	handler, e := NewHandler(cfg)
-	if e != nil {
-		return e
-	}
-	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Handler: handler, TLSConfig: tlsConfig, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
 	ln, e := net.Listen("tcp", cfg.Listen)
 	if e != nil {
 		return e
 	}
 	done := make(chan error, 1)
 	go func() {
-		if cfg.TLSCert != "" && cfg.TLSKey != "" {
-			done <- server.ServeTLS(ln, cfg.TLSCert, cfg.TLSKey)
+		if tlsConfig != nil {
+			done <- server.ServeTLS(ln, "", "")
 		} else {
 			done <- server.Serve(ln)
 		}
@@ -154,6 +202,9 @@ func runLoop(ctx context.Context, cfg configv2.Config) error {
 			continue
 		}
 		if cfg.Mode == "worker" {
+			if e := (vulnv2.ApplicabilityWorker{DSN: cfg.DatabaseURL, Owner: worker.Owner + "-applicability"}).Once(ctx); e != nil && !errors.Is(e, pgx.ErrNoRows) {
+				slog.Error("v2 applicability page failed", "error", e)
+			}
 			if e := runAutomaticInference(ctx, cfg); e != nil {
 				slog.Error("v2 inference attempt deferred")
 			}
@@ -220,10 +271,16 @@ func runLoop(ctx context.Context, cfg configv2.Config) error {
 }
 
 func runAutomaticInference(ctx context.Context, cfg configv2.Config) error {
-	if !cfg.AutomaticInference {
+	if !cfg.AutomaticInference && !cfg.ManualInference {
 		return nil
 	}
-	err := inferenceStore(cfg).Once(ctx)
+	store := inferenceStore(cfg)
+	var err error
+	if cfg.AutomaticInference {
+		err = store.Once(ctx)
+	} else {
+		err = store.OnceManual(ctx)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}

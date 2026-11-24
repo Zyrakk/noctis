@@ -4,7 +4,7 @@ export async function request(path, options = {}) {
   if (response.status === 401) window.dispatchEvent(new Event('noctis:unauthorized'))
   let body
   try { body = await response.json() } catch { const error = new Error('The server returned an invalid response'); error.status = response.status; throw error }
-  if (!response.ok) { const error = new Error(body.error?.message || body.error?.code || 'Unable to complete the request'); error.status = response.status; error.currentRevision=body.error?.current_revision; throw error }
+  if (!response.ok) { const error = new Error(body.error?.message || body.error?.code || 'Unable to complete the request'); error.status = response.status; error.code=body.error?.code; error.currentRevision=body.error?.current_revision; throw error }
   return body
 }
 

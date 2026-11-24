@@ -60,12 +60,25 @@ test('private login remains a separate document', async ({ page }) => {
   await expect(page.locator('video')).toHaveCount(0)
 })
 test('blocked external resources keep the content and real dashboard available', async ({ page, baseURL }) => {
+  const blocked = []
   await page.route('**/*', route => {
     const url = new URL(route.request().url())
-    return url.origin !== baseURL && !['data:', 'blob:'].includes(url.protocol) ? route.abort() : route.continue()
+    if (url.origin !== baseURL && !['data:', 'blob:'].includes(url.protocol)) {
+      blocked.push(route.request().url())
+      return route.abort()
+    }
+    return route.continue()
   })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('html')).not.toHaveClass(/anim/, { timeout: 5000 })
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  const loadedFonts = await page.evaluate(async () => {
+    await document.fonts.ready
+    return [...document.fonts]
+      .filter(font => font.family.replace(/["']/g, '') === 'Fira Sans' && font.status === 'loaded')
+      .map(font => `${font.style} ${font.weight}`)
+  })
+  expect(loadedFonts).toEqual(expect.arrayContaining(['normal 500', 'italic 400']))
+  expect(blocked.filter(url => /fonts\.(googleapis|gstatic)\.com/.test(url))).toEqual([])
   expect(await page.locator('.dashboard-frame img').evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true)
 })

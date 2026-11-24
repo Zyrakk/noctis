@@ -96,9 +96,11 @@ func (a *API) readDomain(w http.ResponseWriter, r *http.Request, c *pgx.Conn, pa
 	ctx := r.Context()
 	switch {
 	case path == "assets":
-		return true, jsonPage(ctx, w, r, c, path, `SELECT id::text,to_jsonb(a) FROM (SELECT DISTINCT ON(id) * FROM noctis_v2.asset_versions ORDER BY id,revision DESC)a WHERE ($1='' OR id::text>$1) ORDER BY id LIMIT $2`)
+		return true, jsonPage(ctx, w, r, c, path, `SELECT id::text,to_jsonb(a)||jsonb_build_object('calculation_state',COALESCE((SELECT CASE WHEN bool_or(calculation_state='failed') THEN 'failed' WHEN bool_or(calculation_state='pending') THEN 'pending' ELSE 'complete' END FROM noctis_v2.applicability_work_status w WHERE w.scope='asset' AND w.input_id=a.id::text AND w.input_revision=a.revision),'pending')) FROM (SELECT DISTINCT ON(id) * FROM noctis_v2.asset_versions ORDER BY id,revision DESC)a WHERE ($1='' OR id::text>$1) ORDER BY id LIMIT $2`)
+	case path == "applicability-work":
+		return true, jsonPage(ctx, w, r, c, path, `SELECT id::text,to_jsonb(w) FROM noctis_v2.applicability_work_status w WHERE ($1='' OR id::text>$1) ORDER BY id LIMIT $2`)
 	case path == "applicability":
-		return true, jsonPage(ctx, w, r, c, path, `SELECT snapshot_id::text||':'||cve||':'||asset_id::text||':'||asset_revision::text,to_jsonb(a)||jsonb_build_object('effective_status',CASE WHEN s.expires_at>clock_timestamp() THEN status ELSE 'unknown' END,'local_exposure','unknown','freshness',CASE WHEN s.expires_at>clock_timestamp() THEN 'current' ELSE 'stale' END) FROM noctis_v2.local_applicability a JOIN noctis_v2.feed_snapshots s ON s.id=a.snapshot_id WHERE ($1='' OR snapshot_id::text||':'||cve||':'||asset_id::text||':'||asset_revision::text>$1) ORDER BY snapshot_id::text||':'||cve||':'||asset_id::text||':'||asset_revision::text LIMIT $2`)
+		return true, jsonPage(ctx, w, r, c, path, `SELECT cve||':'||asset_id::text,to_jsonb(a)||jsonb_build_object('historical_status',status) FROM noctis_v2.applicability_effective a WHERE ($1='' OR cve||':'||asset_id::text>$1) ORDER BY cve||':'||asset_id::text LIMIT $2`)
 	case path == "enrichment-policies":
 		return true, jsonPage(ctx, w, r, c, path, `SELECT provider,to_jsonb(p) FROM noctis_v2.enrichment_policies p WHERE ($1='' OR provider>$1) ORDER BY provider LIMIT $2`)
 	case path == "changes" || strings.HasPrefix(path, "cases/") && strings.HasSuffix(path, "/timeline"):
@@ -111,7 +113,7 @@ func (a *API) readDomain(w http.ResponseWriter, r *http.Request, c *pgx.Conn, pa
 				return true, pgx.ErrNoRows
 			}
 		}
-		return true, jsonPage(ctx, w, r, c, path+":"+caseID, `SELECT id::text,body||jsonb_build_object('created_at',created_at) FROM noctis_v2.case_changes WHERE ($1='' OR case_id::text=$1) AND ($2='' OR id::text>$2) ORDER BY id LIMIT $3`, caseID)
+		return true, jsonPage(ctx, w, r, c, path+":"+caseID, `SELECT id::text,noctis_v2.change_effective_body(case_id,body)||jsonb_build_object('created_at',created_at) FROM noctis_v2.case_changes WHERE ($1='' OR case_id::text=$1) AND ($2='' OR id::text>$2) ORDER BY id LIMIT $3`, caseID)
 	case path == "claims":
 		return true, jsonPage(ctx, w, r, c, path+":"+r.URL.Query().Get("case_id"), `SELECT id::text,to_jsonb(c)||jsonb_build_object('dependencies',COALESCE((SELECT jsonb_agg(to_jsonb(d)||jsonb_build_object('status',cv.status,'invalidated',cv.invalidated)) FROM noctis_v2.claim_dependencies d JOIN noctis_v2.claim_versions cv ON cv.id=d.dependency_id AND cv.revision=d.dependency_revision WHERE d.claim_id=c.id AND d.claim_revision=c.revision),'[]')) FROM (SELECT DISTINCT ON(id) * FROM noctis_v2.claim_versions ORDER BY id,revision DESC) c WHERE ($1='' OR c.case_id::text=$1) AND ($2='' OR id::text>$2) ORDER BY id LIMIT $3`, r.URL.Query().Get("case_id"))
 	case path == "entities":
@@ -322,32 +324,11 @@ func (a *API) mutateDomain(w http.ResponseWriter, r *http.Request, c *pgx.Conn, 
 		if _, e = tx.Exec(ctx, `INSERT INTO noctis_v2.asset_versions(id,revision,cpe,version,evidence,producer) VALUES($1,$2,$3,$4,$5,$6)`, input.ID, revision+1, input.CPE, input.Version, string(refs), "operator:"+username); e != nil {
 			return true, e
 		}
-		rows, err := tx.Query(ctx, `SELECT DISTINCT cve FROM noctis_v2.vulnerability_facts ORDER BY cve LIMIT 1001`)
+		requestID, err := vulnv2.EnqueueAssetApplicabilityTx(ctx, tx, input.ID, revision+1)
 		if err != nil {
 			return true, err
 		}
-		cves := []string{}
-		for rows.Next() {
-			var cve string
-			if e = rows.Scan(&cve); e != nil {
-				rows.Close()
-				return true, e
-			}
-			cves = append(cves, cve)
-		}
-		rows.Close()
-		if e = rows.Err(); e != nil {
-			return true, e
-		}
-		if len(cves) > 1000 {
-			return true, errors.New("inventory refresh limit exceeded")
-		}
-		for _, cve := range cves {
-			if e = vulnv2.RefreshApplicabilityTx(ctx, tx, cve); e != nil {
-				return true, e
-			}
-		}
-		result = map[string]any{"id": input.ID, "revision": revision + 1}
+		result = map[string]any{"id": input.ID, "revision": revision + 1, "calculation_id": requestID, "calculation_state": "pending"}
 	case "enrichment-policies":
 		var input struct {
 			Provider        string   `json:"provider"`

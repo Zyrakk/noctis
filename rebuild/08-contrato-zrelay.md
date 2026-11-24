@@ -37,6 +37,8 @@ Resultado estructurado validado, finish reason, modelo solicitado y modelo decla
 
 Una propiedad no expuesta se registra `unknown`, sin fingir verificación del upstream. La ejecución solo se considera apta para tareas cuya política permita ese grado de observabilidad. `usage` ausente no equivale a coste cero. No sumar snapshots acumulados de streaming como consumo incremental.
 
+Los adaptadores síncronos Chat y Responses solo admiten HTTP 200. Cualquier estado 201–299 produce `response_status_invalid`, permanente e incierto, sin resultado ni uso aceptados: conserva la exposición máxima y bloquea el trabajo sin reintento automático. Un éxito HTTP sin respuesta admitida no demuestra ausencia de ejecución. Un cuerpo aparentemente válido, `Location` o `Retry-After` no autorizan publicación, sondeo ni reenvío; no hay soporte asíncrono implícito. Se mantienen los límites de cuerpo y tiempo y la incertidumbre ante fallos de lectura.
+
 ## Capacidades a comprobar
 
 | Capacidad | Validación requerida |

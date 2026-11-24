@@ -5,6 +5,10 @@ legacy P0 de los datos nuevos v2. La imagen por defecto ejecuta `v2`, nunca
 `serve` legacy. [Recibo ejecutado](receipt.md),
 [plantillas pausadas](../../../deploy/v2/README.md).
 
+El [contrato de horizonte y pausa](source-retry-horizon.md) describe la
+congelación durable de trabajos `parse` y los conteos obligatorios antes de
+aplicar la migración 012 a backlog antiguo.
+
 El runner `go run ./ops/rebuild/operations/telegram` consulta sólo identidad,
 cinco semillas y, con `--dialogs`, diálogos activos/archivados. Requiere copia de
 sesión en directorio0700/archivo0600, credenciales protegidas y exclusividad
@@ -30,18 +34,44 @@ Sólo admite skip de tres helpers hijos de
 crash; los tests padres de fallo siguen siendo obligatorios. No contar un helper
 mockeado de los tests Python como una suite Go real.
 
-El runner único `ops/rebuild/e2e` usa el binario compilado, PostgreSQL aislado,
-HTTPS y frontend real, `--browser --product --ai`, con gateways sintéticos. En CI
-`NOCTIS_V2_E2E_RECEIPT` conserva el recibo saneado después del cleanup. No usar
-`--keep` en CI. La publicación depende de Go/faults/E2E y de la construcción y
-smoke de imagen. `image_checks.py --output NUEVO_DIRECTORIO` construye AMD64 y
-ARM64, ejecuta sólo AMD64 sin red y exporta/verifica ELF ARM64; no instala ni
-modifica QEMU/binfmt. Exportar un ELF ARM64 no acredita ejecución ARM64 nativa.
-La versión integrada es el SHA del commit. CI guarda los dos `docker save`
-probados con sus SHA256 e IDs; publicación descarga esos archivos y rechaza
-hash/ID/arquitectura diferentes. Etiqueta y publica esas mismas imágenes, crea
-el manifest y verifica que sus digests remotos coincidan. No reconstruye después
-del smoke. El recibo de publicación conserva la correspondencia exacta.
+El runner único `ops/rebuild/e2e` usa PostgreSQL aislado, HTTPS y frontend real,
+`--browser --product --ai`, con gateways sintéticos. `make ci` mantiene el E2E
+local del ejecutable compilado. En CI, `make ci-check` conserva Go/race, casos
+obligatorios, fallos, migraciones, Python y frontend; después `make image-check`
+ejecuta el E2E canónico una sola vez sobre `/noctis` extraído de la imagen AMD64.
+Ambos pasos comparten PostgreSQL y las instalaciones de Go/Node/Playwright del
+job `check`; los checks `check`, `image-check` y `build` conservan sus nombres.
+
+Para preparar un candidato local, con los mismos requisitos sintéticos de CI:
+
+```sh
+make image-check IMAGE_CHECK_OUTPUT=/tmp/noctis-candidato-nuevo VERSION="$(git rev-parse HEAD)"
+make image-verify IMAGE_CHECK_OUTPUT=/tmp/noctis-candidato-nuevo VERSION="$(git rev-parse HEAD)"
+```
+
+El destino debe ser nuevo. `COMMIT` toma `git rev-parse HEAD` por defecto; CI pasa
+commit y versión explícitos con `github.sha`. `image_checks.py` construye ambas
+arquitecturas, verifica usuario y CLI AMD64 sin red y exporta/verifica ELF ARM64;
+no instala QEMU/binfmt. El E2E prueba el binario AMD64 y sus assets, migraciones y
+prompts embebidos; no acredita el contenedor funcional ni ejecución ARM64 nativa.
+
+El harness escribe un recibo saneado en un directorio nuevo; el orquestador exige
+éxito del proceso, los tres modos y datos sintéticos, y sólo entonces emite
+`e2e/candidate-receipt.json`. Ese recibo enlaza commit, versión, ID de candidato,
+IDs de ambas imágenes, hashes SHA256 de ambos ejecutables y archivos `docker save`
+y el recibo del harness. Comprueba hashes estables antes y después del E2E. No
+usar `--keep` en CI. Los recibos de prueba se conservan junto a los de publicación.
+
+El preflight de `image-check` y publicación contrasta commit/versión con los
+valores esperados externos, valida ambos archivos y vuelve a extraer/verificar
+los binarios de ambas imágenes antes del primer `docker push`. Una discrepancia
+bloquea toda publicación. Se promueven los mismos archivos sin reconstrucción;
+se conservan las comprobaciones de digests y manifests remotos. Un fallo remoto
+posterior al primer push puede dejar progreso parcial, registrado en
+`publication-progress.json` tras cada arquitectura confirmada; el preflight no
+ofrece atomicidad del registro remoto. La cancelación de checks obsoletos se aplica
+sólo a los jobs de validación, nunca al job de publicación. CI retiene candidatos
+tres días y recibos sintéticos/publicación siete/catorce días, respectivamente.
 
 Persisten cinco avisos npm de severidad alta asociados a la cadena de build
 Tailwind/micromatch/braces. Node, npm y node_modules no se copian a distroless;
@@ -143,8 +173,28 @@ archivos v1/v2 conserva su alcance `legacy-shared-dsn-only`: el antiguo
 `database.secret` no acredita la recuperación de cuatro credenciales segregadas.
 Acepta sólo nombres conocidos (master/admin/DSN/TLS/config/sesión/API/política),
 todos0600 en directorio0700; `restore-config` exige membership exacto y restaura
-a otro directorio nuevo sin iniciar procesos. El DSN recuperado sigue apuntando
-al origen: preparar credenciales nuevas para la DB restaurada antes de uso.
+a otro directorio nuevo sin iniciar servicios. Antes de descifrar crea un staging
+privado hermano `.DESTINO.restore-config-ID.incomplete`; cualquier fallo o
+interrupción anterior a la publicación conserva allí el diagnóstico y deja
+el destino solicitado sin crear. Esas copias pueden contener plaintext y nunca
+deben usarse como configuración publicada ni eliminarse automáticamente.
+
+Tras todas las comprobaciones prepara `restore-receipt.json`0600, con versión,
+cobertura histórica y checks realizados, sin valores secretos. Publica contenido
+y recibo mediante una sola operación Linux `renameat2(RENAME_NOREPLACE)` en el
+mismo sistema de archivos: cualquier destino existente, incluso creado durante
+la restauración, se conserva intacto. Si la plataforma, libc o filesystem no
+soportan esa operación, falla explícitamente y conserva el staging; no copia
+gradualmente ni reemplaza el destino. Sólo el recibo **en el destino final**
+acredita publicación. Si el proceso termina después de ese commit y se pierde
+stdout, el destino y recibo siguen siendo válidos: inspeccionarlos antes de
+repetir; un nuevo intento nunca los sobrescribe. Esta garantía cubre visibilidad
+e interrupción del proceso, no durabilidad ante pérdida eléctrica.
+
+El recibo acredita comprobaciones del formato, no validación semántica completa
+ni autorización para iniciar servicios o capturar Telegram. Mantener las
+verificaciones offline y de binding indicadas arriba. El DSN recuperado sigue
+apuntando al origen: preparar credenciales nuevas para la DB restaurada antes de uso.
 El ensayo histórico004 verificó los cinco archivos admin/master/DSN/TLS byte a byte
 y descifró cuatro credenciales del dump con el master recuperado; una clave
 incorrecta falló. No se leyeron claves privadas reales.

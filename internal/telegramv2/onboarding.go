@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"strconv"
+	"time"
 )
 
 // InventoryImport serializes read-only Telegram discovery against every native
@@ -29,7 +30,7 @@ func (s Store) InventoryImport(ctx context.Context, cfg ClientConfig, actor stri
 		return "", e
 	}
 	id := uuid.NewString()
-	e = s.RunOwned(ctx, cfg.Account, func(ctx context.Context, o Owner) error {
+	e = s.runOwnedRequest(ctx, cfg.Account, 5*time.Second, ownerRequest{inventoryGeneration: generation}, func(ctx context.Context, o Owner) error {
 		if o.Generation != generation {
 			return ErrOwnership
 		}
@@ -67,7 +68,7 @@ func (s Store) SaveInventorySnapshot(ctx context.Context, o Owner, id, actor str
 	}
 	defer tx.Rollback(context.Background())
 	var valid bool
-	e = tx.QueryRow(ctx, `SELECT true FROM noctis_v2.telegram_accounts WHERE id=$1 AND owner=$2 AND owner_fence=$3 AND auth_generation=$4 AND NOT closed AND status='running' AND lease_expires_at>clock_timestamp() FOR UPDATE`, o.Account, o.ID, o.Fence, o.Generation).Scan(&valid)
+	e = tx.QueryRow(ctx, `SELECT true FROM noctis_v2.telegram_accounts WHERE id=$1 AND owner=$2 AND owner_fence=$3 AND auth_generation=$4 AND NOT closed AND NOT authentication_in_progress AND prepared_auth_generation IS NULL AND status='running' AND lease_expires_at>clock_timestamp() FOR UPDATE`, o.Account, o.ID, o.Fence, o.Generation).Scan(&valid)
 	if e != nil {
 		return errors.Join(ErrOwnership, e)
 	}

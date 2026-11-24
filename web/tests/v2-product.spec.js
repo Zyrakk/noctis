@@ -22,6 +22,7 @@ async function fixture(page,{authenticated=true,failed=false}={}) {
     if(['/questions','/discovery','/coverage'].some(path=>url.pathname.endsWith(path))) return send([])
     if(url.pathname.endsWith('/runtime-control')) return send({revision:1,paused:false})
     if(url.pathname.endsWith('/system')) return send({status:'degraded',backlog:null,errors:[]})
+    if(url.pathname.endsWith('/ai/jobs')&&request.method()==='GET') return send({jobs:[]})
     if(url.pathname.endsWith('/ai/config')) return send({revision:1,functions:[],connections:[],bindings:[],daily_cap_units:0,monthly_cap_units:0,max_concurrent:0,credential_available:false})
     throw new Error(`Unexpected URL ${url}`)
   })
@@ -75,6 +76,17 @@ test('carga permanece explícita y cita con offset inválido falla sin inventar 
   const invalid={...ref,start:11}
   await page.goto(`/v2/cases/9007199254740995?evidence=${encodeURIComponent(JSON.stringify(invalid))}`)
   await expect(page.locator('.v2-evidence [role=alert]')).toBeVisible();await expect(page.locator('mark')).toHaveCount(0)
+})
+test('error de carga permite reintentar sin cambiar de ruta',async({page})=>{
+  const requests=await fixture(page,{failed:true});await page.goto('/v2/cases')
+  const alert=page.getByRole('alert').filter({hasText:'Unable to load data'})
+  await expect(alert).toContainText('Base de datos no disponible')
+  const count=()=>requests.filter(r=>r.url.pathname==='/api/v2/cases').length
+  const before=count()
+  await page.getByRole('button',{name:'Try again'}).click()
+  await expect.poll(count).toBeGreaterThan(before)
+  await expect(page).toHaveURL(/\/v2\/cases$/)
+  await expect(alert).toBeVisible()
 })
 test('referencias URL malformadas no solicitan evidencia',async({page})=>{
   const requests=await fixture(page)

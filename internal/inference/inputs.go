@@ -71,7 +71,7 @@ func snapshot(ctx context.Context, tx pgx.Tx, in Input, actor string) (Snapshot,
 	case "case":
 		var rev string
 		var raw []byte
-		e := tx.QueryRow(ctx, `SELECT c.revision::text,r.body FROM noctis_v2.intelligence_cases c JOIN noctis_v2.case_revisions r ON r.case_id=c.id AND r.revision=c.revision WHERE c.id=$1 AND c.revision::text=$2 FOR SHARE OF c`, in.ID, in.Revision).Scan(&rev, &raw)
+		e := tx.QueryRow(ctx, `SELECT c.revision::text,noctis_v2.case_effective_body(c.id,r.body) FROM noctis_v2.intelligence_cases c JOIN noctis_v2.case_revisions r ON r.case_id=c.id AND r.revision=c.revision WHERE c.id=$1 AND c.revision::text=$2 FOR SHARE OF c`, in.ID, in.Revision).Scan(&rev, &raw)
 		if e != nil {
 			return s, e
 		}
@@ -108,7 +108,7 @@ func snapshot(ctx context.Context, tx pgx.Tx, in Input, actor string) (Snapshot,
 		}
 		var raw []byte
 		var version string
-		e := tx.QueryRow(ctx, `SELECT body,policy_version FROM noctis_v2.briefs WHERE period=$1 AND NOT invalidated ORDER BY policy_version DESC LIMIT 1`, in.Period).Scan(&raw, &version)
+		e := tx.QueryRow(ctx, `SELECT body,policy_version FROM noctis_v2.briefs WHERE period=$1 AND NOT invalidated AND noctis_v2.brief_applicability_current(body) ORDER BY policy_version DESC LIMIT 1`, in.Period).Scan(&raw, &version)
 		if e != nil {
 			return s, e
 		}
@@ -171,7 +171,7 @@ func snapshot(ctx context.Context, tx pgx.Tx, in Input, actor string) (Snapshot,
 		}
 		var raw []byte
 		var revision string
-		e := tx.QueryRow(ctx, `SELECT f.body,s.id::text FROM noctis_v2.vulnerability_facts f JOIN noctis_v2.feed_snapshots s ON s.id=f.snapshot_id WHERE f.cve=$1 AND s.expires_at>clock_timestamp() ORDER BY s.as_of DESC LIMIT 1`, in.ID).Scan(&raw, &revision)
+		e := tx.QueryRow(ctx, `SELECT body,generation FROM noctis_v2.nvd_current_selection WHERE cve=$1 AND expires_at>clock_timestamp() AND selection_reason=''`, in.ID).Scan(&raw, &revision)
 		if e != nil {
 			return s, e
 		}

@@ -77,6 +77,15 @@ type Receipt struct {
 type Store struct{ DSN string }
 
 func (s Store) Acquire(ctx context.Context, account, id string, duration time.Duration) (Owner, error) {
+	return s.acquire(ctx, account, id, duration, ownerRequest{})
+}
+
+type ownerRequest struct {
+	authenticate        bool
+	inventoryGeneration string
+}
+
+func (s Store) acquire(ctx context.Context, account, id string, duration time.Duration, request ownerRequest) (Owner, error) {
 	o := Owner{Account: account, ID: id}
 	if account == "" || id == "" || duration <= 0 {
 		return o, ErrOwnership
@@ -86,7 +95,7 @@ func (s Store) Acquire(ctx context.Context, account, id string, duration time.Du
 		return o, e
 	}
 	defer c.Close(context.Background())
-	e = c.QueryRow(ctx, `UPDATE noctis_v2.telegram_accounts SET owner=$2,owner_fence=owner_fence+1,closed=false,lease_expires_at=clock_timestamp()+$3::interval,status='running' WHERE id=$1 AND closed AND capture_failure_revision=capture_resume_revision AND (retry_at IS NULL OR retry_at<=clock_timestamp()) AND status<>'revoked' RETURNING owner_fence,auth_generation::text`, account, id, duration.String()).Scan(&o.Fence, &o.Generation)
+	e = c.QueryRow(ctx, `UPDATE noctis_v2.telegram_accounts SET owner=$2,owner_fence=owner_fence+1,closed=false,lease_expires_at=clock_timestamp()+$3::interval,status='running',authentication_in_progress=$4 WHERE id=$1 AND closed AND owner IS NULL AND lease_expires_at IS NULL AND capture_failure_revision=capture_resume_revision AND (retry_at IS NULL OR retry_at<=clock_timestamp()) AND (status<>'revoked' OR $4) AND (NOT $4 OR (active_capture_budget IS NULL AND pending_generation_transition IS NULL)) AND ($5='' OR (auth_generation=NULLIF($5,'')::uuid AND prepared_auth_generation IS NULL)) RETURNING owner_fence,auth_generation::text`, account, id, duration.String(), request.authenticate, request.inventoryGeneration).Scan(&o.Fence, &o.Generation)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return o, ErrOwnership
 	}
@@ -112,7 +121,11 @@ func (s Store) RunOwned(ctx context.Context, account string, run func(context.Co
 }
 
 func (s Store) runOwnedWithHeartbeat(ctx context.Context, account string, interval time.Duration, run func(context.Context, Owner) error) error {
-	o, e := s.Acquire(ctx, account, uuid.NewString(), 30*time.Second)
+	return s.runOwnedRequest(ctx, account, interval, ownerRequest{}, run)
+}
+
+func (s Store) runOwnedRequest(ctx context.Context, account string, interval time.Duration, request ownerRequest, run func(context.Context, Owner) error) error {
+	o, e := s.acquire(ctx, account, uuid.NewString(), 30*time.Second, request)
 	if e != nil {
 		return e
 	}

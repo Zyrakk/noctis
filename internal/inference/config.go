@@ -167,6 +167,11 @@ func (s Store) Validate(c Config) error {
 		if b.Enabled && (!ids[b.ConnectionID] || !b.StructuredJSON || strings.TrimSpace(b.Model) == "" || len(b.Model) > 256 || b.DailyCap == 0 || b.MonthlyCap == 0 || c.DailyCap == 0 || c.MonthlyCap == 0) {
 			return ErrInvalid
 		}
+		// Compare the marker without changing the persisted tariff identity.
+		priceVersion := strings.TrimSpace(b.Price.Version)
+		if b.Enabled && (priceVersion == "" || strings.EqualFold(priceVersion, "unconfigured")) {
+			return ErrInvalid
+		}
 	}
 	return nil
 }

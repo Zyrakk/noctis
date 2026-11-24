@@ -308,6 +308,17 @@ func (c *Coordinator) difference(ctx context.Context) error {
 		} else if e != nil {
 			return e
 		}
+		// A channel gap is only a protocol marker in the global difference.
+		// Finish its durable recovery before acknowledging this global page.
+		recovered := make(map[int64]bool)
+		for _, update := range updates {
+			if marker, ok := update.(*tg.UpdateChannelTooLong); ok && !recovered[marker.ChannelID] {
+				if e = c.channelDifferenceByID(ctx, marker.ChannelID); e != nil {
+					return e
+				}
+				recovered[marker.ChannelID] = true
+			}
+		}
 		for _, m := range messages {
 			if v, ok := messageEvent(m, "difference", 0, 0); ok {
 				ev = append(ev, v)

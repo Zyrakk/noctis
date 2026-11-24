@@ -221,6 +221,7 @@ function Overview({ navigate }) {
         React.createElement('div', { className: 'pres-metric-detail' }, detail),
       )),
     ),
+    React.createElement('p', { className: 'pres-metric-note' }, 'Illustrative synthetic counts for this walkthrough, not production figures.'),
     React.createElement('div', { className: 'pres-overview-grid' },
       React.createElement('section', { className: 'pres-panel pres-signal-panel' },
         React.createElement('div', { className: 'pres-panel-heading' },

@@ -19,15 +19,18 @@
   },
   "overrides": {
     "picomatch@^4.0.0": "^4.0.4",
-    "tailwindcss": { "postcss-selector-parser": "^7.1.6" },
-    "postcss-nested": { "postcss-selector-parser": "^7.1.6" }
+    "tailwindcss": {
+      "postcss-selector-parser": "^7.1.6"
+    },
+    "postcss-nested": {
+      "postcss-selector-parser": "^7.1.6"
+    }
   },
   "dependencies": {
     "@fontsource/fira-code": "^5.3.0",
     "@fontsource/fira-sans": "^5.3.0",
     "lucide-react": "^0.383.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "recharts": "^2.15.4"
+    "react-dom": "^18.3.1"
   }
 }

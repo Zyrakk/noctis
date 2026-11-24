@@ -10,10 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Zyrakk/noctis/internal/configv2"
+	"github.com/Zyrakk/noctis/internal/inference"
 	"github.com/Zyrakk/noctis/internal/intelligence"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -23,11 +23,16 @@ import (
 type API struct {
 	cfg                configv2.Config
 	username, password string
+	admission          *apiAdmission
+	connect            func(context.Context, string) (*pgx.Conn, error)
 }
 
 func NewHandler(cfg configv2.Config) (http.Handler, error) {
-	if cfg.AdminFile == "" || cfg.Origin == "" {
-		return nil, errors.New("admin secret file and canonical origin required")
+	if e := validateOrigin(cfg.Origin); e != nil {
+		return nil, e
+	}
+	if cfg.AdminFile == "" {
+		return nil, errors.New("admin secret file required")
 	}
 	raw, e := os.ReadFile(cfg.AdminFile)
 	if e != nil {
@@ -37,7 +42,10 @@ func NewHandler(cfg configv2.Config) (http.Handler, error) {
 	if e = json.Unmarshal(raw, &a); e != nil || a.Username == "" || len(a.Password) < 16 {
 		return nil, errors.New("admin secret requires username and password >=16 bytes")
 	}
-	api := &API{cfg: cfg, username: a.Username, password: a.Password}
+	if a.Username == inference.AutomaticActor {
+		return nil, fmt.Errorf("admin username %q is reserved for automatic inference", inference.AutomaticActor)
+	}
+	api := newAPI(cfg, a.Username, a.Password)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v2/", api.handle)
 	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, r *http.Request) {
@@ -90,19 +98,34 @@ func (a *API) handle(w http.ResponseWriter, r *http.Request) {
 		failure(w, 403, "origin_denied")
 		return
 	}
-	c, e := pgx.Connect(ctx, a.cfg.DatabaseURL)
+	login := path == "auth/login" && r.Method == "POST"
+	var cookie *http.Cookie
+	if login {
+		if !a.admitLogin(w, r) {
+			return
+		}
+	} else {
+		var e error
+		cookie, e = r.Cookie("noctis_v2_session")
+		if e != nil || !validSessionToken(cookie.Value) {
+			failure(w, 401, "authentication_required")
+			return
+		}
+	}
+	if !a.admission.acquireDB() {
+		failure(w, 503, "request_capacity_exhausted")
+		return
+	}
+	defer a.admission.releaseDB()
+	c, e := a.connect(ctx, a.cfg.DatabaseURL)
 	if e != nil {
 		failure(w, 503, "database_unavailable")
 		return
 	}
-	defer c.Close(context.Background())
-	if path == "auth/login" && r.Method == "POST" {
+	// Deferred close runs before releaseDB, including when the request is cancelled.
+	defer closeAPIConnection(c)
+	if login {
 		a.login(w, r, c)
-		return
-	}
-	cookie, e := r.Cookie("noctis_v2_session")
-	if e != nil {
-		failure(w, 401, "authentication_required")
 		return
 	}
 	var username, csrf string
@@ -113,6 +136,10 @@ func (a *API) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	if e != nil {
 		failure(w, 503, "database_unavailable")
+		return
+	}
+	if username == inference.AutomaticActor {
+		failure(w, 403, "reserved_actor_identity")
 		return
 	}
 	if path == "auth/session" && r.Method == "GET" {
@@ -163,19 +190,6 @@ func (a *API) handle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (a *API) login(w http.ResponseWriter, r *http.Request, c *pgx.Conn) {
-	var input struct{ Username, Password string }
-	dec := json.NewDecoder(io.LimitReader(r.Body, 4097))
-	dec.DisallowUnknownFields()
-	if e := dec.Decode(&input); e != nil {
-		failure(w, 400, "invalid_login")
-		return
-	}
-	expected := sha256.Sum256([]byte(a.username + "\x00" + a.password))
-	actual := sha256.Sum256([]byte(input.Username + "\x00" + input.Password))
-	if subtle.ConstantTimeCompare(expected[:], actual[:]) != 1 {
-		failure(w, 401, "invalid_credentials")
-		return
-	}
 	token, csrf := random(), random()
 	_, e := c.Exec(r.Context(), `INSERT INTO noctis_v2.sessions(token_hash,username,csrf,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '8 hours')`, tokenHash(token), a.username, csrf)
 	if e != nil {
@@ -197,7 +211,7 @@ func (a *API) read(w http.ResponseWriter, r *http.Request, c *pgx.Conn, path str
 			failure(w, 400, "invalid_pagination")
 			return nil
 		}
-		rows, e := c.Query(ctx, `SELECT cr.body,ic.updated_at,ic.id::text FROM noctis_v2.intelligence_cases ic JOIN noctis_v2.case_revisions cr ON cr.case_id=ic.id AND cr.revision=ic.revision WHERE ($1='' OR ic.title ILIKE '%'||$1||'%') AND ($2='' OR (ic.updated_at,ic.id::text)<($3::timestamptz,$2)) ORDER BY ic.updated_at DESC,ic.id DESC LIMIT $4`, r.URL.Query().Get("q"), cursor.ID, cursor.At, limit+1)
+		rows, e := c.Query(ctx, `SELECT noctis_v2.case_effective_body(ic.id,cr.body),ic.updated_at,ic.id::text FROM noctis_v2.intelligence_cases ic JOIN noctis_v2.case_revisions cr ON cr.case_id=ic.id AND cr.revision=ic.revision WHERE ($1='' OR ic.title ILIKE '%'||$1||'%') AND ($2='' OR (ic.updated_at,ic.id::text)<($3::timestamptz,$2)) ORDER BY ic.updated_at DESC,ic.id DESC LIMIT $4`, r.URL.Query().Get("q"), cursor.ID, cursor.At, limit+1)
 		if e != nil {
 			return e
 		}
@@ -237,7 +251,7 @@ func (a *API) read(w http.ResponseWriter, r *http.Request, c *pgx.Conn, path str
 		}
 		var raw []byte
 		var updated time.Time
-		e := c.QueryRow(ctx, `SELECT cr.body,ic.updated_at FROM noctis_v2.intelligence_cases ic JOIN noctis_v2.case_revisions cr ON cr.case_id=ic.id AND cr.revision=ic.revision WHERE ic.id=$1`, id).Scan(&raw, &updated)
+		e := c.QueryRow(ctx, `SELECT noctis_v2.case_effective_body(ic.id,cr.body),ic.updated_at FROM noctis_v2.intelligence_cases ic JOIN noctis_v2.case_revisions cr ON cr.case_id=ic.id AND cr.revision=ic.revision WHERE ic.id=$1`, id).Scan(&raw, &updated)
 		if e != nil {
 			return e
 		}
@@ -283,7 +297,7 @@ func (a *API) read(w http.ResponseWriter, r *http.Request, c *pgx.Conn, path str
 		}
 		var raw []byte
 		var brief any
-		e = c.QueryRow(ctx, `SELECT body||jsonb_build_object('invalidated',invalidated) FROM noctis_v2.briefs WHERE period=$1 ORDER BY policy_version DESC LIMIT 1`, time.Now().UTC().Format("2006-01-02")).Scan(&raw)
+		e = c.QueryRow(ctx, `SELECT body||jsonb_build_object('invalidated',invalidated OR NOT noctis_v2.brief_applicability_current(body),'current_for_alerts',NOT invalidated AND noctis_v2.brief_applicability_current(body),'status',CASE WHEN invalidated OR NOT noctis_v2.brief_applicability_current(body) THEN 'requires_review' ELSE COALESCE(body->>'status','current') END) FROM noctis_v2.briefs WHERE period=$1 ORDER BY policy_version DESC LIMIT 1`, time.Now().UTC().Format("2006-01-02")).Scan(&raw)
 		if e == nil {
 			if e = json.Unmarshal(raw, &brief); e != nil {
 				return e
@@ -382,7 +396,7 @@ func (a *API) read(w http.ResponseWriter, r *http.Request, c *pgx.Conn, path str
 	return nil
 }
 func readChanges(ctx context.Context, c *pgx.Conn, caseID string) ([]any, error) {
-	rows, e := c.Query(ctx, `SELECT body,created_at FROM noctis_v2.case_changes WHERE ($1='' OR case_id::text=$1) AND ($1<>'' OR created_at>=date_trunc('day',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') ORDER BY created_at DESC,id LIMIT 200`, caseID)
+	rows, e := c.Query(ctx, `SELECT noctis_v2.change_effective_body(case_id,body),created_at FROM noctis_v2.case_changes WHERE ($1='' OR case_id::text=$1) AND ($1<>'' OR created_at>=date_trunc('day',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') ORDER BY created_at DESC,id LIMIT 200`, caseID)
 	if e != nil {
 		return nil, e
 	}

@@ -396,8 +396,8 @@ func TestCore005OwnPauseParksAndResumesDurablyWithoutRevivingInvalidJobsPostgres
 	if e = f.conn.QueryRow(ctx, `SELECT state,last_error_code,attempts FROM noctis_v2.jobs WHERE id=$1`, job).Scan(&state, &code, &attempts); e != nil || state != "dependency_blocked" || code != "source_paused" || attempts != 4 {
 		t.Fatal("pause consumed claim or lost progress", state, code, attempts, e)
 	}
-	coreExec(t, f.conn, `UPDATE noctis_v2.jobs SET created_at=clock_timestamp()-interval '2 days' WHERE id=$1`, job)
-	coreExec(t, f.conn, `UPDATE noctis_v2.jobs SET created_at=clock_timestamp()-interval '2 days' WHERE id=$1`, waitingJob)
+	coreExec(t, f.conn, `UPDATE noctis_v2.jobs SET created_at=created_at-interval '2 days',retry_deadline_at=retry_deadline_at-interval '2 days',source_paused_at=source_paused_at-interval '2 days' WHERE id=$1`, job)
+	coreExec(t, f.conn, `UPDATE noctis_v2.jobs SET created_at=created_at-interval '2 days',retry_deadline_at=retry_deadline_at-interval '2 days',source_paused_at=source_paused_at-interval '2 days' WHERE id=$1`, waitingJob)
 	if e = f.conn.QueryRow(ctx, `SELECT state,last_error_code,attempts FROM noctis_v2.jobs WHERE id=$1`, waitingJob).Scan(&state, &code, &attempts); e != nil || state != "dependency_blocked" || code != "source_paused" || attempts != 0 {
 		t.Fatal("queued pause did not preserve progress", state, code, attempts, e)
 	}

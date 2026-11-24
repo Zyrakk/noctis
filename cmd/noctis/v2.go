@@ -27,7 +27,7 @@ func newV2Cmd() *cobra.Command {
 	var fixtureAuthorities []string
 	var aiKeyFile, aiCAFile string
 	var aiAuthorities []string
-	var automaticInference bool
+	var automaticInference, manualInference bool
 	root.PersistentFlags().StringVar(&dbRef, "database-secret-file", "", "File containing independent v2 database DSN")
 	serve := &cobra.Command{Use: "serve", RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, e := configv2.Load(mode, listen, dbRef)
@@ -44,19 +44,21 @@ func newV2Cmd() *cobra.Command {
 		cfg.AICAFile = aiCAFile
 		cfg.AIAuthorities = aiAuthorities
 		cfg.AutomaticInference = automaticInference
+		cfg.ManualInference = manualInference
 		ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
 		return runtimev2.Run(ctx, cfg)
 	}}
 	serve.Flags().StringVar(&mode, "mode", "api", "api, worker or collector")
 	serve.Flags().BoolVar(&automaticInference, "automatic-inference", false, "Explicitly enable automatic paid inference execution and planning (worker only)")
+	serve.Flags().BoolVar(&manualInference, "manual-inference", false, "Enable paid manual inference, including older eligible requests, without automatic planning (worker only)")
 	serve.Flags().StringVar(&aiKeyFile, "ai-master-key-file", "", "Mounted private AEAD key JSON (key_id, hex key); outside PostgreSQL")
 	serve.Flags().StringVar(&aiCAFile, "ai-ca-file", "", "Server-mounted additional inference TLS trust root")
 	serve.Flags().StringSliceVar(&aiAuthorities, "ai-local-authority", nil, "Server-authorized exact local inference host:port")
 	serve.Flags().StringVar(&admin, "admin-secret-file", "", "Mounted JSON username/password")
-	serve.Flags().StringVar(&origin, "origin", "", "Canonical browser Origin")
-	serve.Flags().StringVar(&cert, "tls-cert-file", "", "TLS certificate file")
-	serve.Flags().StringVar(&key, "tls-key-file", "", "TLS private key file")
+	serve.Flags().StringVar(&origin, "origin", "", "Canonical public HTTP(S) origin: lowercase scheme/host, no path or default port (API only)")
+	serve.Flags().StringVar(&cert, "tls-cert-file", "", "TLS certificate file; requires --tls-key-file (omit both for internal HTTP behind a TLS proxy)")
+	serve.Flags().StringVar(&key, "tls-key-file", "", "TLS private key file; requires --tls-cert-file (API only)")
 	serve.Flags().StringVar(&deliveryEndpoint, "delivery-endpoint", "", "Explicit worker outbox destination; uncertain attempts never replay automatically")
 	serve.Flags().StringSliceVar(&fixtureAuthorities, "fixture-authority", nil, "Explicit local fixture host:port allowlist (collector only)")
 	serve.Flags().StringVar(&listen, "listen", "127.0.0.1:8081", "Health API listen address")
@@ -185,6 +187,9 @@ func newV2Cmd() *cobra.Command {
 		return (jobs.Store{DSN: dsn}).Replay(cmd.Context(), args[0])
 	}}
 	dispatch := &cobra.Command{Use: "dispatch-once ENDPOINT", Args: cobra.ExactArgs(1), Short: "Explicitly deliver one queued event; uncertainty never auto-retried", RunE: func(cmd *cobra.Command, args []string) error {
+		if e := intelligence.ValidateDeliveryEndpoint(args[0]); e != nil {
+			return e
+		}
 		c, dsn, e := connect(cmd.Context())
 		if e != nil {
 			return e

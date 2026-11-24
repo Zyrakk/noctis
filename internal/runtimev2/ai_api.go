@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -81,6 +82,33 @@ func (a *API) handleAI(w http.ResponseWriter, r *http.Request, path, actor strin
 			return true
 		}
 		response(w, map[string]any{"valid": true, "provider_contacted": false, "quality_validated": false})
+	case path == "ai/jobs" && r.Method == "GET":
+		limit := 50
+		params, parseErr := url.ParseQuery(r.URL.RawQuery)
+		if parseErr != nil {
+			reject(inference.ErrInvalid)
+			return true
+		}
+		for key, values := range params {
+			if (key != "limit" && key != "cursor") || len(values) != 1 {
+				reject(inference.ErrInvalid)
+				return true
+			}
+		}
+		if params.Has("limit") {
+			var e error
+			limit, e = strconv.Atoi(params.Get("limit"))
+			if e != nil {
+				reject(inference.ErrInvalid)
+				return true
+			}
+		}
+		page, e := s.ListJobs(ctx, actor, params.Get("cursor"), limit)
+		if e != nil {
+			reject(e)
+			return true
+		}
+		response(w, page)
 	case path == "ai/jobs" && r.Method == "POST":
 		var in inference.Submit
 		if e := decode(&in); e != nil {

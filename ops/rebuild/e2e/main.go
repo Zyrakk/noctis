@@ -176,6 +176,25 @@ func run() (runErr error) {
 	if _, e = command("brief", time.Now().UTC().Format("2006-01-02"), "p1"); e != nil {
 		return e
 	}
+	aiCaseID := ""
+	if *ai {
+		conn, ce := pgx.Connect(ctx, taskDSN)
+		if ce != nil {
+			return ce
+		}
+		// Product tests intentionally revoke other sources. Keep AI tied to the
+		// original fixture instead of the mutable ordering of the case list.
+		var ids []string
+		e = conn.QueryRow(ctx, `SELECT ARRAY(SELECT DISTINCT m.case_id::text FROM noctis_v2.case_memberships m JOIN noctis_v2.observations o ON o.id=m.observation_id WHERE o.source_id=$1)`, source).Scan(&ids)
+		conn.Close(ctx)
+		if e != nil {
+			return fmt.Errorf("resolve baseline AI fixture case: %w", e)
+		}
+		if len(ids) != 1 {
+			return fmt.Errorf("baseline AI fixture must have exactly one case, got %d", len(ids))
+		}
+		aiCaseID = ids[0]
+	}
 	productIDs := map[string]string{}
 	if *product || realInputs != nil {
 		conn, ce := pgx.Connect(ctx, taskDSN)
@@ -213,7 +232,7 @@ func run() (runErr error) {
 	if e != nil {
 		return e
 	}
-	if _, e = runtimeConn.Exec(ctx, "CREATE ROLE "+roleSQL+" LOGIN;GRANT USAGE ON SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT ON public.noctis_v2_migrations TO "+roleSQL); e != nil {
+	if _, e = runtimeConn.Exec(ctx, "CREATE ROLE "+roleSQL+" LOGIN;GRANT USAGE ON SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT DELETE ON noctis_v2.question_sources TO "+roleSQL+";GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA noctis_v2 TO "+roleSQL+";GRANT SELECT ON public.noctis_v2_migrations TO "+roleSQL); e != nil {
 		runtimeConn.Close(ctx)
 		return e
 	}
@@ -372,7 +391,7 @@ func run() (runErr error) {
 	if *ai {
 		cmd := exec.CommandContext(ctx, "npx", "playwright", "test", "tests/v2-ai-real.spec.js", "--config=playwright.ai.config.js")
 		cmd.Dir = "web"
-		cmd.Env = append(os.Environ(), "NOCTIS_V2_E2E_URL="+origin, "NOCTIS_V2_E2E_USERNAME=operator", "NOCTIS_V2_E2E_PASSWORD="+password)
+		cmd.Env = append(os.Environ(), "NOCTIS_V2_E2E_URL="+origin, "NOCTIS_V2_E2E_USERNAME=operator", "NOCTIS_V2_E2E_PASSWORD="+password, "NOCTIS_V2_AI_CASE_ID="+aiCaseID)
 		cmd.Env = append(cmd.Env, aiEnv...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
